@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id        String  @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  phone     String?
+  email     String?
+  isActive  Boolean @default(true)
+  courts    Court[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Court {
+  id          String    @id @default(cuid())
+  name        String
+  sport       String    // futbol, voley, basket, tenis, eventos
+  description String?
+  branchId    String
+  branch      Branch    @relation(fields: [branchId], references: [id])
+  images      String    // JSON array of image URLs
+  rating      Float     @default(0)
+  reviewCount Int       @default(0)
+  pricePerHour Float    @default(0)
+  isActive    Boolean   @default(true)
+  amenities   String    // JSON array of amenities
+  timeSlots   Booking[]
+  reviews     Review[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Client {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  phone         String?
+  avatar        String?
+  points        Int       @default(0)
+  credit        Float     @default(0)
+  membership    String?   // none, basic, premium
+  bookings      Booking[]
+  reviews       Review[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Booking {
+  id            String    @id @default(cuid())
+  courtId       String
+  court         Court     @relation(fields: [courtId], references: [id])
+  clientId      String
+  client        Client    @relation(fields: [clientId], references: [id])
+  date          DateTime  // The date of the booking
+  startTime     String    // "14:00"
+  endTime       String    // "15:00"
+  totalPrice    Float
+  status        String    @default("confirmed") // confirmed, cancelled, completed, no_show
+  paymentMethod String?   // card, cash, transfer
+  paymentStatus String    @default("pending") // pending, paid, refunded
+  notes         String?
+  payments     Payment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  courtId   String
+  court     Court    @relation(fields: [courtId], references: [id])
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  rating    Int      // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  bookingId     String
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+  amount        Float
+  method        String    // card, cash, transfer, mercado_pago
+  status        String    @default("pending") // pending, completed, failed, refunded
+  externalRef   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
