@@ -37,8 +37,6 @@ const sportTabs = [
   { value: 'todos', label: 'Todos' },
   { value: 'futbol', label: 'Fútbol' },
   { value: 'voley', label: 'Vóley' },
-  { value: 'basket', label: 'Básquet' },
-  { value: 'tenis', label: 'Tenis' },
   { value: 'eventos', label: 'Eventos' },
 ]
 

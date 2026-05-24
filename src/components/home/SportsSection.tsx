@@ -16,25 +16,9 @@ const sports = [
     id: 'voley',
     label: 'Vóley',
     icon: 'sports_volleyball',
-    count: 1,
+    count: 2,
     color: 'from-blue-500/20 to-blue-700/10',
     borderColor: 'border-blue-500/20',
-  },
-  {
-    id: 'basket',
-    label: 'Básquet',
-    icon: 'sports_basketball',
-    count: 1,
-    color: 'from-orange-500/20 to-orange-700/10',
-    borderColor: 'border-orange-500/20',
-  },
-  {
-    id: 'tenis',
-    label: 'Tenis',
-    icon: 'sports_tennis',
-    count: 1,
-    color: 'from-yellow-500/20 to-yellow-700/10',
-    borderColor: 'border-yellow-500/20',
   },
   {
     id: 'eventos',
@@ -59,14 +43,14 @@ export default function SportsSection() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
-            Explora por Deporte
+            Nuestras Instalaciones
           </h2>
           <p className="text-cm-on-surface-variant text-sm mt-2 font-[family-name:var(--font-inter)]">
-            Encuentra la cancha perfecta para tu deporte favorito
+            7 espacios disponibles para tu deporte y eventos
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-3xl mx-auto">
           {sports.map((sport, index) => (
             <motion.button
               key={sport.id}
@@ -74,19 +58,19 @@ export default function SportsSection() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.05 }}
               onClick={() => handleSportClick(sport.id)}
-              className={`glass-card rounded-2xl p-5 md:p-6 flex flex-col items-center gap-3 hover:border-cm-primary/30 transition-all duration-300 group cursor-pointer ${sport.borderColor}`}
+              className={`glass-card rounded-2xl p-6 md:p-8 flex flex-col items-center gap-3 hover:border-cm-primary/30 transition-all duration-300 group cursor-pointer ${sport.borderColor}`}
             >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${sport.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-                <span className="material-symbols-outlined text-cm-primary text-[28px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+              <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${sport.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                <span className="material-symbols-outlined text-cm-primary text-[32px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                   {sport.icon}
                 </span>
               </div>
               <div className="text-center">
-                <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">
+                <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">
                   {sport.label}
                 </p>
-                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
-                  {sport.count} cancha{sport.count !== 1 ? 's' : ''}
+                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
+                  {sport.count} {sport.count === 1 ? 'espacio' : 'espacios'}
                 </p>
               </div>
             </motion.button>

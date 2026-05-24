@@ -6,11 +6,9 @@ import { motion } from 'framer-motion'
 
 // Hero section for the home page
 const sportOptions = [
-  { value: 'todos', label: 'Todos los deportes' },
+  { value: 'todos', label: 'Todos' },
   { value: 'futbol', label: 'Fútbol' },
   { value: 'voley', label: 'Vóley' },
-  { value: 'basket', label: 'Básquet' },
-  { value: 'tenis', label: 'Tenis' },
   { value: 'eventos', label: 'Eventos' },
 ]
 
@@ -65,8 +63,8 @@ export default function HeroSection() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-10 font-[family-name:var(--font-inter)]"
         >
-          Descubre canchas de fútbol, vóley, básquet y tenis cerca de ti.
-          Reserva, paga y juega sin complicaciones.
+          4 canchas de fútbol, 2 de vóley y un salón de eventos.
+          Reserva, paga y disfruta sin complicaciones.
         </motion.p>
 
         {/* Search Bar */}
@@ -116,9 +114,9 @@ export default function HeroSection() {
           className="flex flex-wrap justify-center gap-6 md:gap-12 mt-12"
         >
           {[
-            { value: '500+', label: 'Canchas' },
-            { value: '10,000+', label: 'Reservas' },
-            { value: '2,000+', label: 'Clientes' },
+            { value: '7', label: 'Espacios' },
+            { value: '4', label: 'Fútbol' },
+            { value: '2', label: 'Vóley' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-bold text-cm-primary text-glow">
