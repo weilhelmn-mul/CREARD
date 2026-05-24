@@ -5,30 +5,26 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const courtId = searchParams.get('courtId')
-    const clientId = searchParams.get('clientId')
+    const userId = searchParams.get('userId')
     const date = searchParams.get('date')
     const status = searchParams.get('status')
 
     const where: Record<string, unknown> = {}
 
     if (courtId) where.courtId = courtId
-    if (clientId) where.clientId = clientId
+    if (userId) where.userId = userId
     if (status) where.status = status
     if (date) {
-      const startDate = new Date(date)
-      startDate.setHours(0, 0, 0, 0)
-      const endDate = new Date(date)
-      endDate.setHours(23, 59, 59, 999)
-      where.date = { gte: startDate, lte: endDate }
+      where.date = date
     }
 
     const bookings = await db.booking.findMany({
       where,
       include: {
         court: { include: { branch: true } },
-        client: true,
+        user: true,
       },
-      orderBy: { date: 'desc' },
+      orderBy: { startTime: 'asc' },
     })
 
     return NextResponse.json(bookings)
@@ -41,18 +37,33 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { courtId, clientId, date, startTime, endTime, totalPrice, paymentMethod, notes } = body
+    const {
+      courtId,
+      userId,
+      date,
+      startTime,
+      endTime,
+      totalPrice,
+      advanceAmount,
+      remainingAmount,
+      status,
+      paymentMethod,
+      notes,
+    } = body
 
-    // Check for overlapping bookings
-    const bookingDate = new Date(date)
+    if (!courtId || !userId || !date || !startTime || !endTime) {
+      return NextResponse.json(
+        { error: 'Faltan campos requeridos: courtId, userId, date, startTime, endTime' },
+        { status: 400 }
+      )
+    }
+
+    // Check for overlapping active bookings
     const existingBookings = await db.booking.findMany({
       where: {
         courtId,
-        date: {
-          gte: new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate()),
-          lt: new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate() + 1),
-        },
-        status: { in: ['confirmed'] },
+        date,
+        status: { in: ['confirmed', 'partially_paid', 'fully_paid', 'pending'] },
         OR: [
           { startTime: { lt: endTime }, endTime: { gt: startTime } },
         ],
@@ -67,27 +78,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Get court price if not provided
+    let price = parseFloat(totalPrice) || 0
     if (!totalPrice) {
       const court = await db.court.findUnique({ where: { id: courtId } })
-      body.totalPrice = court?.pricePerHour || 0
+      price = court?.pricePerHour || 0
     }
+
+    const adv = parseFloat(advanceAmount) || price * 0.5
+    const rem = parseFloat(remainingAmount) || price - adv
 
     const booking = await db.booking.create({
       data: {
         courtId,
-        clientId,
-        date: bookingDate,
+        userId,
+        date,
         startTime,
         endTime,
-        totalPrice: parseFloat(totalPrice) || 0,
-        status: 'confirmed',
+        totalPrice: price,
+        advanceAmount: adv,
+        remainingAmount: rem,
+        status: status || 'pending',
         paymentMethod: paymentMethod || null,
-        paymentStatus: paymentMethod ? 'paid' : 'pending',
         notes: notes || null,
       },
       include: {
         court: { include: { branch: true } },
-        client: true,
+        user: true,
       },
     })
 
@@ -103,12 +119,16 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { id, status } = body
 
+    if (!id) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+    }
+
     const booking = await db.booking.update({
       where: { id },
       data: { status },
       include: {
         court: { include: { branch: true } },
-        client: true,
+        user: true,
       },
     })
 

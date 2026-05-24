@@ -8,28 +8,30 @@ export async function GET(request: NextRequest) {
     const sport = searchParams.get('sport')
     const branchId = searchParams.get('branchId')
 
+    // Single court by id
     if (id) {
       const court = await db.court.findUnique({
         where: { id },
         include: {
           branch: true,
-          reviews: {
-            include: { client: true },
-            orderBy: { createdAt: 'desc' },
-            take: 5,
+          _count: {
+            select: { reviews: true, bookings: true },
           },
         },
       })
+
       if (!court) {
         return NextResponse.json({ error: 'Court not found' }, { status: 404 })
       }
+
       return NextResponse.json({
         ...court,
-        images: JSON.parse(court.images),
-        amenities: JSON.parse(court.amenities),
+        images: JSON.parse(court.images || '[]'),
+        amenities: JSON.parse(court.amenities || '[]'),
       })
     }
 
+    // List courts with optional filters
     const where: Record<string, unknown> = { isActive: true }
     if (sport && sport !== 'todos') {
       where.sport = sport
@@ -40,14 +42,19 @@ export async function GET(request: NextRequest) {
 
     const courts = await db.court.findMany({
       where,
-      include: { branch: true },
-      orderBy: { rating: 'desc' },
+      include: {
+        branch: true,
+        _count: {
+          select: { reviews: true, bookings: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     })
 
     const parsedCourts = courts.map((court) => ({
       ...court,
-      images: JSON.parse(court.images),
-      amenities: JSON.parse(court.amenities),
+      images: JSON.parse(court.images || '[]'),
+      amenities: JSON.parse(court.amenities || '[]'),
     }))
 
     return NextResponse.json(parsedCourts)
@@ -62,6 +69,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, sport, description, branchId, images, pricePerHour, amenities } = body
 
+    if (!name || !sport || !branchId) {
+      return NextResponse.json(
+        { error: 'Name, sport, and branchId are required' },
+        { status: 400 }
+      )
+    }
+
     const court = await db.court.create({
       data: {
         name,
@@ -74,11 +88,14 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      ...court,
-      images: JSON.parse(court.images),
-      amenities: JSON.parse(court.amenities),
-    }, { status: 201 })
+    return NextResponse.json(
+      {
+        ...court,
+        images: JSON.parse(court.images || '[]'),
+        amenities: JSON.parse(court.amenities || '[]'),
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating court:', error)
     return NextResponse.json({ error: 'Failed to create court' }, { status: 500 })

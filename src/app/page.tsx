@@ -14,6 +14,7 @@ import BookingForm from '@/components/bookings/BookingForm'
 import BookingsView from '@/components/bookings/BookingsView'
 import ProfileView from '@/components/profile/ProfileView'
 import AdminDashboard from '@/components/admin/AdminDashboard'
+import AuthView from '@/components/auth/AuthView'
 
 function HomeView() {
   return (
@@ -38,69 +39,38 @@ function ViewRouter() {
     <AnimatePresence mode="wait">
       {currentView === 'home' && <HomeView key="home" />}
       {currentView === 'search' && (
-        <motion.div
-          key="search"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div key="search" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
           <SearchView />
         </motion.div>
       )}
       {currentView === 'court-detail' && (
-        <motion.div
-          key="court-detail"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div key="court-detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
           <CourtDetail />
         </motion.div>
       )}
       {currentView === 'booking-form' && (
-        <motion.div
-          key="booking-form"
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 100 }}
-          transition={{ type: 'tween', duration: 0.25 }}
-        >
+        <motion.div key="booking-form" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 100 }} transition={{ type: 'tween', duration: 0.25 }}>
           <BookingForm />
         </motion.div>
       )}
       {currentView === 'bookings' && (
-        <motion.div
-          key="bookings"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div key="bookings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
           <BookingsView />
         </motion.div>
       )}
       {currentView === 'profile' && (
-        <motion.div
-          key="profile"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div key="profile" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
           <ProfileView />
         </motion.div>
       )}
       {currentView === 'admin' && (
-        <motion.div
-          key="admin"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
           <AdminDashboard />
+        </motion.div>
+      )}
+      {(currentView === 'login' || currentView === 'register') && (
+        <motion.div key="auth" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }}>
+          <AuthView />
         </motion.div>
       )}
     </AnimatePresence>
@@ -109,15 +79,15 @@ function ViewRouter() {
 
 export default function Home() {
   const { currentView } = useAppStore()
-  const isBookingForm = currentView === 'booking-form'
+  const isFullPage = currentView === 'booking-form' || currentView === 'login' || currentView === 'register'
 
   return (
     <div className="min-h-screen flex flex-col bg-cm-background">
-      {!isBookingForm && <TopAppBar />}
-      <main className={`flex-1 ${isBookingForm ? '' : 'pt-16 pb-24 md:pb-8'}`}>
+      {!isFullPage && <TopAppBar />}
+      <main className={`flex-1 ${isFullPage ? '' : 'pt-16 pb-24 md:pb-8'}`}>
         <ViewRouter />
       </main>
-      {!isBookingForm && <BottomNavBar />}
+      {!isFullPage && <BottomNavBar />}
     </div>
   )
 }

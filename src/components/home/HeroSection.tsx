@@ -9,7 +9,6 @@ const sportOptions = [
   { value: 'todos', label: 'Todos' },
   { value: 'futbol', label: 'Fútbol' },
   { value: 'voley', label: 'Vóley' },
-  { value: 'eventos', label: 'Eventos' },
 ]
 
 export default function HeroSection() {
@@ -63,8 +62,7 @@ export default function HeroSection() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-10 font-[family-name:var(--font-inter)]"
         >
-          4 canchas de fútbol, 2 de vóley y un salón de eventos.
-          Reserva, paga y disfruta sin complicaciones.
+          4 canchas de fútbol 5 y 2 canchas de vóley. Reserva, paga y disfruta sin complicaciones.
         </motion.p>
 
         {/* Search Bar */}
@@ -114,8 +112,8 @@ export default function HeroSection() {
           className="flex flex-wrap justify-center gap-6 md:gap-12 mt-12"
         >
           {[
-            { value: '7', label: 'Espacios' },
-            { value: '4', label: 'Fútbol' },
+            { value: '6', label: 'Espacios' },
+            { value: '4', label: 'Fútbol 5' },
             { value: '2', label: 'Vóley' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">

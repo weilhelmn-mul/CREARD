@@ -16,82 +16,95 @@ model Branch {
   email     String?
   isActive  Boolean @default(true)
   courts    Court[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Court {
   id          String    @id @default(cuid())
   name        String
-  sport       String    // futbol, voley, basket, tenis, eventos
+  sport       String    // futbol, voley
   description String?
   branchId    String
   branch      Branch    @relation(fields: [branchId], references: [id])
   images      String    // JSON array of image URLs
-  rating      Float     @default(0)
-  reviewCount Int       @default(0)
   pricePerHour Float    @default(0)
   isActive    Boolean   @default(true)
   amenities   String    // JSON array of amenities
-  timeSlots   Booking[]
+  bookings    Booking[]
   reviews     Review[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model User {
+  id         String    @id @default(cuid())
+  name       String
+  email      String    @unique
+  phone      String?
+  password   String    // hashed password (in production use bcrypt)
+  role       String    @default("user") // user, admin
+  isActive   Boolean   @default(true)
+  bookings   Booking[]
+  payments   Payment[]
+  reviews    Review[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Booking {
+  id              String    @id @default(cuid())
+  courtId         String
+  court           Court     @relation(fields: [courtId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  date            String    // YYYY-MM-DD
+  startTime       String    // "18:00"
+  endTime         String    // "19:00"
+  totalPrice      Float
+  advanceAmount   Float     @default(0) // 50% adelanto
+  remainingAmount Float     @default(0)
+  status          String    @default("pending") // pending, confirmed, partially_paid, fully_paid, completed, cancelled, no_show, expired
+  paymentMethod   String?   // yape, plin, culqi, card, cash, transfer
+  notes           String?
+  payments        Payment[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Payment {
+  id          String  @id @default(cuid())
+  bookingId   String
+  booking     Booking @relation(fields: [bookingId], references: [id])
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+  amount      Float
+  type        String  // advance, remaining, full
+  method      String  // yape, plin, culqi, card, cash, transfer
+  status      String  @default("pending") // pending, completed, failed, refunded
+  externalRef String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
 
-model Client {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  phone         String?
-  avatar        String?
-  points        Int       @default(0)
-  credit        Float     @default(0)
-  membership    String?   // none, basic, premium
-  bookings      Booking[]
-  reviews       Review[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
-model Booking {
-  id            String    @id @default(cuid())
-  courtId       String
-  court         Court     @relation(fields: [courtId], references: [id])
-  clientId      String
-  client        Client    @relation(fields: [clientId], references: [id])
-  date          DateTime  // The date of the booking
-  startTime     String    // "14:00"
-  endTime       String    // "15:00"
-  totalPrice    Float
-  status        String    @default("confirmed") // confirmed, cancelled, completed, no_show
-  paymentMethod String?   // card, cash, transfer
-  paymentStatus String    @default("pending") // pending, paid, refunded
-  notes         String?
-  payments     Payment[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+model Expense {
+  id          String  @id @default(cuid())
+  description String
+  amount      Float
+  category    String  // mantenimiento, servicios, personal, alquiler, otros
+  date        String  // YYYY-MM-DD
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Review {
   id        String   @id @default(cuid())
   courtId   String
   court     Court    @relation(fields: [courtId], references: [id])
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
   rating    Int      // 1-5
   comment   String?
-  createdAt DateTime @default(now())
-}
-
-model Payment {
-  id            String    @id @default(cuid())
-  bookingId     String
-  booking       Booking   @relation(fields: [bookingId], references: [id])
-  amount        Float
-  method        String    // card, cash, transfer, mercado_pago
-  status        String    @default("pending") // pending, completed, failed, refunded
-  externalRef   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime   @default(now())
 }

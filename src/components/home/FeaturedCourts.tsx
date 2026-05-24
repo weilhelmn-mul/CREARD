@@ -19,17 +19,11 @@ interface Court {
 const sportLabels: Record<string, string> = {
   futbol: 'Fútbol',
   voley: 'Vóley',
-  basket: 'Básquet',
-  tenis: 'Tenis',
-  eventos: 'Eventos',
 }
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer',
   voley: 'sports_volleyball',
-  basket: 'sports_basketball',
-  tenis: 'sports_tennis',
-  eventos: 'celebration',
 }
 
 export default function FeaturedCourts() {
@@ -39,7 +33,7 @@ export default function FeaturedCourts() {
   useEffect(() => {
     fetch('/api/courts')
       .then((res) => res.json())
-      .then((data) => setCourts(data.slice(0, 8)))
+      .then((data) => setCourts(data.slice(0, 6)))
       .catch(console.error)
   }, [])
 

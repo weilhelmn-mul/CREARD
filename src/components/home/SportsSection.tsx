@@ -20,14 +20,6 @@ const sports = [
     color: 'from-blue-500/20 to-blue-700/10',
     borderColor: 'border-blue-500/20',
   },
-  {
-    id: 'eventos',
-    label: 'Eventos',
-    icon: 'celebration',
-    count: 1,
-    color: 'from-purple-500/20 to-purple-700/10',
-    borderColor: 'border-purple-500/20',
-  },
 ]
 
 export default function SportsSection() {
@@ -46,11 +38,11 @@ export default function SportsSection() {
             Nuestras Instalaciones
           </h2>
           <p className="text-cm-on-surface-variant text-sm mt-2 font-[family-name:var(--font-inter)]">
-            7 espacios disponibles para tu deporte y eventos
+            6 espacios disponibles para tu deporte
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 max-w-2xl mx-auto">
           {sports.map((sport, index) => (
             <motion.button
               key={sport.id}

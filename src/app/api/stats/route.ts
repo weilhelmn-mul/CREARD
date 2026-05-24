@@ -1,84 +1,142 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+function getTodayStr(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function getWeekStartStr(): string {
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Monday start
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - diff)
+  const y = monday.getFullYear()
+  const m = String(monday.getMonth() + 1).padStart(2, '0')
+  const d = String(monday.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function getMonthStartStr(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}-01`
+}
+
 export async function GET() {
   try {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+    const todayStr = getTodayStr()
+    const weekStartStr = getWeekStartStr()
+    const monthStartStr = getMonthStartStr()
 
-    // Total bookings
-    const totalBookings = await db.booking.count()
+    // Basic counts
+    const [totalCourts, totalUsers, totalBookings] = await Promise.all([
+      db.court.count(),
+      db.user.count(),
+      db.booking.count(),
+    ])
 
-    // Active bookings (confirmed)
-    const activeBookings = await db.booking.count({
-      where: { status: 'confirmed' },
+    // Today's bookings and revenue
+    const todayBookings = await db.booking.count({
+      where: { date: todayStr },
     })
 
-    // Total revenue (paid bookings)
-    const revenueResult = await db.payment.aggregate({
-      _sum: { amount: true },
-      where: { status: 'completed' },
-    })
-    const totalRevenue = revenueResult._sum.amount || 0
-
-    // This month revenue
-    const monthRevenueResult = await db.payment.aggregate({
+    const todayPayments = await db.payment.aggregate({
       _sum: { amount: true },
       where: {
         status: 'completed',
-        createdAt: { gte: startOfMonth, lte: endOfMonth },
+        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       },
     })
-    const monthRevenue = monthRevenueResult._sum.amount || 0
+    const todayRevenue = todayPayments._sum.amount || 0
 
-    // Active clients
-    const activeClients = await db.client.count({
+    // Pending payments (sum of remainingAmount where status is partially_paid)
+    const pendingPaymentsResult = await db.booking.aggregate({
+      _sum: { remainingAmount: true },
+      where: { status: 'partially_paid' },
+    })
+    const pendingPayments = pendingPaymentsResult._sum.remainingAmount || 0
+
+    // Weekly revenue (payments created this week)
+    const weeklyRevenueResult = await db.payment.aggregate({
+      _sum: { amount: true },
       where: {
-        bookings: {
-          some: {
-            date: { gte: new Date(now.getFullYear(), now.getMonth() - 3) },
-          },
-        },
+        status: 'completed',
+        createdAt: { gte: new Date(weekStartStr) },
       },
     })
+    const weeklyRevenue = weeklyRevenueResult._sum.amount || 0
 
-    const totalClients = await db.client.count()
-
-    // Occupancy rate (bookings this week / possible slots)
-    const weekStart = new Date(now)
-    weekStart.setDate(now.getDate() - now.getDay())
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 7)
-
-    const weekBookings = await db.booking.count({
+    // Monthly revenue
+    const monthlyRevenueResult = await db.payment.aggregate({
+      _sum: { amount: true },
       where: {
-        date: { gte: weekStart, lt: weekEnd },
-        status: { in: ['confirmed', 'completed'] },
+        status: 'completed',
+        createdAt: { gte: new Date(monthStartStr) },
       },
     })
-    const totalCourts = await db.court.count()
-    const possibleSlots = totalCourts * 17 * 7 // 17 hours (6-23) * 7 days
-    const occupancyRate = possibleSlots > 0 ? Math.round((weekBookings / possibleSlots) * 100) : 0
+    const monthlyRevenue = monthlyRevenueResult._sum.amount || 0
 
     // Bookings by sport
-    const bookingsBySport = await db.booking.groupBy({
+    const courtSportMap: Record<string, string> = {}
+    const courts = await db.court.findMany({ select: { id: true, sport: true } })
+    courts.forEach((c) => {
+      courtSportMap[c.id] = c.sport
+    })
+
+    const bookingsGrouped = await db.booking.groupBy({
       by: ['courtId'],
-      where: { status: { in: ['confirmed', 'completed'] } },
       _count: true,
     })
 
-    const courtSportMap: Record<string, string> = {}
-    const courts = await db.court.findMany({ select: { id: true, sport: true } })
-    courts.forEach((c) => { courtSportMap[c.id] = c.sport })
-
-    const sportCounts: Record<string, number> = {}
-    bookingsBySport.forEach((b) => {
-      const sport = courtSportMap[b.courtId] || 'other'
-      sportCounts[sport] = (sportCounts[sport] || 0) + b._count
+    const bookingsBySport: Record<string, number> = { futbol: 0, voley: 0 }
+    bookingsGrouped.forEach((b) => {
+      const sport = courtSportMap[b.courtId]
+      if (sport && bookingsBySport[sport] !== undefined) {
+        bookingsBySport[sport] += b._count
+      }
     })
 
+    // Bookings by status
+    const bookingsByStatusResult = await db.booking.groupBy({
+      by: ['status'],
+      _count: true,
+    })
+    const bookingsByStatus: Record<string, number> = {}
+    bookingsByStatusResult.forEach((b) => {
+      bookingsByStatus[b.status] = b._count
+    })
+
+    // Top courts by booking count
+    const courtBookingCounts = await db.booking.groupBy({
+      by: ['courtId'],
+      _count: true,
+      orderBy: { _count: { id: 'desc' } },
+      take: 5,
+    })
+
+    const topCourts = await Promise.all(
+      courtBookingCounts.map(async (cbc) => {
+        const court = await db.court.findUnique({
+          where: { id: cbc.courtId },
+          include: { branch: true },
+        })
+        return {
+          ...court,
+          images: court ? JSON.parse(court.images || '[]') : [],
+          amenities: court ? JSON.parse(court.amenities || '[]') : [],
+          bookingCount: cbc._count,
+        }
+      })
+    )
+
     // Revenue by month (last 7 months)
+    const now = new Date()
     const revenueByMonth: { month: string; revenue: number }[] = []
     for (let i = 6; i >= 0; i--) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -99,42 +157,8 @@ export async function GET() {
       })
     }
 
-    // Recent bookings
-    const recentBookings = await db.booking.findMany({
-      take: 10,
-      include: {
-        court: { include: { branch: true } },
-        client: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    // Top courts by revenue
-    const courtRevenue = await db.booking.groupBy({
-      by: ['courtId'],
-      where: { status: { in: ['confirmed', 'completed'] } },
-      _sum: { totalPrice: true },
-      _count: true,
-      orderBy: { _sum: { totalPrice: 'desc' } },
-      take: 5,
-    })
-
-    const topCourts = await Promise.all(
-      courtRevenue.map(async (cr) => {
-        const court = await db.court.findUnique({
-          where: { id: cr.courtId },
-          include: { branch: true },
-        })
-        return {
-          ...court,
-          totalRevenue: cr._sum.totalPrice || 0,
-          bookingCount: cr._count,
-        }
-      })
-    )
-
     // Daily bookings last 7 days
-    const dailyBookings: { day: string; bookings: number; revenue: number }[] = []
+    const dailyBookings: { day: string; date: string; bookings: number; revenue: number }[] = []
     for (let i = 6; i >= 0; i--) {
       const dayDate = new Date(now)
       dayDate.setDate(now.getDate() - i)
@@ -142,13 +166,11 @@ export async function GET() {
       const dayEnd = new Date(dayDate)
       dayEnd.setHours(23, 59, 59, 999)
       const dayName = dayDate.toLocaleDateString('es', { weekday: 'short' })
+      const dateStr = dayDate.toISOString().split('T')[0]
 
       const [dayBookings, dayRevenueResult] = await Promise.all([
         db.booking.count({
-          where: {
-            date: { gte: dayDate, lte: dayEnd },
-            status: { in: ['confirmed', 'completed'] },
-          },
+          where: { date: dateStr },
         }),
         db.payment.aggregate({
           _sum: { amount: true },
@@ -161,23 +183,25 @@ export async function GET() {
 
       dailyBookings.push({
         day: dayName.charAt(0).toUpperCase() + dayName.slice(1),
+        date: dateStr,
         bookings: dayBookings,
         revenue: dayRevenueResult._sum.amount || 0,
       })
     }
 
     return NextResponse.json({
+      totalCourts,
+      totalUsers,
       totalBookings,
-      activeBookings,
-      totalRevenue,
-      monthRevenue,
-      activeClients,
-      totalClients,
-      occupancyRate,
-      bookingsBySport: sportCounts,
-      revenueByMonth,
-      recentBookings,
+      todayBookings,
+      todayRevenue,
+      pendingPayments,
+      weeklyRevenue,
+      monthlyRevenue,
+      bookingsBySport,
+      bookingsByStatus,
       topCourts,
+      revenueByMonth,
       dailyBookings,
     })
   } catch (error) {

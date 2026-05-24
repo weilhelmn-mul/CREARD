@@ -20,24 +20,17 @@ interface Court {
 const sportLabels: Record<string, string> = {
   futbol: 'Fútbol',
   voley: 'Vóley',
-  basket: 'Básquet',
-  tenis: 'Tenis',
-  eventos: 'Eventos',
 }
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer',
   voley: 'sports_volleyball',
-  basket: 'sports_basketball',
-  tenis: 'sports_tennis',
-  eventos: 'celebration',
 }
 
 const sportTabs = [
   { value: 'todos', label: 'Todos' },
   { value: 'futbol', label: 'Fútbol' },
   { value: 'voley', label: 'Vóley' },
-  { value: 'eventos', label: 'Eventos' },
 ]
 
 type SortType = 'rating' | 'price-asc' | 'price-desc' | 'name'
