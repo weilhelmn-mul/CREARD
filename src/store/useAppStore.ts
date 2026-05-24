@@ -58,7 +58,7 @@ export const useAppStore = create<AppState>((set) => ({
     {
       id: '1',
       title: 'Reserva confirmada',
-      message: 'Tu reserva en Cancha Sintética Pro para mañana a las 18:00 ha sido confirmada.',
+      message: 'Tu reserva en CREARD para mañana a las 18:00 ha sido confirmada.',
       type: 'success',
       read: false,
       createdAt: new Date(),

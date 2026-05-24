@@ -6,11 +6,11 @@ async function main() {
   // Create single branch
   const branch1 = await prisma.branch.create({
     data: {
-      name: 'CanchaMax Centro',
+      name: 'CREARD',
       address: 'Av. Principal 123',
       city: 'Lima',
       phone: '+51 987 654 321',
-      email: 'centro@canchamax.com',
+      email: 'info@creard.com',
     },
   });
 
@@ -24,7 +24,7 @@ async function main() {
         description: 'Cancha de fútbol 5 con césped sintético de última generación. Iluminación LED, vestuarios con duchas y marcador electrónico. Ideal para partidos amateurs y torneos.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida/ADBb0ugR1W028dfouFYVkLV8ywXH715szM1noNRjAX27NjZJbSISuwwfcsG6OXBvhpGPNm447Y0fxD3AlUcrHqWNIigbyhb8_DhH7zoaXTTMs5-cvBckeVW9rdWSj4hDNrVXdNzmNGD7mXTNDm3uZEFYighajMVsZxRH-FuyI1GNSeBM_VvVec734cFXJx1aXQQyGao2CWTAGDNAhQwBBVrzBz2WCsSW4zrd9LxTJemAT7MobhTbMPrW9AnLSSs',
+          '/cancha-futbol-1.png',
         ]),
         rating: 4.9,
         reviewCount: 128,
@@ -40,7 +40,7 @@ async function main() {
         description: 'Cancha de fútbol 7 con césped sintético de alta densidad. Porterías reglamentarias, red protector lateral y zona de aquecimiento. Perfecta para partidos grupales.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida/ADBb0ugR1W028dfouFYVkLV8ywXH715szM1noNRjAX27NjZJbSISuwwfcsG6OXBvhpGPNm447Y0fxD3AlUcrHqWNIigbyhb8_DhH7zoaXTTMs5-cvBckeVW9rdWSj4hDNrVXdNzmNGD7mXTNDm3uZEFYighajMVsZxRH-FuyI1GNSeBM_VvVec734cFXJx1aXQQyGao2CWTAGDNAhQwBBVrzBz2WCsSW4zrd9LxTJemAT7MobhTbMPrW9AnLSSs',
+          '/cancha-futbol-2.png',
         ]),
         rating: 4.8,
         reviewCount: 95,
@@ -56,7 +56,7 @@ async function main() {
         description: 'Cancha de fútbol 5 techada con piso tarima profesional. Climatización, sonido ambiental y vestuarios premium. Ideal para jugar sin importar el clima.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida/ADBb0ugR1W028dfouFYVkLV8ywXH715szM1noNRjAX27NjZJbSISuwwfcsG6OXBvhpGPNm447Y0fxD3AlUcrHqWNIigbyhb8_DhH7zoaXTTMs5-cvBckeVW9rdWSj4hDNrVXdNzmNGD7mXTNDm3uZEFYighajMVsZxRH-FuyI1GNSeBM_VvVec734cFXJx1aXQQyGao2CWTAGDNAhQwBBVrzBz2WCsSW4zrd9LxTJemAT7MobhTbMPrW9AnLSSs',
+          '/cancha-futbol-3.png',
         ]),
         rating: 4.7,
         reviewCount: 72,
@@ -72,7 +72,7 @@ async function main() {
         description: 'Cancha de fútbol 11 con césped natural, gradas para 500 espectadores y cabinas de transmisión. La experiencia más completa para partidos competitivos y torneos oficiales.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida/ADBb0ugR1W028dfouFYVkLV8ywXH715szM1noNRjAX27NjZJbSISuwwfcsG6OXBvhpGPNm447Y0fxD3AlUcrHqWNIigbyhb8_DhH7zoaXTTMs5-cvBckeVW9rdWSj4hDNrVXdNzmNGD7mXTNDm3uZEFYighajMVsZxRH-FuyI1GNSeBM_VvVec734cFXJx1aXQQyGao2CWTAGDNAhQwBBVrzBz2WCsSW4zrd9LxTJemAT7MobhTbMPrW9AnLSSs',
+          '/cancha-futbol-4.png',
         ]),
         rating: 4.9,
         reviewCount: 156,
@@ -88,7 +88,7 @@ async function main() {
         description: 'Cancha profesional de vóley con piso PVC, red FIVV homologada, tribunas para 200 espectadores y sistema de sonido profesional. Ideal para ligas y competencias.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDA5470OGWpmp_n9u2uhmPJkXVjJa3jyHGB5QXJE86RcW2giEptBZV6vNSBF6be7H90PkkotYRUHmd-mPw-mk2XjrJlfH-aHktPs6isa4SPUE_4veDrPd5LM6gIdXhd2QN4o14ZxYfN4d_PsKZ_YQG-DAvPxYidH0BuLzUqSGJwv8TACldwTKeku4dkebvp3jFWbOlVioZT9b9r6alfgUisim823Qjy3zZIs5NE8eoPy4SCdN_a0BC5Xiw0KRPg1n_IUR2R4D0Ld27j',
+          '/cancha-voley.png',
         ]),
         rating: 4.8,
         reviewCount: 87,
@@ -104,7 +104,7 @@ async function main() {
         description: 'Cancha de vóley techada con piso PVC y excelente iluminación. Perfecciona para entrenamientos, partidos amistosos y torneos escolares o universitarios.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDA5470OGWpmp_n9u2uhmPJkXVjJa3jyHGB5QXJE86RcW2giEptBZV6vNSBF6be7H90PkkotYRUHmd-mPw-mk2XjrJlfH-aHktPs6isa4SPUE_4veDrPd5LM6gIdXhd2QN4o14ZxYfN4d_PsKZ_YQG-DAvPxYidH0BuLzUqSGJwv8TACldwTKeku4dkebvp3jFWbOlVioZT9b9r6alfgUisim823Qjy3zZIs5NE8eoPy4SCdN_a0BC5Xiw0KRPg1n_IUR2R4D0Ld27j',
+          '/cancha-voley.png',
         ]),
         rating: 4.6,
         reviewCount: 54,
@@ -120,7 +120,7 @@ async function main() {
         description: 'Espacio versátil para eventos corporativos, torneos, celebraciones y reuniones. Capacidad para 300 personas con servicio de catering, proyector, sistema de sonido profesional y aire acondicionado.',
         branchId: branch1.id,
         images: JSON.stringify([
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBfFiyRwb_rR1S8525jWwAgyypWC8J5H9eeagTeGYBkrjWF7QVTGYD8VaXrfsdIIStep6EkcGXMW8cLSrCria-MF7fEfpa6qnObNeIvqXrzVe8klRKGRJqWB6fyseGAHesOF6RyTJHUFokiEnRBfHaJe23R7gSQ_FLMvqDvw1AjEaJFZUS3bllkp3j9FzZmmZUzn3WlvtGZCSCaPm_A5bnXACJ1TL9M4CTbJJh27nI2aWT4nkkkHgCzqxTmzH_hsMnZdi80sCQ8cUqg',
+          '/salon-eventos.png',
         ]),
         rating: 5.0,
         reviewCount: 45,

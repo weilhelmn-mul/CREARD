@@ -44,7 +44,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* CanchaMax custom colors */
+  /* CREARD custom colors */
   --color-cm-background: #0c160a;
   --color-cm-surface: #0c160a;
   --color-cm-surface-dim: #0c160a;
@@ -160,7 +160,7 @@
   }
 }
 
-/* Custom CanchaMax utility classes */
+/* Custom CREARD utility classes */
 .glass-card {
   background: rgba(45, 56, 42, 0.4);
   backdrop-filter: blur(20px);

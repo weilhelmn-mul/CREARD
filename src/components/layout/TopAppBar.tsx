@@ -26,12 +26,14 @@ export default function TopAppBar() {
               <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
             </div>
           )}
-          <h1
-            className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-primary text-glow cursor-pointer"
-            onClick={() => setView('home')}
-          >
-            CanchaMax Pro
-          </h1>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
+            <img src="/creard-logo.png" alt="CREARD" className="h-8 w-8 rounded-lg" />
+            <h1
+              className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-primary text-glow"
+            >
+              CREARD
+            </h1>
+          </div>
         </div>
 
         {/* Desktop Nav */}
