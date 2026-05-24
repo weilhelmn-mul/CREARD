@@ -37,7 +37,7 @@ async function main() {
       data: {
         name: 'Cancha de Fútbol 2',
         sport: 'futbol',
-        description: 'Cancha de fútbol 7 con césped sintético de alta densidad. Porterías reglamentarias, red protector lateral y zona de aquecimiento. Perfecta para partidos grupales.',
+        description: 'Cancha de fútbol 5 con césped sintético premium e iluminación de última generación. Amplia zona de calentamiento y vestuarios completos. Ideal para torneos competitivos y partidos de alta exigencia.',
         branchId: branch1.id,
         images: JSON.stringify([
           '/cancha-futbol-2.png',
@@ -69,15 +69,15 @@ async function main() {
       data: {
         name: 'Cancha de Fútbol 4',
         sport: 'futbol',
-        description: 'Cancha de fútbol 11 con césped natural, gradas para 500 espectadores y cabinas de transmisión. La experiencia más completa para partidos competitivos y torneos oficiales.',
+        description: 'Cancha de fútbol 5 al aire libre con césped sintético de alta calidad, excelente iluminación nocturna y amplio espacio para espectadores. La mejor opción para partidos competitivos y torneos oficiales.',
         branchId: branch1.id,
         images: JSON.stringify([
           '/cancha-futbol-4.png',
         ]),
         rating: 4.9,
         reviewCount: 156,
-        pricePerHour: 85,
-        amenities: JSON.stringify(['Gradas', 'Cabinas TV', 'Estacionamiento', 'Vestuarios', 'Duchas', 'Cafetería', 'Césped natural']),
+        pricePerHour: 55,
+        amenities: JSON.stringify(['Wi-Fi', 'Estacionamiento', 'Vestuarios', 'Duchas', 'Iluminación LED', 'Cafetería', 'Zona de calentamiento']),
       },
     }),
     // VÓLEY A
@@ -246,7 +246,7 @@ async function main() {
         date: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1),
         startTime: '08:00',
         endTime: '10:00',
-        totalPrice: 170,
+        totalPrice: 110,
         status: 'completed',
         paymentMethod: 'cash',
         paymentStatus: 'paid',
@@ -316,7 +316,7 @@ async function main() {
         date: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6),
         startTime: '15:00',
         endTime: '17:00',
-        totalPrice: 170,
+        totalPrice: 110,
         status: 'completed',
         paymentMethod: 'transfer',
         paymentStatus: 'paid',
@@ -339,7 +339,7 @@ async function main() {
       data: { bookingId: bookings[4].id, amount: 480, method: 'card', status: 'completed', externalRef: 'MP-004' },
     }),
     prisma.payment.create({
-      data: { bookingId: bookings[5].id, amount: 170, method: 'cash', status: 'completed', externalRef: 'EF-005' },
+      data: { bookingId: bookings[5].id, amount: 110, method: 'cash', status: 'completed', externalRef: 'EF-005' },
     }),
     prisma.payment.create({
       data: { bookingId: bookings[6].id, amount: 60, method: 'card', status: 'completed', externalRef: 'MP-006' },
@@ -354,7 +354,7 @@ async function main() {
       data: { bookingId: bookings[9].id, amount: 55, method: 'card', status: 'completed', externalRef: 'MP-009' },
     }),
     prisma.payment.create({
-      data: { bookingId: bookings[10].id, amount: 170, method: 'transfer', status: 'completed', externalRef: 'TR-010' },
+      data: { bookingId: bookings[10].id, amount: 110, method: 'transfer', status: 'completed', externalRef: 'TR-010' },
     }),
   ]);
 
@@ -381,7 +381,7 @@ async function main() {
         courtId: courts[1].id,
         clientId: clients[2].id,
         rating: 4,
-        comment: 'La Cancha de Fútbol 2 es perfecta para 7 vs 7. Porterías reglamentarias y buen césped.',
+        comment: 'La Cancha de Fútbol 2 es perfecta para 5 vs 5. Excelente césped y buena iluminación.',
       },
     }),
     prisma.review.create({
@@ -397,7 +397,7 @@ async function main() {
         courtId: courts[3].id,
         clientId: clients[2].id,
         rating: 5,
-        comment: 'La Cancha 4 de fútbol 11 es espectacular. Gradas, césped natural, la mejor experiencia.',
+        comment: 'La Cancha de Fútbol 4 es espectacular. Ideal para torneos, amplio espacio y la mejor iluminación.',
       },
     }),
     prisma.review.create({
