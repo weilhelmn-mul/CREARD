@@ -1,69 +1,68 @@
-import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { createPayment, getPayments, updateBooking, getBookings } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { bookingId, userId, amount, type, method, status, externalRef } = body
+    const body = await request.json();
+    const { bookingId, userId, amount, type, method, status, externalRef } = body;
 
     if (!bookingId || !userId || !amount || !type || !method) {
       return NextResponse.json(
         { error: 'bookingId, userId, amount, type, and method are required' },
         { status: 400 }
-      )
+      );
     }
 
-    // Create payment and update booking in a transaction
-    const result = await db.$transaction(async (tx) => {
-      // Create the payment record
-      const payment = await tx.payment.create({
-        data: {
-          bookingId,
-          userId,
-          amount: parseFloat(amount) || 0,
-          type: type || 'remaining',
-          method,
-          status: status || 'completed',
-          externalRef: externalRef || null,
-        },
-        include: {
-          booking: true,
-        },
-      })
+    // Crear el pago en la subcolección
+    const paymentId = await createPayment(bookingId, {
+      user_id: userId,
+      amount: parseFloat(amount) || 0,
+      type: type || 'remaining',
+      method,
+      status: status || 'completed',
+      external_ref: externalRef || null,
+    });
 
-      // If this is a remaining payment, update the booking
-      if (type === 'remaining') {
-        const booking = payment.booking
-        const newAdvanceAmount = booking.advanceAmount + payment.amount
-        let newRemainingAmount = booking.remainingAmount - payment.amount
-        let newStatus = booking.status
+    // Si es pago restante, actualizar la reserva
+    if (type === 'remaining') {
+      const bookings = await getBookings({ courtId: undefined, userId: undefined, date: undefined, status: undefined });
+      // Buscar la reserva por ID
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (booking) {
+        const newAdvance = (booking.advance_amount || 0) + (parseFloat(amount) || 0);
+        let newRemaining = (booking.total_price || 0) - newAdvance;
+        let newStatus = booking.status || 'partially_paid';
 
-        // Clamp remaining to 0
-        if (newRemainingAmount < 0) newRemainingAmount = 0
-
-        // If fully paid, update status
-        if (newRemainingAmount <= 0) {
-          newStatus = 'fully_paid'
-        } else if (booking.status === 'pending') {
-          newStatus = 'partially_paid'
+        if (newRemaining <= 0) {
+          newRemaining = 0;
+          newStatus = 'fully_paid';
         }
 
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            advanceAmount: newAdvanceAmount,
-            remainingAmount: newRemainingAmount,
-            status: newStatus,
-          },
-        })
+        await updateBooking(bookingId, {
+          advance_amount: newAdvance,
+          remaining_amount: newRemaining,
+          status: newStatus,
+        });
       }
+    }
 
-      return payment
-    })
+    // Si es adelanto, actualizar estado de la reserva
+    if (type === 'advance') {
+      const bookings = await getBookings({});
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (booking) {
+        await updateBooking(bookingId, {
+          status: 'partially_paid',
+          slot_status: 'reserved',
+          payment_method: method,
+          advance_amount: parseFloat(amount) || 0,
+        });
+      }
+    }
 
-    return NextResponse.json(result, { status: 201 })
+    return NextResponse.json({ id: paymentId, success: true }, { status: 201 });
   } catch (error) {
-    console.error('Error creating payment:', error)
-    return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 })
+    console.error('Error creating payment:', error);
+    return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 });
   }
 }

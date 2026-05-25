@@ -1,38 +1,50 @@
-import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { getAllFromCollection, getBookings } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
 
     if (id) {
-      const client = await db.client.findUnique({
-        where: { id },
-        include: {
-          _count: {
-            select: { bookings: true, reviews: true },
-          },
-        },
-      })
-      if (!client) {
-        return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+      // Buscar usuario específico
+      const snapshot = await (await import('@/lib/firebase-admin')).adminDb
+        .collection('users')
+        .doc(id)
+        .get();
+
+      if (!snapshot.exists) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 });
       }
-      return NextResponse.json(client)
+
+      const userData = snapshot.data();
+
+      // Contar reservas del usuario
+      const userBookings = await getBookings({ userId: id });
+
+      return NextResponse.json({
+        ...userData,
+        id: snapshot.id,
+        _count: { bookings: userBookings.length },
+      });
     }
 
-    const clients = await db.client.findMany({
-      include: {
-        _count: {
-          select: { bookings: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+    // Listar todos los usuarios (solo con role 'user')
+    const allUsers = await getAllFromCollection('users');
+    const clients = allUsers
+      .filter((u) => u.role === 'user')
+      .map(async (u) => {
+        const userBookings = await getBookings({ userId: u.id as string });
+        return {
+          ...u,
+          _count: { bookings: userBookings.length },
+        };
+      });
 
-    return NextResponse.json(clients)
+    const resolved = await Promise.all(clients);
+    return NextResponse.json(resolved);
   } catch (error) {
-    console.error('Error fetching clients:', error)
-    return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 })
+    console.error('Error fetching clients:', error);
+    return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
   }
 }

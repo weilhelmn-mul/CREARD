@@ -1,103 +1,59 @@
-import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { getCourts, getCourtById, createCourt } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-    const sport = searchParams.get('sport')
-    const branchId = searchParams.get('branchId')
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const sport = searchParams.get('sport');
+    const branchId = searchParams.get('branchId');
 
-    // Single court by id
     if (id) {
-      const court = await db.court.findUnique({
-        where: { id },
-        include: {
-          branch: true,
-          _count: {
-            select: { reviews: true, bookings: true },
-          },
-        },
-      })
-
+      const court = await getCourtById(id);
       if (!court) {
-        return NextResponse.json({ error: 'Court not found' }, { status: 404 })
+        return NextResponse.json({ error: 'Court not found' }, { status: 404 });
       }
-
-      return NextResponse.json({
-        ...court,
-        images: JSON.parse(court.images || '[]'),
-        amenities: JSON.parse(court.amenities || '[]'),
-      })
+      return NextResponse.json(court);
     }
 
-    // List courts with optional filters
-    const where: Record<string, unknown> = { isActive: true }
-    if (sport && sport !== 'todos') {
-      where.sport = sport
-    }
-    if (branchId) {
-      where.branchId = branchId
-    }
+    const courts = await getCourts({
+      sport: sport || undefined,
+      branchId: branchId || undefined,
+      active: true,
+    });
 
-    const courts = await db.court.findMany({
-      where,
-      include: {
-        branch: true,
-        _count: {
-          select: { reviews: true, bookings: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    const parsedCourts = courts.map((court) => ({
-      ...court,
-      images: JSON.parse(court.images || '[]'),
-      amenities: JSON.parse(court.amenities || '[]'),
-    }))
-
-    return NextResponse.json(parsedCourts)
+    return NextResponse.json(courts);
   } catch (error) {
-    console.error('Error fetching courts:', error)
-    return NextResponse.json({ error: 'Failed to fetch courts' }, { status: 500 })
+    console.error('Error fetching courts:', error);
+    return NextResponse.json({ error: 'Failed to fetch courts' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, sport, description, branchId, images, pricePerHour, amenities } = body
+    const body = await request.json();
+    const { name, sport, description, branchId, images, pricePerHour, amenities } = body;
 
     if (!name || !sport || !branchId) {
       return NextResponse.json(
         { error: 'Name, sport, and branchId are required' },
         { status: 400 }
-      )
+      );
     }
 
-    const court = await db.court.create({
-      data: {
-        name,
-        sport,
-        description,
-        branchId,
-        images: JSON.stringify(images || []),
-        pricePerHour: parseFloat(pricePerHour) || 0,
-        amenities: JSON.stringify(amenities || []),
-      },
-    })
+    const id = await createCourt({
+      name,
+      sport,
+      description,
+      branch_id: branchId,
+      images: images || [],
+      price_per_hour: parseFloat(pricePerHour) || 0,
+      amenities: amenities || [],
+    });
 
-    return NextResponse.json(
-      {
-        ...court,
-        images: JSON.parse(court.images || '[]'),
-        amenities: JSON.parse(court.amenities || '[]'),
-      },
-      { status: 201 }
-    )
+    return NextResponse.json({ id, success: true }, { status: 201 });
   } catch (error) {
-    console.error('Error creating court:', error)
-    return NextResponse.json({ error: 'Failed to create court' }, { status: 500 })
+    console.error('Error creating court:', error);
+    return NextResponse.json({ error: 'Failed to create court' }, { status: 500 });
   }
 }

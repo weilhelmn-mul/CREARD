@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 export default function AuthView() {
   const { currentView, setView, setUser } = useAppStore()
@@ -47,6 +49,11 @@ export default function AuthView() {
 
     setLoading(true)
     try {
+      // Autenticar con Firebase Auth (cliente)
+      const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword)
+      const firebaseUser = userCredential.user
+
+      // Obtener datos adicionales del perfil via API
       const res = await fetch('/api/auth?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,13 +63,43 @@ export default function AuthView() {
       const data = await res.json()
 
       if (!res.ok) {
+        // El usuario existe en Auth pero no en Firestore (primer login)
+        if (res.status === 401) {
+          // Crear perfil en Firestore automáticamente
+          const regRes = await fetch('/api/auth?action=register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: firebaseUser.displayName || loginEmail.split('@')[0],
+              email: loginEmail,
+              password: 'placeholder',
+            }),
+          })
+
+          if (regRes.ok) {
+            const regData = await regRes.json()
+            setUser(regData.user)
+            setView('home')
+            return
+          }
+        }
         throw new Error(data.error || 'Error al iniciar sesión.')
       }
 
       setUser(data.user)
       setView('home')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado.')
+      if (err instanceof Error) {
+        if (err.message.includes('auth/invalid-credential') || err.message.includes('auth/wrong-password') || err.message.includes('auth/user-not-found')) {
+          setError('Correo o contraseña inválidos.')
+        } else if (err.message.includes('auth/too-many-requests')) {
+          setError('Demasiados intentos. Intenta más tarde.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('Ocurrió un error inesperado.')
+      }
     } finally {
       setLoading(false)
     }
@@ -89,6 +126,13 @@ export default function AuthView() {
 
     setLoading(true)
     try {
+      // Crear cuenta en Firebase Auth (cliente)
+      const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword)
+
+      // Actualizar nombre en Firebase Auth
+      await updateProfile(userCredential.user, { displayName: regName })
+
+      // Crear documento en Firestore via API
       const res = await fetch('/api/auth?action=register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,13 +147,27 @@ export default function AuthView() {
       const data = await res.json()
 
       if (!res.ok) {
+        // Si falla la creación en Firestore, eliminar de Auth
+        await userCredential.user.delete()
         throw new Error(data.error || 'Error al registrar.')
       }
 
       setUser(data.user)
       setView('home')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado.')
+      if (err instanceof Error) {
+        if (err.message.includes('auth/email-already-in-use')) {
+          setError('Ya existe una cuenta con este correo electrónico.')
+        } else if (err.message.includes('auth/weak-password')) {
+          setError('La contraseña es demasiado débil.')
+        } else if (err.message.includes('auth/invalid-email')) {
+          setError('El formato del correo electrónico no es válido.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('Ocurrió un error inesperado.')
+      }
     } finally {
       setLoading(false)
     }
