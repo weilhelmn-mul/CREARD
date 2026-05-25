@@ -17,3 +17,27 @@ Stage Summary:
 - Creados: `.env.local`, `scripts/seed-firebase.ts`, `download/Guia_Configuracion_Firebase_CREARD.pdf`
 - Modificados: `src/lib/firebase-admin.ts` (mejor manejo de errores), `src/app/api/auth/route.ts` (mejor login)
 - Para completar la conexion, el usuario necesita llenar las credenciales Firebase en `.env.local` siguiendo la guia PDF
+
+---
+Task ID: 2
+Agent: Main Agent + full-stack-developer
+Task: Mejorar la pestana Home de la APP web CREARD
+
+Work Log:
+- Analizado estructura completa del Home: 4 secciones existentes (Hero, FeaturedCourts, SportsSection, HowItWorks)
+- Reescrito HeroSection con: animated gradient mesh, date chips (Hoy+3 dias), animated counters, location badge, promo banner
+- Reescrito FeaturedCourts con: responsive grid (2col mobile, 3col desktop), amenity chips, available slots, skeleton loading, fallback data
+- Reescrito SportsSection con: immersive full-width cards, amenity pills, price ranges, techada badge
+- Reescrito HowItWorks con: 4-step timeline, glowing icons, animated connector, CREARD-specific payment details
+- Creado TodaysSchedule: timeline de reservas del dia, status badges, empty state, skeleton loading
+- Creado PromoBanner: selling points grid, payment methods (Yape/Plin/Efectivo/Tarjeta), CTA button
+- Actualizado page.tsx con nuevo orden de secciones: Hero > FeaturedCourts > SportsSection > TodaysSchedule > PromoBanner > HowItWorks
+- Mejorado firebase-admin.ts: lazy initialization con proxies para evitar crash en build sin credenciales
+- Verificado: build exitoso, dev server funciona correctamente
+
+Stage Summary:
+- 4 componentes reescritos + 2 componentes nuevos
+- Todas las secciones usan useInView (Framer Motion) para animaciones al scroll
+- Precios en S/., textos en espanol, diseño responsive mobile-first
+- Firebase Admin ahora usa lazy init para no crashear en build sin credenciales reales
+- Build exitoso: `npx next build` compila sin errores

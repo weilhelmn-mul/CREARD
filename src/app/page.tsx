@@ -7,6 +7,8 @@ import BottomNavBar from '@/components/layout/BottomNavBar'
 import HeroSection from '@/components/home/HeroSection'
 import FeaturedCourts from '@/components/home/FeaturedCourts'
 import SportsSection from '@/components/home/SportsSection'
+import TodaysSchedule from '@/components/home/TodaysSchedule'
+import PromoBanner from '@/components/home/PromoBanner'
 import HowItWorks from '@/components/home/HowItWorks'
 import SearchView from '@/components/search/SearchView'
 import CourtDetail from '@/components/courts/CourtDetail'
@@ -27,6 +29,8 @@ function HomeView() {
       <HeroSection />
       <FeaturedCourts />
       <SportsSection />
+      <TodaysSchedule />
+      <PromoBanner />
       <HowItWorks />
     </motion.div>
   )

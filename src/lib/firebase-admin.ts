@@ -1,72 +1,115 @@
 // ============================================================
 // CREARD - Configuracion del lado del servidor (API Routes)
-// Firebase Admin SDK
+// Firebase Admin SDK (Lazy Init)
 // ============================================================
 
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth, Auth } from 'firebase-admin/auth';
 
-// Validacion de credenciales
-const REQUIRED_ENV_VARS = [
-  'FIREBASE_SERVICE_ACCOUNT_PROJECT_ID',
-  'FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY',
-  'FIREBASE_SERVICE_ACCOUNT_CLIENT_EMAIL',
-];
+let _appAdmin: ReturnType<typeof initializeApp> | null = null;
+let _adminDb: Firestore | null = null;
+let _adminAuth: Auth | null = null;
+let _initError: string | null = null;
 
-const missingVars = REQUIRED_ENV_VARS.filter(
-  (v) => !process.env[v] || process.env[v]?.includes('AQUI') || process.env[v]?.includes('tu_')
-);
-
-if (missingVars.length > 0 && process.env.NODE_ENV !== 'production') {
-  console.warn('\n[CREARD] ADVERTENCIA: Faltan credenciales de Firebase Admin:');
-  missingVars.forEach((v) => console.warn(`  - ${v}`));
-  console.warn('\nPara configurar Firebase:');
-  console.warn('  1. Ve a Firebase Console > Proyecto > Configuracion > Cuentas de servicio');
-  console.warn('  2. Haz clic en "Generar nueva clave privada"');
-  console.warn('  3. Descarga el JSON y copia los valores en .env.local');
-  console.warn('  Guia completa: /download/Guia_Configuracion_Firebase_CREARD.pdf\n');
+function isConfigured(): boolean {
+  const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+  const pid = process.env.FIREBASE_SERVICE_ACCOUNT_PROJECT_ID || '';
+  const ce = process.env.FIREBASE_SERVICE_ACCOUNT_CLIENT_EMAIL || '';
+  return (
+    pk.length > 20 &&
+    !pk.includes('AQUI') &&
+    !pk.includes('tu_') &&
+    !pid.includes('tu_') &&
+    ce.includes('@')
+  );
 }
 
-const serviceAccount = {
-  type: process.env.FIREBASE_SERVICE_ACCOUNT_TYPE || 'service_account',
-  project_id: process.env.FIREBASE_SERVICE_ACCOUNT_PROJECT_ID || '',
-  private_key_id: process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY_ID || '',
-  private_key: (process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_SERVICE_ACCOUNT_CLIENT_EMAIL || '',
-  client_id: process.env.FIREBASE_SERVICE_ACCOUNT_CLIENT_ID || '',
-  auth_uri: process.env.FIREBASE_SERVICE_ACCOUNT_AUTH_URI || 'https://accounts.google.com/o/oauth2/auth',
-  token_uri: process.env.FIREBASE_SERVICE_ACCOUNT_TOKEN_URI || 'https://oauth2.googleapis.com/token',
-};
+function initFirebase() {
+  if (_initError) return;
 
-let appAdmin: ReturnType<typeof initializeApp>;
-
-try {
-  if (getApps().length === 0) {
-    if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
-      throw new Error(
-        'FIREBASE_NOT_CONFIGURED: Faltan credenciales en .env.local. ' +
-        'Ve a Firebase Console > Configuracion > Cuentas de servicio > Generar nueva clave privada'
-      );
+  try {
+    if (!isConfigured()) {
+      _initError = 'Firebase no configurado. Agrega credenciales reales en .env.local';
+      console.warn('\n[CREARD] Firebase Admin no configurado - las operaciones de BD fallaran.');
+      console.warn('Consulta la guia: /download/Guia_Configuracion_Firebase_CREARD.pdf\n');
+      return;
     }
-    appAdmin = initializeApp({
-      credential: cert(serviceAccount as Parameters<typeof cert>[0]),
-    });
-  } else {
-    appAdmin = getApp();
+
+    const serviceAccount = {
+      type: process.env.FIREBASE_SERVICE_ACCOUNT_TYPE || 'service_account',
+      project_id: process.env.FIREBASE_SERVICE_ACCOUNT_PROJECT_ID || '',
+      private_key_id: process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY_ID || '',
+      private_key: (process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+      client_email: process.env.FIREBASE_SERVICE_ACCOUNT_CLIENT_EMAIL || '',
+      client_id: process.env.FIREBASE_SERVICE_ACCOUNT_CLIENT_ID || '',
+      auth_uri: process.env.FIREBASE_SERVICE_ACCOUNT_AUTH_URI || 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: process.env.FIREBASE_SERVICE_ACCOUNT_TOKEN_URI || 'https://oauth2.googleapis.com/token',
+    };
+
+    if (getApps().length === 0) {
+      _appAdmin = initializeApp({
+        credential: cert(serviceAccount as Parameters<typeof cert>[0]),
+      });
+    } else {
+      _appAdmin = getApp();
+    }
+
+    _adminDb = getFirestore(_appAdmin);
+    _adminAuth = getAuth(_appAdmin);
+    console.log('[CREARD] Firebase Admin inicializado correctamente.');
+  } catch (error: any) {
+    _initError = error.message || 'Error desconocido inicializando Firebase';
+    console.error('[CREARD] Error inicializando Firebase Admin:', _initError);
   }
-} catch (error: any) {
-  if (error.message?.includes('FIREBASE_NOT_CONFIGURED')) {
-    console.error('\n[CREARD] ERROR CRITICO: Firebase no esta configurado.');
-    console.error('El servidor se iniciara pero las operaciones de base de datos fallaran.');
-    console.error('Configura tu .env.local con las credenciales de Firebase.\n');
-  } else {
-    console.error('[CREARD] Error inicializando Firebase Admin:', error.message);
-  }
-  throw error;
 }
 
-const adminDb = getFirestore(appAdmin);
-const adminAuth = getAuth(appAdmin);
+// Lazy initialization - only runs when first accessed
+function getAdminApp() {
+  if (!_appAdmin && !_initError) initFirebase();
+  return _appAdmin;
+}
 
-export { appAdmin, adminDb, adminAuth };
+function getAdminDb(): Firestore {
+  if (!_adminDb && !_initError) initFirebase();
+  if (!_adminDb) throw new Error(_initError || 'Firebase no inicializado');
+  return _adminDb;
+}
+
+function getAdminAuth(): Auth {
+  if (!_adminAuth && !_initError) initFirebase();
+  if (!_adminAuth) throw new Error(_initError || 'Firebase no inicializado');
+  return _adminAuth;
+}
+
+export { getAdminApp, getAdminDb, getAdminAuth };
+
+// Legacy exports for backward compatibility
+export const appAdmin = new Proxy({} as ReturnType<typeof initializeApp>, {
+  get(_, prop) {
+    const app = getAdminApp();
+    return app ? (app as any)[prop] : undefined;
+  },
+});
+
+export const adminDb = new Proxy({} as Firestore, {
+  get(_, prop) {
+    try {
+      const db = getAdminDb();
+      return (db as any)[prop];
+    } catch {
+      return undefined;
+    }
+  },
+});
+
+export const adminAuth = new Proxy({} as Auth, {
+  get(_, prop) {
+    try {
+      const auth = getAdminAuth();
+      return (auth as any)[prop];
+    } catch {
+      return undefined;
+    }
+  },
+});
