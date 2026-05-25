@@ -1,0 +1,227 @@
+// ============================================================
+// CREARD - Reglas de Seguridad de Firestore
+// ============================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // HELPERS (Funciones auxiliares)
+    // ============================================================
+
+    // Verificar si el usuario es admin
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Verificar si el usuario es dueño del documento
+    function isOwner(userIdField) {
+      return isAuthenticated() &&
+        request.auth.uid == resource.data[userIdField];
+    }
+
+    // Verificar si el usuario es dueño O es admin
+    function isOwnerOrAdmin(userIdField) {
+      return isAuthenticated() &&
+        (request.auth.uid == resource.data[userIdField] || isAdmin());
+    }
+
+    // Validar estructura de booking
+    function isValidBookingData() {
+      return request.resource.data.keys().hasAll([
+        'court_id', 'user_id', 'date', 'start_time', 'end_time',
+        'total_price', 'advance_amount', 'remaining_amount',
+        'status', 'slot_status'
+      ]) &&
+      request.resource.data.court_id is string &&
+      request.resource.data.user_id is string &&
+      request.resource.data.date is string &&
+      request.resource.data.start_time is string &&
+      request.resource.data.end_time is string &&
+      request.resource.data.total_price is number &&
+      request.resource.data.total_price >= 0 &&
+      request.resource.data.advance_amount is number &&
+      request.resource.data.advance_amount <= request.resource.data.total_price &&
+      request.resource.data.remaining_amount is number &&
+      (request.resource.data.advance_amount + request.resource.data.remaining_amount)
+        == request.resource.data.total_price &&
+      request.resource.data.status in [
+        'pending', 'confirmed', 'partially_paid', 'fully_paid',
+        'completed', 'cancelled', 'no_show', 'expired'
+      ] &&
+      request.resource.data.slot_status in [
+        'available', 'reserved', 'in_play', 'finished', 'blocked', 'expired'
+      ];
+    }
+
+    // Validar estructura de payment
+    function isValidPaymentData() {
+      return request.resource.data.keys().hasAll([
+        'booking_id', 'user_id', 'amount', 'type', 'method', 'status'
+      ]) &&
+      request.resource.data.amount is number &&
+      request.resource.data.amount > 0 &&
+      request.resource.data.type in ['advance', 'remaining', 'full'] &&
+      request.resource.data.method in [
+        'yape', 'plin', 'culqi', 'card', 'cash', 'transfer'
+      ] &&
+      request.resource.data.status in ['pending', 'completed', 'failed', 'refunded'];
+    }
+
+    // Validar estructura de expense
+    function isValidExpenseData() {
+      return request.resource.data.keys().hasAll([
+        'description', 'amount', 'category', 'date'
+      ]) &&
+      request.resource.data.amount is number &&
+      request.resource.data.amount > 0 &&
+      request.resource.data.category in [
+        'mantenimiento', 'servicios', 'personal', 'alquiler', 'otros'
+      ];
+    }
+
+    // Validar estructura de review
+    function isValidReviewData() {
+      return request.resource.data.keys().hasAll([
+        'user_id', 'user_name', 'rating', 'created_at'
+      ]) &&
+      request.resource.data.rating is int &&
+      request.resource.data.rating >= 1 &&
+      request.resource.data.rating <= 5;
+    }
+
+    // ============================================================
+    // 1. /branches (Sucursales) - Lectura pública
+    // ============================================================
+
+    match /branches/{branchId} {
+      // Cualquiera puede leer sucursales
+      allow read: if true;
+
+      // Solo admin puede crear/editar/eliminar sucursales
+      allow create: if isAdmin() && isValidBranch();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    function isValidBranch() {
+      return request.resource.data.keys().hasAll(['name', 'address', 'city']) &&
+        request.resource.data.name is string &&
+        request.resource.data.address is string;
+    }
+
+    // ============================================================
+    // 2. /courts (Canchas) - Lectura pública
+    // ============================================================
+
+    match /courts/{courtId} {
+      // Cualquiera puede leer canchas activas
+      allow read: if true;
+
+      // Solo admin puede crear/editar/eliminar canchas
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+
+      // ----- Subcolección: /courts/{courtId}/reviews -----
+      match /reviews/{reviewId} {
+        // Cualquiera puede leer reseñas
+        allow read: if true;
+
+        // Solo usuarios autenticados pueden crear reseñas
+        allow create: if isAuthenticated() &&
+          request.resource.data.user_id == request.auth.uid &&
+          isValidReviewData();
+
+        // Solo el autor o admin puede editar/eliminar
+        allow update: if isAuthenticated() &&
+          (request.resource.data.user_id == request.auth.uid || isAdmin());
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ============================================================
+    // 3. /users (Usuarios)
+    // ============================================================
+
+    match /users/{userId} {
+      // Solo el propio usuario o admin puede leer
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == userId || isAdmin());
+
+      // Los usuarios se crean a través de Firebase Auth + función
+      allow create: if isAdmin();
+
+      // Solo el propio usuario o admin puede actualizar
+      allow update: if isAuthenticated() &&
+        (request.auth.uid == userId || isAdmin());
+
+      // Solo admin puede eliminar usuarios
+      allow delete: if isAdmin();
+
+      // Seguridad: un usuario NO puede cambiar su propio rol
+      // Esto se valida con una función Cloud additionally
+    }
+
+    // ============================================================
+    // 4. /bookings (Reservas)
+    // ============================================================
+
+    match /bookings/{bookingId} {
+      // El usuario puede ver sus reservas; el admin ve todas
+      allow read: if isAuthenticated() &&
+        (resource.data.user_id == request.auth.uid || isAdmin());
+
+      // Los usuarios pueden crear reservas propias
+      allow create: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        isValidBookingData();
+
+      // El usuario puede actualizar su reserva (cancelar); admin actualiza todas
+      allow update: if isAuthenticated() &&
+        (resource.data.user_id == request.auth.uid || isAdmin()) &&
+        isValidBookingData();
+
+      // Solo admin puede eliminar reservas (para auditoría)
+      allow delete: if isAdmin();
+
+      // ----- Subcolección: /bookings/{bookingId}/payments -----
+      match /payments/{paymentId} {
+        // Usuario ve sus pagos; admin ve todos
+        allow read: if isAuthenticated() &&
+          (resource.data.user_id == request.auth.uid || isAdmin());
+
+        // Usuario puede crear pagos propios
+        allow create: if isAuthenticated() &&
+          request.resource.data.user_id == request.auth.uid &&
+          isValidPaymentData();
+
+        // Solo admin puede actualizar/eliminar pagos
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ============================================================
+    // 5. /expenses (Gastos) - Solo admin
+    // ============================================================
+
+    match /expenses/{expenseId} {
+      // Solo admin puede ver gastos
+      allow read: if isAdmin();
+
+      // Solo admin puede crear/editar/eliminar gastos
+      allow create: if isAdmin() && isValidExpenseData();
+      allow update: if isAdmin() && isValidExpenseData();
+      allow delete: if isAdmin();
+    }
+  }
+}
