@@ -51,73 +51,86 @@ export default function AuthView() {
 
     setLoading(true)
     try {
+      // ── Strategy 1: Try Firebase Client SDK ──
       if (isFirebaseClientAvailable()) {
-        // Firebase mode
-        const firebaseModule = await import('@/lib/firebase')
-        const userCredential = await firebaseModule.firebaseSignIn(loginEmail, loginPassword)
-        const firebaseUser = userCredential.user
-        const token = await firebaseModule.firebaseGetIdToken(firebaseUser)
+        try {
+          const firebaseModule = await import('@/lib/firebase')
+          const userCredential = await firebaseModule.firebaseSignIn(loginEmail, loginPassword)
+          const firebaseUser = userCredential.user
+          const token = await firebaseModule.firebaseGetIdToken(firebaseUser)
 
-        const res = await fetch('/api/auth?action=login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-        })
-        const data = await res.json()
+          const res = await fetch('/api/auth?action=login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+          })
+          const data = await res.json()
 
-        if (!res.ok) {
-          // Handle specific status messages
-          if (res.status === 403 && data.code === 'AUTH_PENDING') {
-            setError('Tu cuenta esta pendiente de aprobacion. Un administrador revisara tu registro pronto.')
-            return
-          }
-          if (res.status === 403 && data.code === 'AUTH_REJECTED') {
-            setError('Tu cuenta fue rechazada. Contacta al administrador para mas informacion.')
-            return
-          }
-          if (res.status === 403 && data.code === 'AUTH_DISABLED') {
-            setError('Tu cuenta fue deshabilitada. Contacta al administrador.')
-            return
-          }
-          if (res.status === 401) {
-            // User in Firebase Auth but not in Firestore - auto-register
-            const regRes = await fetch('/api/auth?action=register', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: firebaseUser.displayName || loginEmail.split('@')[0],
-                email: loginEmail,
-                password: 'placeholder',
-              }),
-            })
-            if (regRes.ok) {
-              const regData = await regRes.json()
-              const store = useAppStore.getState()
-              store.setUser(regData.user)
-              store.setFirebaseToken(token)
-              setView('home')
+          if (!res.ok) {
+            if (res.status === 403 && data.code === 'AUTH_PENDING') {
+              setError('Tu cuenta esta pendiente de aprobacion. Un administrador revisara tu registro pronto.')
               return
             }
+            if (res.status === 403 && data.code === 'AUTH_REJECTED') {
+              setError('Tu cuenta fue rechazada. Contacta al administrador para mas informacion.')
+              return
+            }
+            if (res.status === 403 && data.code === 'AUTH_DISABLED') {
+              setError('Tu cuenta fue deshabilitada. Contacta al administrador.')
+              return
+            }
+            if (res.status === 401) {
+              const regRes = await fetch('/api/auth?action=register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: firebaseUser.displayName || loginEmail.split('@')[0],
+                  email: loginEmail,
+                  password: 'placeholder',
+                }),
+              })
+              if (regRes.ok) {
+                const regData = await regRes.json()
+                const store = useAppStore.getState()
+                store.setUser(regData.user)
+                store.setFirebaseToken(token)
+                setView('home')
+                return
+              }
+            }
+            throw new Error(data.error || 'Error al iniciar sesion.')
           }
-          throw new Error(data.error || 'Error al iniciar sesion.')
-        }
 
-        const store = useAppStore.getState()
-        store.setUser(data.user)
-        store.setFirebaseToken(token)
-        setView('home')
-      } else {
-        // Demo mode
-        const res = await fetch('/api/auth?action=login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Error al iniciar sesion.')
-        setUser(data.user)
-        setView('home')
+          const store = useAppStore.getState()
+          store.setUser(data.user)
+          store.setFirebaseToken(token)
+          setView('home')
+          return // Success - exit
+        } catch (firebaseErr: any) {
+          // Firebase Client failed - log and fall back to server-only auth
+          console.warn('[CREARD] Firebase Client login failed, falling back to server auth:', firebaseErr?.message)
+          // If the error is clearly wrong credentials (not a Firebase SDK issue), show it
+          if (firebaseErr?.message?.includes('auth/invalid-credential') ||
+              firebaseErr?.message?.includes('auth/wrong-password')) {
+            setError('Correo o contrasena invalidos.')
+            return
+          }
+          // Otherwise, fall through to server-only auth
+        }
       }
+
+      // ── Strategy 2: Server-only auth (demo mode or Firebase fallback) ──
+      const res = await fetch('/api/auth?action=login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al iniciar sesion.')
+      const store = useAppStore.getState()
+      store.setUser(data.user)
+      store.setFirebaseToken(null)
+      setView('home')
     } catch (err) {
       if (err instanceof Error) {
         if (err.message.includes('auth/invalid-credential') || err.message.includes('auth/wrong-password') || err.message.includes('auth/user-not-found')) {
