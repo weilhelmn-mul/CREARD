@@ -172,15 +172,37 @@ export default function TopAppBar() {
 
           {/* Auth section */}
           {!user ? (
-            <button
-              onClick={() => setView('login')}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-all duration-200 border border-cm-primary/20"
-            >
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                login
-              </span>
-              <span className="hidden sm:inline">Iniciar Sesión</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Admin Demo Button */}
+              <button
+                onClick={() => {
+                  useAppStore.getState().setUser({
+                    id: 'demo-admin',
+                    name: 'Administrador',
+                    email: 'admin@creard.com',
+                    phone: '+51 999 999 999',
+                    role: 'admin',
+                  })
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all duration-200 border border-amber-500/20"
+                title="Acceso demo como administrador"
+              >
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                  admin_panel_settings
+                </span>
+                <span className="hidden sm:inline">Admin Demo</span>
+              </button>
+
+              <button
+                onClick={() => setView('login')}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-all duration-200 border border-cm-primary/20"
+              >
+                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                  login
+                </span>
+                <span className="hidden sm:inline">Iniciar Sesión</span>
+              </button>
+            </div>
           ) : (
             <div className="relative" ref={userMenuRef}>
               <button
