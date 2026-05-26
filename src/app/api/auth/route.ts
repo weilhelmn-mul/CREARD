@@ -101,6 +101,23 @@ export async function POST(request: NextRequest) {
       // Demo mode: accept any login
       if (!isFirebaseAvailable()) {
         const mockUserId = `demo-user-${Date.now()}`;
+
+        // Super admin hardcoded credentials for demo mode
+        const DEMO_ADMIN_EMAIL = 'weilhelmn@gmail.com';
+        const DEMO_ADMIN_PASSWORD = 'Creard2025!';
+        if (email === DEMO_ADMIN_EMAIL && password === DEMO_ADMIN_PASSWORD) {
+          return NextResponse.json({
+            user: {
+              id: 'demo-super-admin',
+              name: 'Weilhelm',
+              email: DEMO_ADMIN_EMAIL,
+              phone: null,
+              role: 'super_admin',
+              status: 'approved',
+            },
+          });
+        }
+
         return NextResponse.json({
           user: {
             id: mockUserId,
