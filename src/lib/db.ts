@@ -333,6 +333,65 @@ export async function getPayments(bookingId: string): Promise<Partial<Payment>[]
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/**
+ * Actualiza el estado de un pago existente (usado por webhooks de Culqi)
+ */
+export async function updatePaymentStatus(
+  bookingId: string,
+  paymentId: string,
+  status: string,
+  extra?: Record<string, unknown>
+): Promise<void> {
+  const updateData: Record<string, unknown> = {
+    status,
+    updated_at: Timestamp.now(),
+  };
+  if (extra) {
+    Object.assign(updateData, extra);
+  }
+  await adminDb
+    .collection('bookings')
+    .doc(bookingId)
+    .collection('payments')
+    .doc(paymentId)
+    .update(updateData);
+}
+
+/**
+ * Busca un pago por su referencia externa (Culqi charge ID)
+ * Busca en todas las reservas - usar con moderación
+ */
+export async function findPaymentByExternalRef(
+  externalRef: string
+): Promise<{ bookingId: string; payment: Partial<Payment> } | null> {
+  // Consultar las reservas más recientes (últimas 100)
+  const bookingsSnapshot = await adminDb
+    .collection('bookings')
+    .orderBy('created_at', 'desc')
+    .limit(100)
+    .get();
+
+  for (const bookingDoc of bookingsSnapshot.docs) {
+    const paymentsSnapshot = await adminDb
+      .collection('bookings')
+      .doc(bookingDoc.id)
+      .collection('payments')
+      .where('external_ref', '==', externalRef)
+      .limit(1)
+      .get();
+
+    if (!paymentsSnapshot.empty) {
+      const payDoc = paymentsSnapshot.docs[0];
+      return {
+        bookingId: bookingDoc.id,
+        payment: { id: payDoc.id, ...payDoc.data() },
+      };
+    }
+  }
+
+  return null;
+}
+
 // --- Expenses ---
 export async function getExpenses(filters?: {
   category?: string;
