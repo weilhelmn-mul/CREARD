@@ -53,10 +53,14 @@ interface CulqiError {
 
 /**
  * Verifica si las credenciales de Culqi están configuradas
+ * Acepta llaves de prueba (sk_test_*) y producción (sk_live_*)
  */
 export function isCulqiConfigured(): boolean {
   const key = process.env.CULQI_API_KEY || '';
-  return key.length > 10 && !key.includes('TU_') && !key.includes('sk_test_');
+  return (
+    key.length > 10 &&
+    (key.startsWith('sk_test_') || key.startsWith('sk_live_'))
+  );
 }
 
 /**

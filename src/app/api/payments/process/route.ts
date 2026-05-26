@@ -71,10 +71,63 @@ export async function POST(request: NextRequest) {
 
     // ── 4. Verificar configuración de Culqi ──
     if (!isCulqiConfigured()) {
-      return NextResponse.json(
-        { error: 'El sistema de pagos en línea no está configurado. Contacta al administrador.' },
-        { status: 503 }
-      );
+      // Demo mode: simular pago exitoso sin llave privada Culqi
+      console.log('[PAYMENT] Culqi no configurado - registrando pago en modo demo.');
+
+      const demoPaymentId = `pay-demo-${Date.now()}`;
+      const demoChargeId = `chr_demo_${Date.now()}`;
+      const paymentAmountSoles = parseFloat(amount);
+      const demoMethod = type === 'advance' ? 'Tarjeta Visa (Demo)' : 'Yape (Demo)';
+      const demoStatus = 'completed';
+
+      // Registrar pago demo en Firestore (si Firebase disponible)
+      try {
+        const booking = await getBookingById(bookingId);
+        if (booking) {
+          await createPayment(bookingId, {
+            user_id: authUser.id,
+            amount: paymentAmountSoles,
+            type: type || 'remaining',
+            method: demoMethod,
+            status: demoStatus,
+            external_ref: demoChargeId,
+          });
+
+          // Actualizar reserva
+          if (type === 'remaining') {
+            const newAdvance = (booking.advance_amount || 0) + paymentAmountSoles;
+            let newRemaining = (booking.total_price || 0) - newAdvance;
+            let newStatus = booking.status || 'partially_paid';
+            if (newRemaining <= 0.5) { newRemaining = 0; newStatus = 'fully_paid'; }
+            await updateBooking(bookingId, {
+              advance_amount: Math.round(newAdvance * 100) / 100,
+              remaining_amount: Math.round(Math.max(0, newRemaining) * 100) / 100,
+              status: newStatus,
+            });
+          } else if (type === 'advance') {
+            await updateBooking(bookingId, {
+              status: 'partially_paid',
+              slot_status: 'reserved',
+              payment_method: demoMethod,
+              advance_amount: paymentAmountSoles,
+              remaining_amount: (booking.total_price || 0) - paymentAmountSoles,
+            });
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[PAYMENT] Demo payment: no se pudo guardar en BD:', dbErr);
+      }
+
+      return NextResponse.json({
+        id: demoPaymentId,
+        success: true,
+        demo: true,
+        chargeId: demoChargeId,
+        state: 'completed',
+        amount: paymentAmountSoles,
+        method: demoMethod,
+        outcome: 'Pago registrado en modo demo. Configura CULQI_API_KEY para pagos reales.',
+      }, { status: 201 });
     }
 
     // ── 5. Verificar la reserva existe ──
