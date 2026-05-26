@@ -2,6 +2,91 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCourts, getCourtById, createCourt } from '@/lib/db';
 import { adminDb } from '@/lib/firebase-admin';
 
+// Fallback courts for when Firebase is not configured
+const fallbackCourts = [
+  {
+    id: 'cancha-1',
+    name: 'Cancha Fútbol 1',
+    sport: 'futbol',
+    description: 'Cancha premium con césped sintético de última generación, ideal para partidos competitivos y torneos.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/cancha-futbol-1.png'],
+    pricePerHour: 60,
+    amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios'],
+    isActive: true,
+  },
+  {
+    id: 'cancha-2',
+    name: 'Cancha Fútbol 2',
+    sport: 'futbol',
+    description: 'Cancha estándar con césped sintético, perfecta para partidos amistosos y entrenamientos.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/cancha-futbol-2.png'],
+    pricePerHour: 50,
+    amenities: ['Cesped sintetico', 'Iluminacion'],
+    isActive: true,
+  },
+  {
+    id: 'cancha-3',
+    name: 'Cancha Fútbol 3',
+    sport: 'futbol',
+    description: 'Cancha con techado parcial, permite jugar incluso cuando hay llovizna ligera.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/cancha-futbol-3.png'],
+    pricePerHour: 55,
+    amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'],
+    isActive: true,
+  },
+  {
+    id: 'cancha-4',
+    name: 'Cancha Fútbol 4',
+    sport: 'futbol',
+    description: 'Nuestra cancha más nueva con las mejores instalaciones del complejo.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/cancha-futbol-4.png'],
+    pricePerHour: 65,
+    amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'],
+    isActive: true,
+  },
+  {
+    id: 'cancha-5',
+    name: 'Cancha Vóley 1',
+    sport: 'voley',
+    description: 'Piso PVC profesional con red reglamentaria, usada para torneos de vóley.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/cancha-voley.png'],
+    pricePerHour: 40,
+    amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'],
+    isActive: true,
+  },
+  {
+    id: 'cancha-6',
+    name: 'Salón Eventos',
+    sport: 'eventos',
+    description: 'Espacio multiusos techado con sistema de sonido e iluminación profesional.',
+    branchId: 'branch-1',
+    branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
+    images: ['/salon-eventos.png'],
+    pricePerHour: 80,
+    amenities: ['Techado', 'Sonido', 'Iluminacion'],
+    isActive: true,
+  },
+];
+
+function isFirebaseAvailable(): boolean {
+  try {
+    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
+  } catch {
+    return false;
+  }
+}
+
 // Transformar snake_case (Firestore) a camelCase (frontend) + enriquecer con branch
 async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Obtener datos de la sede (branch)
@@ -32,7 +117,7 @@ async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, 
     description: c.description || '',
     branchId: c.branch_id,
     branch: branch || { id: c.branch_id || 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco' },
-    images: Array.isArray(c.images) ? c.images : [],
+    images: Array.isArray(c.images) && c.images.length > 0 ? c.images : ['/cancha-futbol-1.png'],
     pricePerHour: Number(c.price_per_hour) || 0,
     amenities: Array.isArray(c.amenities) ? c.amenities : [],
     isActive: c.is_active !== false,
@@ -43,6 +128,25 @@ async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, 
 
 export async function GET(request: NextRequest) {
   try {
+    // If Firebase is not configured, return fallback courts
+    if (!isFirebaseAvailable()) {
+      const { searchParams } = new URL(request.url);
+      const id = searchParams.get('id');
+      const sport = searchParams.get('sport');
+
+      if (id) {
+        const court = fallbackCourts.find(c => c.id === id);
+        if (court) return NextResponse.json(court);
+        return NextResponse.json({ error: 'Court not found' }, { status: 404 });
+      }
+
+      let filtered = fallbackCourts;
+      if (sport && sport !== 'todos') {
+        filtered = fallbackCourts.filter(c => c.sport === sport);
+      }
+      return NextResponse.json(filtered);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const sport = searchParams.get('sport');
@@ -61,9 +165,13 @@ export async function GET(request: NextRequest) {
     const courts = await getCourts({
       sport: sport || undefined,
       branchId: branchId || undefined,
-      // Solo filtrar por activo si se pasa explícitamente el parámetro
       active: active === 'true' ? true : active === 'false' ? false : undefined,
     });
+
+    if (!courts || courts.length === 0) {
+      // Return fallback if no courts in Firestore yet
+      return NextResponse.json(fallbackCourts);
+    }
 
     const transformed = await Promise.all(
       courts.map((c) => toCamelCourt(c as Record<string, unknown>))
@@ -72,12 +180,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(transformed);
   } catch (error) {
     console.error('Error fetching courts:', error);
-    return NextResponse.json({ error: 'Failed to fetch courts' }, { status: 500 });
+    // Return fallback courts on any error
+    return NextResponse.json(fallbackCourts);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isFirebaseAvailable()) {
+      return NextResponse.json(
+        { error: 'Firebase no configurado. Configura las variables de entorno para crear canchas.' },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
     const { name, sport, description, branchId, images, pricePerHour, amenities } = body;
 

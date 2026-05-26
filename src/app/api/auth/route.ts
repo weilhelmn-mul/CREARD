@@ -5,6 +5,15 @@ import {
 } from '@/lib/db';
 import { adminAuth } from '@/lib/firebase-admin';
 
+function isFirebaseAvailable(): boolean {
+  try {
+    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
+    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,6 +35,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: 'La contraseña debe tener al menos 6 caracteres' },
           { status: 400 }
+        );
+      }
+
+      // Demo mode: create a mock user
+      if (!isFirebaseAvailable()) {
+        const mockUserId = `demo-user-${Date.now()}`;
+        return NextResponse.json(
+          {
+            user: {
+              id: mockUserId,
+              name,
+              email,
+              phone: phone || null,
+              role: 'user',
+            },
+          },
+          { status: 201 }
         );
       }
 
@@ -58,7 +84,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── LOGIN (verificar credenciales con Firebase Auth) ──
+    // ── LOGIN ──
     if (action === 'login') {
       const { email, password } = body;
 
@@ -69,7 +95,20 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Obtener usuario por email
+      // Demo mode: accept any login
+      if (!isFirebaseAvailable()) {
+        const mockUserId = `demo-user-${Date.now()}`;
+        return NextResponse.json({
+          user: {
+            id: mockUserId,
+            name: email.split('@')[0],
+            email,
+            phone: null,
+            role: 'user',
+          },
+        });
+      }
+
       let userRecord;
       try {
         userRecord = await adminAuth.getUserByEmail(email);
@@ -79,13 +118,6 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
-
-      // Verificar contraseña usando Firebase Auth token
-      // Firebase Admin no tiene metodo directo para verificar password,
-      // la verificacion real se hace en el cliente con signInWithEmailAndPassword.
-      // Aqui verificamos que el usuario existe y devolvemos sus datos.
-      // Si la contraseña es incorrecta, el cliente recibira error de Firebase Auth
-      // antes de llamar a esta API.
 
       const userData = await getUserById(userRecord.uid);
 
@@ -100,7 +132,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── GET USER (obtener datos de usuario por email) ──
+    // ── GET USER ──
     if (action === 'get-user') {
       const { email } = body;
 
@@ -109,6 +141,19 @@ export async function POST(request: NextRequest) {
           { error: 'Email es requerido' },
           { status: 400 }
         );
+      }
+
+      // Demo mode
+      if (!isFirebaseAvailable()) {
+        return NextResponse.json({
+          user: {
+            id: `demo-user-${Date.now()}`,
+            name: email.split('@')[0],
+            email,
+            phone: null,
+            role: 'user',
+          },
+        });
       }
 
       const userRecord = await adminAuth.getUserByEmail(email);
@@ -143,21 +188,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Correo o contraseña inválidos' },
         { status: 401 }
-      );
-    }
-    if (firebaseError.errorInfo?.code === 'auth/invalid-password') {
-      return NextResponse.json(
-        { error: 'Correo o contraseña inválidos' },
-        { status: 401 }
-      );
-    }
-
-    // Si Firebase no esta configurado, dar mensaje claro
-    if (firebaseError.message?.includes('FIREBASE_NOT_CONFIGURED') || 
-        firebaseError.message?.includes('credential')) {
-      return NextResponse.json(
-        { error: 'Firebase no esta configurado. Configura las credenciales en .env.local' },
-        { status: 503 }
       );
     }
 

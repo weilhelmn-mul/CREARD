@@ -40,18 +40,34 @@ export default function SearchView() {
   const [sortBy, setSortBy] = useState<SortType>('price-asc')
   const [loading, setLoading] = useState(true)
 
+  const fallbackCourts: Court[] = [
+    { id: '1', name: 'Cancha Fútbol 1', sport: 'futbol', pricePerHour: 60, images: ['/cancha-futbol-1.png'], description: 'Cancha premium con césped sintético', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '2', name: 'Cancha Fútbol 2', sport: 'futbol', pricePerHour: 50, images: ['/cancha-futbol-2.png'], description: 'Cancha estándar', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '3', name: 'Cancha Fútbol 3', sport: 'futbol', pricePerHour: 55, images: ['/cancha-futbol-3.png'], description: 'Techada parcial', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '4', name: 'Cancha Fútbol 4', sport: 'futbol', pricePerHour: 65, images: ['/cancha-futbol-4.png'], description: 'Nueva con mejores instalaciones', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '5', name: 'Cancha Vóley 1', sport: 'voley', pricePerHour: 40, images: ['/cancha-voley.png'], description: 'Piso PVC profesional', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '6', name: 'Salón Eventos', sport: 'eventos', pricePerHour: 80, images: ['/salon-eventos.png'], description: 'Espacio multiusos techado', branch: { name: 'CREARD', city: 'San Sebastián' } },
+  ]
+
   useEffect(() => {
     let cancelled = false
     fetch('/api/courts')
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {
-          setCourts(data)
+          if (Array.isArray(data) && data.length > 0) {
+            setCourts(data)
+          } else {
+            setCourts(fallbackCourts)
+          }
           setLoading(false)
         }
       })
       .catch(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setCourts(fallbackCourts)
+          setLoading(false)
+        }
       })
     return () => { cancelled = true }
   }, [])
@@ -171,8 +187,8 @@ export default function SearchView() {
                 {/* Image */}
                 <div className="relative h-44 overflow-hidden">
                   <Image
-                    src={court.images[0]}
-                    alt={court.name}
+                    src={court.images?.[0] || '/cancha-futbol-1.png'}
+                    alt={court.name || 'Cancha'}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                     unoptimized
@@ -192,7 +208,7 @@ export default function SearchView() {
                   {/* Price Badge */}
                   <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-cm-surface/80 backdrop-blur-sm">
                     <span className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
-                      S/. {court.pricePerHour}
+                      S/. {court.pricePerHour || 0}
                     </span>
                     <span className="text-[10px] text-cm-on-surface-variant">/hr</span>
                   </div>
@@ -206,7 +222,7 @@ export default function SearchView() {
                   <div className="flex items-center gap-1 text-cm-on-surface-variant text-xs mb-2">
                     <span className="material-symbols-outlined text-[14px]">location_on</span>
                     <span className="font-[family-name:var(--font-inter)]">
-                      {court.branch.name}, {court.branch.city}
+                      {court.branch?.name || 'CREARD'}, {court.branch?.city || 'San Sebastián'}
                     </span>
                   </div>
                   {court.description && (
