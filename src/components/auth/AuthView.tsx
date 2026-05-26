@@ -50,96 +50,56 @@ export default function AuthView() {
     }
 
     setLoading(true)
-    try {
-      // ── Strategy 1: Try Firebase Client SDK ──
-      if (isFirebaseClientAvailable()) {
-        try {
-          const firebaseModule = await import('@/lib/firebase')
-          const userCredential = await firebaseModule.firebaseSignIn(loginEmail, loginPassword)
-          const firebaseUser = userCredential.user
-          const token = await firebaseModule.firebaseGetIdToken(firebaseUser)
 
-          const res = await fetch('/api/auth?action=login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-          })
-          const data = await res.json()
-
-          if (!res.ok) {
-            if (res.status === 403 && data.code === 'AUTH_PENDING') {
-              setError('Tu cuenta esta pendiente de aprobacion. Un administrador revisara tu registro pronto.')
-              return
-            }
-            if (res.status === 403 && data.code === 'AUTH_REJECTED') {
-              setError('Tu cuenta fue rechazada. Contacta al administrador para mas informacion.')
-              return
-            }
-            if (res.status === 403 && data.code === 'AUTH_DISABLED') {
-              setError('Tu cuenta fue deshabilitada. Contacta al administrador.')
-              return
-            }
-            if (res.status === 401) {
-              const regRes = await fetch('/api/auth?action=register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  name: firebaseUser.displayName || loginEmail.split('@')[0],
-                  email: loginEmail,
-                  password: 'placeholder',
-                }),
-              })
-              if (regRes.ok) {
-                const regData = await regRes.json()
-                const store = useAppStore.getState()
-                store.setUser(regData.user)
-                store.setFirebaseToken(token)
-                setView('home')
-                return
-              }
-            }
-            throw new Error(data.error || 'Error al iniciar sesion.')
-          }
-
-          const store = useAppStore.getState()
-          store.setUser(data.user)
-          store.setFirebaseToken(token)
-          setView('home')
-          return // Success - exit
-        } catch (firebaseErr: any) {
-          // Firebase Client failed - log and fall back to server-only auth
-          console.warn('[CREARD] Firebase Client login failed, falling back to server auth:', firebaseErr?.message)
-          // If the error is clearly wrong credentials (not a Firebase SDK issue), show it
-          if (firebaseErr?.message?.includes('auth/invalid-credential') ||
-              firebaseErr?.message?.includes('auth/wrong-password')) {
-            setError('Correo o contrasena invalidos.')
-            return
-          }
-          // Otherwise, fall through to server-only auth
-        }
+    // ── Step 1: Try Firebase Client (optional - get token if possible) ──
+    let firebaseToken: string | null = null
+    if (isFirebaseClientAvailable()) {
+      try {
+        const firebaseModule = await import('@/lib/firebase')
+        const userCredential = await firebaseModule.firebaseSignIn(loginEmail, loginPassword)
+        firebaseToken = await firebaseModule.firebaseGetIdToken(userCredential.user)
+        console.log('[CREARD] Firebase Client auth succeeded')
+      } catch (firebaseErr: unknown) {
+        // Firebase Client failed - continue with server-only auth
+        const msg = firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)
+        console.warn('[CREARD] Firebase Client auth failed, using server-only auth:', msg)
       }
+    }
 
-      // ── Strategy 2: Server-only auth (demo mode or Firebase fallback) ──
+    // ── Step 2: Authenticate with server (ALWAYS - this is the source of truth) ──
+    try {
       const res = await fetch('/api/auth?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al iniciar sesion.')
+
+      if (!res.ok) {
+        // Handle specific status codes
+        if (res.status === 403 && data.code === 'AUTH_PENDING') {
+          setError('Tu cuenta esta pendiente de aprobacion. Un administrador revisara tu registro pronto.')
+          return
+        }
+        if (res.status === 403 && data.code === 'AUTH_REJECTED') {
+          setError('Tu cuenta fue rechazada. Contacta al administrador para mas informacion.')
+          return
+        }
+        if (res.status === 403 && data.code === 'AUTH_DISABLED') {
+          setError('Tu cuenta fue deshabilitada. Contacta al administrador.')
+          return
+        }
+        throw new Error(data.error || 'Error al iniciar sesion.')
+      }
+
+      // Login successful
       const store = useAppStore.getState()
       store.setUser(data.user)
-      store.setFirebaseToken(null)
+      store.setFirebaseToken(firebaseToken)
       setView('home')
     } catch (err) {
       if (err instanceof Error) {
-        if (err.message.includes('auth/invalid-credential') || err.message.includes('auth/wrong-password') || err.message.includes('auth/user-not-found')) {
-          setError('Correo o contrasena invalidos.')
-        } else if (err.message.includes('auth/too-many-requests')) {
-          setError('Demasiados intentos. Intenta mas tarde.')
-        } else {
-          setError(err.message)
-        }
+        setError(err.message)
       } else {
         setError('Ocurrio un error inesperado.')
       }
