@@ -175,3 +175,27 @@ Stage Summary:
 - Archivos modificados: `create-admin/route.ts`, `auth/route.ts`
 - El próximo login de weilhelmn@gmail.com corregirá automáticamente status y rol en Firestore
 - No requiere ejecutar el endpoint create-admin manualmente - el auto-fix se ejecuta en cada login
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Integrar sistema de pagos en línea con Culqi en CREARD
+
+Work Log:
+- Analicé el código existente de pagos y reservas (BookingsView, BookingForm, payments/route, db.ts)
+- Creé src/lib/culqi.ts: cliente API Culqi server-side (createCharge, getCharge, verifyWebhookSignature)
+- Creé src/app/api/payments/process/route.ts: endpoint para procesar cargos con validaciones (monto, propiedad, anti-duplicados)
+- Creé src/app/api/webhooks/culqi/route.ts: handler de webhooks (charge.succeeded, charge.failed, charge.expired)
+- Creé src/components/payments/CulqiPayButton.tsx: checkout v4 con SDK dinámico, selector 50%/100%, estados animados
+- Creé src/components/payments/OnlinePaymentSection.tsx: sección reutilizable con resumen + tabs Online/Manual
+- Actualicé src/lib/db.ts: updatePaymentStatus() y findPaymentByExternalRef()
+- Integré CulqiPayButton en BookingsView.tsx: modal con tabs "En Línea" / "Manual"
+- Configuré NEXT_PUBLIC_CULQI_PUBLIC_KEY y CULQI_WEBHOOK_SECRET en Vercel
+- Build exitoso, push a GitHub, despliegue automático en Vercel (READY)
+
+Stage Summary:
+- Sistema de pagos Culqi completamente integrado
+- Soporta Yape, Plin, Visa, MC, Amex, Diners Club via Checkout v4
+- Backends seguros: llave privada nunca expuesta al frontend
+- Webhook handler para confirmación de pagos Yape/Plin (pending → completed)
+- Pendiente: agregar CULQI_API_KEY (llave privada) en Vercel para activar pagos reales
