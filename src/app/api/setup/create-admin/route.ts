@@ -44,16 +44,27 @@ export async function POST(request: NextRequest) {
       userRecord = await adminAuth.getUserByEmail(ADMIN_EMAIL);
       console.log('[SETUP] Usuario ya existe, actualizando rol a super_admin...');
 
+      // Reset password to ensure it matches the expected one
+      try {
+        await adminAuth.updateUser(userRecord.uid, {
+          password: ADMIN_PASSWORD,
+          disabled: false,
+          displayName: ADMIN_NAME,
+        });
+        console.log('[SETUP] Password and profile reset for existing admin user');
+      } catch (updateErr) {
+        console.warn('[SETUP] Could not reset password:', updateErr);
+        // Try at least enabling the user
+        try {
+          await adminAuth.updateUser(userRecord.uid, { disabled: false });
+        } catch { /* ignore */ }
+      }
+
       // Update Firestore document with super_admin role and approved status
       await updateUser(userRecord.uid, { role: 'super_admin', status: 'approved', is_active: true });
 
       // Also set Firebase custom claims
       await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
-
-      // Enable the user in Firebase Auth in case they were disabled
-      try {
-        await adminAuth.updateUser(userRecord.uid, { disabled: false });
-      } catch { /* ignore if already enabled */ }
 
       return NextResponse.json({
         success: true,
