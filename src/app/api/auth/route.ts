@@ -5,6 +5,7 @@ import {
 } from '@/lib/db';
 import { adminAuth } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
+import { jsonCreateUser, jsonGetUserByEmail, jsonUpdateUser } from '@/lib/json-storage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,10 +31,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Demo mode: create a mock user (auto-approved)
+      // Demo mode: create a mock user (auto-approved) and save to JSON storage
       if (!isFirebaseAvailable()) {
-        // Use a STABLE ID based on email hash (not random) so bookings persist across sessions
         const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
+
+        // Save user to JSON storage for persistence
+        await jsonCreateUser({
+          id: stableUserId,
+          name,
+          email,
+          phone: phone || null,
+          role: 'user',
+          status: 'approved',
+          is_active: true,
+        });
+
         return NextResponse.json(
           {
             user: {
@@ -108,6 +120,17 @@ export async function POST(request: NextRequest) {
         const DEMO_ADMIN_EMAIL = 'weilhelmn@gmail.com';
         const DEMO_ADMIN_PASSWORD = 'Creard2025!';
         if (email === DEMO_ADMIN_EMAIL && password === DEMO_ADMIN_PASSWORD) {
+          // Ensure super admin exists in JSON storage
+          await jsonCreateUser({
+            id: 'demo-super-admin',
+            name: 'Weilhelm',
+            email: DEMO_ADMIN_EMAIL,
+            phone: null,
+            role: 'super_admin',
+            status: 'approved',
+            is_active: true,
+          });
+
           return NextResponse.json({
             user: {
               id: 'demo-super-admin',
@@ -120,13 +143,28 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        // Check if user exists in JSON storage
+        let existingUser = await jsonGetUserByEmail(email);
+        const userName = existingUser?.name || email.split('@')[0];
+
+        // Save/update user in JSON storage
+        await jsonCreateUser({
+          id: stableUserId,
+          name: userName,
+          email,
+          phone: existingUser?.phone || null,
+          role: existingUser?.role || 'user',
+          status: 'approved',
+          is_active: true,
+        });
+
         return NextResponse.json({
           user: {
             id: stableUserId,
-            name: email.split('@')[0],
+            name: userName,
             email,
-            phone: null,
-            role: 'user',
+            phone: existingUser?.phone || null,
+            role: existingUser?.role || 'user',
             status: 'approved',
           },
         });
@@ -232,14 +270,15 @@ export async function POST(request: NextRequest) {
       // Demo mode
       if (!isFirebaseAvailable()) {
         const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
+        const existingUser = await jsonGetUserByEmail(email);
         return NextResponse.json({
           user: {
             id: stableUserId,
-            name: email.split('@')[0],
+            name: existingUser?.name || email.split('@')[0],
             email,
-            phone: null,
-            role: 'user',
-            status: 'approved',
+            phone: existingUser?.phone || null,
+            role: existingUser?.role || 'user',
+            status: existingUser?.status || 'approved',
           },
         });
       }

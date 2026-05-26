@@ -1,0 +1,68 @@
+{
+  "cancha-1": {
+    "id": "cancha-1",
+    "name": "Cancha Fútbol 1",
+    "sport": "futbol",
+    "description": "Cancha premium con césped sintético de última generación.",
+    "branch_id": "branch-1",
+    "images": ["/cancha-futbol-1.png"],
+    "price_per_hour": 60,
+    "is_active": true,
+    "amenities": ["Cesped sintetico", "Iluminacion LED", "Vestuarios"]
+  },
+  "cancha-2": {
+    "id": "cancha-2",
+    "name": "Cancha Fútbol 2",
+    "sport": "futbol",
+    "description": "Cancha estándar con césped sintético.",
+    "branch_id": "branch-1",
+    "images": ["/cancha-futbol-2.png"],
+    "price_per_hour": 50,
+    "is_active": true,
+    "amenities": ["Cesped sintetico", "Iluminacion"]
+  },
+  "cancha-3": {
+    "id": "cancha-3",
+    "name": "Cancha Fútbol 3",
+    "sport": "futbol",
+    "description": "Cancha con techado parcial.",
+    "branch_id": "branch-1",
+    "images": ["/cancha-futbol-3.png"],
+    "price_per_hour": 55,
+    "is_active": true,
+    "amenities": ["Cesped sintetico", "Techado parcial", "Vestuarios"]
+  },
+  "cancha-4": {
+    "id": "cancha-4",
+    "name": "Cancha Fútbol 4",
+    "sport": "futbol",
+    "description": "Nuestra cancha más nueva.",
+    "branch_id": "branch-1",
+    "images": ["/cancha-futbol-4.png"],
+    "price_per_hour": 65,
+    "is_active": true,
+    "amenities": ["Cesped premium", "Iluminacion LED", "Duchas", "Estacionamiento"]
+  },
+  "cancha-5": {
+    "id": "cancha-5",
+    "name": "Cancha Vóley 1",
+    "sport": "voley",
+    "description": "Piso PVC profesional con red reglamentaria.",
+    "branch_id": "branch-1",
+    "images": ["/cancha-voley.png"],
+    "price_per_hour": 40,
+    "is_active": true,
+    "amenities": ["Piso PVC", "Red reglamentaria", "Iluminacion LED"]
+  },
+  "cancha-6": {
+    "id": "cancha-6",
+    "name": "Salón Eventos",
+    "sport": "eventos",
+    "description": "Espacio multiusos techado con sonido e iluminación.",
+    "branch_id": "branch-1",
+    "images": ["/salon-eventos.png"],
+    "price_per_hour": 80,
+    "is_active": true,
+    "amenities": ["Techado", "Sonido", "Iluminacion"]
+  }
+}

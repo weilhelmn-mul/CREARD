@@ -9,9 +9,37 @@ import {
 import { createPayment } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
+import {
+  jsonGetBookings,
+  jsonCreateBooking,
+  jsonUpdateBooking,
+  jsonCreatePayment,
+  jsonGetUserById,
+  jsonGetCourtById,
+} from '@/lib/json-storage';
 
 // Transformar snake_case (Firestore) a camelCase (frontend)
 function toCamelBooking(b: Record<string, unknown>) {
+  // Court data may come as snake_case (Firestore) or camelCase (JSON fallback)
+  const courtRaw = b._court as Record<string, unknown> | null;
+  const court = courtRaw ? {
+    id: courtRaw.id || courtRaw.court_id,
+    name: courtRaw.name || courtRaw.court_name,
+    sport: courtRaw.sport,
+    branch: (courtRaw.branch as Record<string, unknown>) || {
+      id: courtRaw.branch_id || 'branch-1',
+      name: 'CREARD',
+    },
+  } : null;
+
+  // User data
+  const userRaw = b._user as Record<string, unknown> | null;
+  const user = userRaw ? {
+    id: userRaw.id,
+    name: userRaw.name,
+    email: userRaw.email,
+  } : null;
+
   return {
     id: b.id,
     courtId: b.court_id,
@@ -28,13 +56,37 @@ function toCamelBooking(b: Record<string, unknown>) {
     notes: b.notes,
     createdAt: b.created_at,
     updatedAt: b.updated_at,
-    court: b._court || null,
-    user: b._user || null,
+    court,
+    user,
   };
+}
+
+// Helper: get user from either Firebase or JSON storage
+async function getUser(id: string): Promise<Record<string, unknown> | null> {
+  if (isFirebaseAvailable()) {
+    return (await getUserById(id)) as Record<string, unknown> | null;
+  }
+  return jsonGetUserById(id);
+}
+
+// Helper: get court from either Firebase or JSON storage
+async function getCourt(id: string): Promise<Record<string, unknown> | null> {
+  if (isFirebaseAvailable()) {
+    return (await getCourtById(id)) as Record<string, unknown> | null;
+  }
+  return jsonGetCourtById(id);
+}
+
+// Helper: enrich a booking with court and user data
+async function enrichBooking(b: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const court = b.court_id ? await getCourt(b.court_id as string) : null;
+  const user = b.user_id ? await getUser(b.user_id as string) : null;
+  return { ...b, _court: court, _user: user };
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const useJson = !isFirebaseAvailable();
     const { searchParams } = new URL(request.url);
     const courtId = searchParams.get('courtId');
     const userId = searchParams.get('userId');
@@ -43,8 +95,9 @@ export async function GET(request: NextRequest) {
 
     // Court availability check (courtId + date) is public — no auth required
     if (courtId && date && !userId) {
-      if (!isFirebaseAvailable()) return NextResponse.json([]);
-      const bookings = await getBookings({ courtId, date });
+      const bookings = useJson
+        ? await jsonGetBookings({ courtId, date })
+        : await getBookings({ courtId, date });
       return NextResponse.json(bookings.map(toCamelBooking));
     }
 
@@ -52,11 +105,6 @@ export async function GET(request: NextRequest) {
     const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     const authUser = authResult.user;
-
-    // If Firebase not configured, return empty (no database to query)
-    if (!isFirebaseAvailable()) {
-      return NextResponse.json([]);
-    }
 
     // Non-admin users can only see their own bookings
     if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
@@ -66,46 +114,45 @@ export async function GET(request: NextRequest) {
       }
       // Default to own bookings
       const effectiveUserId = userId || authUser.id;
-      let bookings = await getBookings({ userId: effectiveUserId });
+      let bookings = useJson
+        ? await jsonGetBookings({ userId: effectiveUserId })
+        : await getBookings({ userId: effectiveUserId });
 
       // Fallback: if no bookings found with userId, try searching by user email
-      // This handles cases where bookings were created with a different user ID format
       if (bookings.length === 0 && authUser.email) {
-        bookings = await getBookings({ userEmail: authUser.email });
+        bookings = useJson
+          ? await jsonGetBookings({ userEmail: authUser.email })
+          : await getBookings({ userEmail: authUser.email });
       }
 
-      const enriched = await Promise.all(
-        bookings.map(async (b) => {
-          const [court, user] = await Promise.all([
-            b.court_id ? getCourtById(b.court_id) : Promise.resolve(null),
-            b.user_id ? getUserById(b.user_id) : Promise.resolve(null),
-          ]);
-          const raw = { ...b, _court: court, _user: user };
-          return toCamelBooking(raw);
-        })
-      );
+      // Enrich with court and user data
+      const enriched = await Promise.all(bookings.map(async (b) => {
+        const raw = await enrichBooking(b as Record<string, unknown>);
+        return toCamelBooking(raw);
+      }));
       return NextResponse.json(enriched);
     }
 
-    const bookings = await getBookings({
-      courtId: courtId || undefined,
-      userId: userId || undefined,
-      date: date || undefined,
-      status: status || undefined,
-    });
+    // Admin / super_admin: fetch with all filters
+    const bookings = useJson
+      ? await jsonGetBookings({
+          courtId: courtId || undefined,
+          userId: userId || undefined,
+          date: date || undefined,
+          status: status || undefined,
+        })
+      : await getBookings({
+          courtId: courtId || undefined,
+          userId: userId || undefined,
+          date: date || undefined,
+          status: status || undefined,
+        });
 
-    // Enriquecer con datos de court y user, y transformar a camelCase
-    const enriched = await Promise.all(
-      bookings.map(async (b) => {
-        const [court, user] = await Promise.all([
-          b.court_id ? getCourtById(b.court_id) : Promise.resolve(null),
-          b.user_id ? getUserById(b.user_id) : Promise.resolve(null),
-        ]);
-
-        const raw = { ...b, _court: court, _user: user };
-        return toCamelBooking(raw);
-      })
-    );
+    // Enriquecer con datos de court y user
+    const enriched = await Promise.all(bookings.map(async (b) => {
+      const raw = await enrichBooking(b as Record<string, unknown>);
+      return toCamelBooking(raw);
+    }));
 
     return NextResponse.json(enriched);
   } catch (error) {
@@ -116,40 +163,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // If Firebase not configured, create a simulated booking with a mock ID
-    if (!isFirebaseAvailable()) {
-      const body = await request.json();
-      const { courtId, userId, date, startTime, endTime, totalPrice, advanceAmount, remainingAmount, paymentMethod } = body;
+    const useJson = !isFirebaseAvailable();
 
-      if (!courtId || !userId || !date || !startTime || !endTime) {
-        return NextResponse.json(
-          { error: 'Faltan campos requeridos: courtId, userId, date, startTime, endTime' },
-          { status: 400 }
-        );
-      }
-
-      const mockId = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const price = parseFloat(totalPrice) || 60;
-      const adv = parseFloat(advanceAmount) || price * 0.5;
-      const rem = parseFloat(remainingAmount) || price - adv;
-
-      return NextResponse.json({
-        id: mockId,
-        courtId,
-        userId,
-        date,
-        startTime,
-        endTime,
-        totalPrice: price,
-        advanceAmount: adv,
-        remainingAmount: rem,
-        status: 'partially_paid',
-        paymentMethod: paymentMethod || 'yape',
-        success: true,
-      }, { status: 201 });
-    }
-
-    // Authenticate user
+    // Authenticate user (always required)
     const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     const authUser = authResult.user;
@@ -186,8 +202,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verificar solapamiento
-    const existing = await getBookings({ courtId, date });
+    // Check overlap
+    const existing = useJson
+      ? await jsonGetBookings({ courtId, date })
+      : await getBookings({ courtId, date });
     const overlapping = existing.filter(
       (b) =>
         !['cancelled', 'expired'].includes(b.status || '') &&
@@ -204,43 +222,77 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Obtener precio de la cancha si no se proporciona
+    // Get court price if not provided
     let price = parseFloat(totalPrice) || 0;
     if (!totalPrice) {
-      const court = await getCourtById(courtId);
+      const court = await getCourt(courtId);
       price = (court?.price_per_hour as number) || 0;
     }
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
     const rem = parseFloat(remainingAmount) || price - adv;
+    const bookingStatus = status || 'pending';
 
-    const id = await createBooking({
-      court_id: courtId,
-      user_id: userId,
-      user_email: authUser.email, // Denormalized for fallback search
-      date,
-      start_time: startTime,
-      end_time: endTime,
-      total_price: price,
-      advance_amount: adv,
-      remaining_amount: rem,
-      status: status || 'pending',
-      slot_status: 'available',
-      payment_method: paymentMethod || null,
-      notes: notes || null,
-    });
+    let id: string;
 
-    // Create advance payment record
-    try {
-      await createPayment(id, {
+    if (useJson) {
+      // Save to JSON file
+      id = await jsonCreateBooking({
+        court_id: courtId,
         user_id: userId,
-        amount: adv,
-        type: 'advance',
-        method: paymentMethod || 'yape',
-        status: 'completed',
+        user_email: authUser.email,
+        date,
+        start_time: startTime,
+        end_time: endTime,
+        total_price: price,
+        advance_amount: adv,
+        remaining_amount: rem,
+        status: bookingStatus,
+        slot_status: 'available',
+        payment_method: paymentMethod || null,
+        notes: notes || null,
       });
-    } catch (payErr) {
-      console.error('Warning: could not create payment record:', payErr);
+      // Create advance payment in JSON storage
+      try {
+        await jsonCreatePayment(id, {
+          user_id: userId,
+          amount: adv,
+          type: 'advance',
+          method: paymentMethod || 'yape',
+          status: 'completed',
+        });
+      } catch (payErr) {
+        console.error('Warning: could not create payment record:', payErr);
+      }
+    } else {
+      // Save to Firestore
+      id = await createBooking({
+        court_id: courtId,
+        user_id: userId,
+        user_email: authUser.email,
+        date,
+        start_time: startTime,
+        end_time: endTime,
+        total_price: price,
+        advance_amount: adv,
+        remaining_amount: rem,
+        status: bookingStatus,
+        slot_status: 'available',
+        payment_method: paymentMethod || null,
+        notes: notes || null,
+      });
+      // Create advance payment record
+      try {
+        await createPayment(id, {
+          user_id: userId,
+          amount: adv,
+          type: 'advance',
+          method: paymentMethod || 'yape',
+          status: 'completed',
+        });
+      } catch (payErr) {
+        console.error('Warning: could not create payment record:', payErr);
+      }
     }
 
     return NextResponse.json({
@@ -253,7 +305,7 @@ export async function POST(request: NextRequest) {
       totalPrice: price,
       advanceAmount: adv,
       remainingAmount: rem,
-      status: status || 'pending',
+      status: bookingStatus,
       paymentMethod: paymentMethod || null,
       success: true,
     }, { status: 201 });
@@ -270,9 +322,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    if (!isFirebaseAvailable()) {
-      return NextResponse.json({ success: true });
-    }
+    const useJson = !isFirebaseAvailable();
 
     // Authenticate user
     const authResult = await requireAnyAuth(request);
@@ -290,7 +340,9 @@ export async function PUT(request: NextRequest) {
     if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       if (status === 'cancelled') {
         // Verify the booking belongs to the user
-        const bookings = await getBookings({ userId: authUser.id });
+        const bookings = useJson
+          ? await jsonGetBookings({ userId: authUser.id })
+          : await getBookings({ userId: authUser.id });
         const booking = bookings.find((b) => b.id === id);
         if (!booking) {
           return NextResponse.json(
@@ -299,7 +351,6 @@ export async function PUT(request: NextRequest) {
           );
         }
       } else {
-        // Users can only cancel, not change other statuses
         return NextResponse.json(
           { error: 'Solo puedes cancelar tus propias reservas.' },
           { status: 403 }
@@ -311,7 +362,11 @@ export async function PUT(request: NextRequest) {
     if (status) updateData.status = status;
     if (slot_status) updateData.slot_status = slot_status;
 
-    await updateBooking(id, updateData);
+    if (useJson) {
+      await jsonUpdateBooking(id, updateData);
+    } else {
+      await updateBooking(id, updateData);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
