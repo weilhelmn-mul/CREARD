@@ -207,9 +207,14 @@ export async function POST(request: NextRequest) {
       paymentMethod: paymentMethod || null,
       success: true,
     }, { status: 201 });
-  } catch (error) {
-    console.error('Error creating booking:', error);
-    return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as { message?: string; code?: string; stack?: string };
+    console.error('Error creating booking:', err?.message || err);
+    console.error('Stack:', err?.stack || 'no stack');
+    return NextResponse.json({ 
+      error: 'Failed to create booking',
+      detail: err?.message || 'Unknown error'
+    }, { status: 500 });
   }
 }
 

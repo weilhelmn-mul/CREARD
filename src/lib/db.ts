@@ -131,11 +131,25 @@ async function queryDocs(
   orderDir: 'asc' | 'desc' = 'asc'
 ): Promise<DocumentData[]> {
   let q = buildQuery(collectionName, constraints);
-  if (orderField) {
+  // Only use Firestore orderBy when there's at most 1 equality constraint
+  // to avoid composite index requirements
+  const eqConstraints = constraints.filter(c => c.op === '==');
+  if (orderField && eqConstraints.length <= 1) {
     q = q.orderBy(orderField, orderDir);
   }
   const snapshot: QuerySnapshot = await q.get();
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  let docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Client-side sort when we skipped Firestore orderBy
+  if (orderField && eqConstraints.length > 1) {
+    docs.sort((a, b) => {
+      const va = a[orderField] ?? '';
+      const vb = b[orderField] ?? '';
+      if (va < vb) return orderDir === 'asc' ? -1 : 1;
+      if (va > vb) return orderDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  return docs;
 }
 
 async function getDocById(collectionName: string, id: string): Promise<DocumentData | null> {
