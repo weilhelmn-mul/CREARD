@@ -58,7 +58,8 @@ export interface User {
   name: string
   email: string
   phone?: string
-  role: 'user' | 'admin'
+  role: 'user' | 'admin' | 'super_admin'
+  status?: 'pending' | 'approved' | 'rejected' | 'disabled'
 }
 
 interface AppState {

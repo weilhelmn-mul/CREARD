@@ -42,8 +42,9 @@ export interface User {
   name: string;
   email: string;
   phone: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'super_admin';
   is_active: boolean;
+  status: 'pending' | 'approved' | 'rejected' | 'disabled';
   created_at: Date;
   updated_at: Date;
 }
@@ -359,6 +360,7 @@ export async function createUser(data: {
   email: string;
   phone?: string;
   role?: string;
+  status?: string;
 }): Promise<void> {
   await setDocById('users', data.id, {
     id: data.id,
@@ -366,6 +368,7 @@ export async function createUser(data: {
     email: data.email,
     phone: data.phone || null,
     role: data.role || 'user',
+    status: data.status || 'pending',
     is_active: true,
   });
 }

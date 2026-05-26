@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
+import UsersTab from '@/components/admin/UsersTab'
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -1105,66 +1106,7 @@ export default function AdminDashboard() {
           {/* ─── USUARIOS ─── */}
           {activeTab === 'usuarios' && (
             <motion.div key="usuarios" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-              <div className="mb-4">
-                <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Gestión de Clientes</h2>
-                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{rankedUsers.length} clientes registrados</p>
-              </div>
-
-              {/* Ranking */}
-              <div className="space-y-2">
-                {rankedUsers.length === 0 ? (
-                  <div className="text-center py-16">
-                    <span className="material-symbols-outlined text-5xl text-cm-on-surface-variant/30 block mb-3">group</span>
-                    <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay clientes registrados</p>
-                  </div>
-                ) : (
-                  rankedUsers.map((u, i) => (
-                    <motion.div
-                      key={u.email}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                      className="glass-card rounded-xl p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Rank */}
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-[family-name:var(--font-sora)] font-bold text-sm ${
-                          i === 0 ? 'bg-amber-500/20 text-amber-400' :
-                          i === 1 ? 'bg-gray-400/20 text-gray-300' :
-                          i === 2 ? 'bg-orange-500/20 text-orange-400' :
-                          'bg-cm-surface-container-highest text-cm-on-surface-variant'
-                        }`}>
-                          {i + 1}
-                        </div>
-
-                        {/* Avatar */}
-                        <div className="w-10 h-10 rounded-full bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
-                            {u.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">{u.name}</h3>
-                          <div className="flex items-center gap-2 text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
-                            <span>{u.email}</span>
-                            {u.phone && <span>· {u.phone}</span>}
-                          </div>
-                        </div>
-
-                        {/* Stats */}
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-cm-primary font-bold font-[family-name:var(--font-sora)] text-sm">{fmtCurrency(u.totalSpent)}</p>
-                          <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
-                            {u.bookingCount} reserva{u.bookingCount !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </div>
+              <UsersTab />
             </motion.div>
           )}
 

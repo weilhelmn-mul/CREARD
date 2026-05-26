@@ -100,3 +100,28 @@ Stage Summary:
 - Fix: Made all Firebase client SDK imports fully lazy (no static firebase/* imports)
 - Login verified working: weilhelmn@gmail.com / Creard2025! successfully authenticates
 - Admin panel accessible after login with role=admin
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Implement user registration with admin validation and role management
+
+Work Log:
+- Updated User interface in db.ts: added status ('pending'|'approved'|'rejected'|'disabled') and role ('user'|'admin'|'super_admin')
+- Updated createUser() in db.ts: new users default to status='pending'
+- Rewrote /api/auth/route.ts: login checks user status (pending/rejected/disabled), returns specific error codes
+- Registration API now checks if Firebase Auth user exists first (avoids 409 conflict when client creates auth account first)
+- Created /api/admin/users/route.ts: full CRUD with GET (list all users), PUT (approve/reject/disable/enable/set_role/update_profile), DELETE
+- Created /components/admin/UsersTab.tsx: complete user management panel with search, status filters, approve/reject/disable actions, role changer, detail modal
+- Updated AdminDashboard.tsx: replaced old client ranking with new UsersTab component
+- Updated AuthView.tsx: shows success message after registration ("pending approval"), shows specific error messages for pending/rejected/disabled status
+- Added authFetch helper in UsersTab to send Firebase ID token in Authorization header
+- Updated useAppStore.ts: User interface supports super_admin role and status field
+- Deployed and verified: admin login, users panel, registration, approval, new user login all working
+
+Stage Summary:
+- New users register with status='pending' - cannot login until admin approves
+- Admin panel (Panel Admin > Usuarios) shows all users with status badges
+- Admin can: approve, reject, disable, enable users and change roles (user/admin/super_admin)
+- Role 'super_admin' can only be assigned by another super_admin
+- Registration now works end-to-end: create account → message "pending approval" → admin approves → user can login

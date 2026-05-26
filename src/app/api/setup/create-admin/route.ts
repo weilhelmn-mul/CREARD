@@ -52,11 +52,16 @@ export async function POST(request: NextRequest) {
       userRecord = await adminAuth.getUserByEmail(ADMIN_EMAIL);
       console.log('[SETUP] Usuario ya existe, actualizando rol a admin...');
 
-      // Update Firestore document with admin role
-      await updateUser(userRecord.uid, { role: 'admin' });
+      // Update Firestore document with admin role and approved status
+      await updateUser(userRecord.uid, { role: 'admin', status: 'approved', is_active: true });
 
       // Also set Firebase custom claims
-      await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
+      await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin', status: 'approved' });
+
+      // Enable the user in Firebase Auth in case they were disabled
+      try {
+        await adminAuth.updateUser(userRecord.uid, { disabled: false });
+      } catch { /* ignore if already enabled */ }
 
       return NextResponse.json({
         success: true,
