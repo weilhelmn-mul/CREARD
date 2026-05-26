@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const id = searchParams.get('id');
     const sport = searchParams.get('sport');
     const branchId = searchParams.get('branchId');
+    const active = searchParams.get('active');
 
     if (id) {
       const court = await getCourtById(id);
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
     const courts = await getCourts({
       sport: sport || undefined,
       branchId: branchId || undefined,
-      active: true,
+      // Solo filtrar por activo si se pasa explícitamente el parámetro
+      active: active === 'true' ? true : active === 'false' ? false : undefined,
     });
 
     return NextResponse.json(courts);

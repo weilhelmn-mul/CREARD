@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getExpenses, createExpense } from '@/lib/db';
+import { getExpenses, createExpense, deleteDocById } from '@/lib/db';
+
+// Transformar snake_case (Firestore) a camelCase (frontend)
+function toCamelExpense(e: Record<string, unknown>) {
+  return {
+    id: e.id,
+    description: e.description,
+    amount: e.amount || 0,
+    category: e.category,
+    date: e.date,
+    notes: e.notes,
+    createdAt: e.created_at,
+    updatedAt: e.updated_at,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +28,7 @@ export async function GET(request: NextRequest) {
       endDate: endDate || undefined,
     });
 
-    return NextResponse.json(expenses);
+    return NextResponse.json(expenses.map(toCamelExpense));
   } catch (error) {
     console.error('Error fetching expenses:', error);
     return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 });
@@ -45,5 +59,22 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating expense:', error);
     return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
+    }
+
+    await deleteDocById('expenses', id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    return NextResponse.json({ error: 'Failed to delete expense' }, { status: 500 });
   }
 }

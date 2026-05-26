@@ -20,8 +20,8 @@ interface Booking {
   remainingAmount: number
   status: string
   paymentMethod: string | null
-  court: { id: string; name: string; sport: string; branch: { name: string } }
-  user: { id: string; name: string; email: string; phone?: string }
+  court: { id: string; name: string; sport: string; branch?: { name: string } } | null
+  user: { id: string; name: string; email: string; phone?: string } | null
 }
 
 interface Expense {
@@ -31,7 +31,8 @@ interface Expense {
   category: string
   date: string
   notes: string | null
-  createdAt: string
+  createdAt?: string
+  created_at?: string
 }
 
 interface Stats {
@@ -137,11 +138,20 @@ export default function AdminDashboard() {
       ])
 
       if (statsRes.ok) setStats(await statsRes.json())
-      if (bookingsRes.ok) setBookings(await bookingsRes.json())
-      if (expensesRes.ok) setExpenses(await expensesRes.json())
-      if (courtsRes.ok) setAllCourts(await courtsRes.json())
+      if (bookingsRes.ok) {
+        const bookingsData = await bookingsRes.json()
+        setBookings(Array.isArray(bookingsData) ? bookingsData : [])
+      }
+      if (expensesRes.ok) {
+        const expensesData = await expensesRes.json()
+        setExpenses(Array.isArray(expensesData) ? expensesData : [])
+      }
+      if (courtsRes.ok) {
+        const courtsData = await courtsRes.json()
+        setAllCourts(Array.isArray(courtsData) ? courtsData : [])
+      }
     } catch {
-      toast({ title: 'Error', description: 'No se pudieron cargar los datos', variant: 'destructive' })
+      toast({ title: 'Error', description: 'No se pudieron cargar los datos. Verifica la conexion a la base de datos.', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
@@ -175,8 +185,9 @@ export default function AdminDashboard() {
 
   /* user stats from bookings */
   const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+    if (!b.user || !b.user.id) return acc
     if (!acc[b.user.id]) {
-      acc[b.user.id] = { name: b.user.name, email: b.user.email, phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
     }
     acc[b.user.id].bookingCount++
     if (['completed', 'fully_paid'].includes(b.status)) {
@@ -399,14 +410,14 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court.sport] || 'sports'}</span>
-                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court.name}</span>
+                                  <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3 hidden md:table-cell">
                                 <div>
-                                  <p className="text-cm-on-surface font-[family-name:var(--font-sora)] text-xs">{b.user.name}</p>
-                                  <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">{b.user.email}</p>
+                                  <p className="text-cm-on-surface font-[family-name:var(--font-sora)] text-xs">{b.user?.name || 'Sin nombre'}</p>
+                                  <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">{b.user?.email || ''}</p>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
@@ -601,7 +612,7 @@ export default function AdminDashboard() {
                           const cat = expenseCategories[e.category] || expenseCategories.otros
                           return (
                             <tr key={e.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDateFull(e.date)}</td>
+                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDateFull(e.created_at || e.date)}</td>
                               <td className="px-4 py-3">
                                 <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{e.description}</p>
                                 {e.notes && <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)] mt-0.5">{e.notes}</p>}
@@ -857,10 +868,10 @@ export default function AdminDashboard() {
                                     ? 'bg-cm-primary/20 text-cm-primary border border-cm-primary/30'
                                     : 'bg-cm-surface-container-highest/30 text-cm-on-surface-variant/30 border border-transparent'
                                 }`}
-                                title={booking ? `${booking.user.name} (${booking.startTime}-${booking.endTime})` : 'Disponible'}
+                                title={booking ? `${booking.user?.name || 'Cliente'} (${booking.startTime}-${booking.endTime})` : 'Disponible'}
                               >
                                 {booking ? (
-                                  <span className="truncate px-1">{booking.user.name.split(' ')[0]}</span>
+                                  <span className="truncate px-1">{(booking.user?.name || 'Cliente').split(' ')[0]}</span>
                                 ) : (
                                   <span className="opacity-0 sm:opacity-100">{slot.slice(0, 2)}</span>
                                 )}

@@ -3,10 +3,32 @@ import {
   getBookings,
   createBooking,
   updateBooking,
-  getPayments,
-  createPayment,
   getCourtById,
+  getUserById,
 } from '@/lib/db';
+
+// Transformar snake_case (Firestore) a camelCase (frontend)
+function toCamelBooking(b: Record<string, unknown>) {
+  return {
+    id: b.id,
+    courtId: b.court_id,
+    userId: b.user_id,
+    date: b.date,
+    startTime: b.start_time,
+    endTime: b.end_time,
+    totalPrice: b.total_price || 0,
+    advanceAmount: b.advance_amount || 0,
+    remainingAmount: b.remaining_amount || 0,
+    status: b.status || 'pending',
+    slotStatus: b.slot_status,
+    paymentMethod: b.payment_method,
+    notes: b.notes,
+    createdAt: b.created_at,
+    updatedAt: b.updated_at,
+    court: b._court || null,
+    user: b._user || null,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,14 +45,16 @@ export async function GET(request: NextRequest) {
       status: status || undefined,
     });
 
-    // Enriquecer con datos de court y user
+    // Enriquecer con datos de court y user, y transformar a camelCase
     const enriched = await Promise.all(
       bookings.map(async (b) => {
-        const court = await getCourtById(b.court_id || '');
-        return {
-          ...b,
-          court,
-        };
+        const [court, user] = await Promise.all([
+          b.court_id ? getCourtById(b.court_id) : Promise.resolve(null),
+          b.user_id ? getUserById(b.user_id) : Promise.resolve(null),
+        ]);
+
+        const raw = { ...b, _court: court, _user: user };
+        return toCamelBooking(raw);
       })
     );
 
@@ -66,10 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar solapamiento
-    const existing = await getBookings({
-      courtId,
-      date,
-    });
+    const existing = await getBookings({ courtId, date });
     const overlapping = existing.filter(
       (b) =>
         !['cancelled', 'expired'].includes(b.status || '') &&

@@ -9,9 +9,17 @@ function getTodayStr(): string {
   return `${y}-${m}-${d}`;
 }
 
+function getDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export async function GET() {
   try {
     const todayStr = getTodayStr();
+    const now = new Date();
 
     // Conteos básicos
     const [totalCourts, totalUsers, totalBookings] = await Promise.all([
@@ -24,17 +32,40 @@ export async function GET() {
     const allBookings = await getAllFromCollection('bookings');
 
     // Reservas de hoy
-    const todayBookings = allBookings.filter((b) => b.date === todayStr).length;
+    const todayBookingsList = allBookings.filter((b) => b.date === todayStr);
+    const todayBookings = todayBookingsList.length;
 
-    // Ingresos (simplificado - sumar advance_amount de reservas completadas)
-    const completedBookings = allBookings.filter((b) => b.status === 'completed' || b.status === 'fully_paid');
-    const todayRevenue = completedBookings.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
-    const weeklyRevenue = todayRevenue;
-    const monthlyRevenue = todayRevenue;
+    // Ingresos de hoy (reservas completadas/pagadas de hoy)
+    const todayCompleted = todayBookingsList.filter(
+      (b) => b.status === 'completed' || b.status === 'fully_paid'
+    );
+    const todayRevenue = todayCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+
+    // Ingresos semanales (últimos 7 días)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = getDateStr(weekAgo);
+    const weeklyBookings = allBookings.filter(
+      (b) => b.date >= weekAgoStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
+    );
+    const weeklyRevenue = weeklyBookings.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+
+    // Ingresos mensuales (mes actual)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStartStr = getDateStr(monthStart);
+    const monthlyBookings = allBookings.filter(
+      (b) => b.date >= monthStartStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
+    );
+    const monthlyRevenue = monthlyBookings.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+
+    // Total ingresos (todos los completados/pagados)
+    const totalRevenue = allBookings
+      .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
+      .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
 
     // Pagos pendientes
     const pendingPayments = allBookings
-      .filter((b) => b.status === 'partially_paid')
+      .filter((b) => b.status === 'partially_paid' || b.status === 'confirmed')
       .reduce((sum, b) => sum + ((b.remaining_amount as number) || 0), 0);
 
     // Bookings by sport
@@ -58,9 +89,15 @@ export async function GET() {
     // Top courts
     const courts = await getAllFromCollection('courts');
     const courtBookingCounts: Record<string, number> = {};
+    const courtRevenue: Record<string, number> = {};
     for (const b of allBookings) {
       const cid = b.court_id as string;
-      courtBookingCounts[cid] = (courtBookingCounts[cid] || 0) + 1;
+      if (cid) {
+        courtBookingCounts[cid] = (courtBookingCounts[cid] || 0) + 1;
+        if (b.status === 'completed' || b.status === 'fully_paid') {
+          courtRevenue[cid] = (courtRevenue[cid] || 0) + ((b.total_price as number) || 0);
+        }
+      }
     }
 
     const topCourts = courts
@@ -69,35 +106,51 @@ export async function GET() {
         images: Array.isArray(c.images) ? c.images : [],
         amenities: Array.isArray(c.amenities) ? c.amenities : [],
         bookingCount: courtBookingCounts[c.id as string] || 0,
+        totalRevenue: courtRevenue[c.id as string] || 0,
       }))
       .sort((a, b) => (b.bookingCount as number) - (a.bookingCount as number))
       .slice(0, 5);
 
-    // Revenue by month (placeholder)
+    // Revenue by month (real data - últimos 6 meses)
     const revenueByMonth: { month: string; revenue: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const monthDate = new Date(new Date().getFullYear(), new Date().getMonth() - i, 1);
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthName = monthDate.toLocaleDateString('es', { month: 'short' });
+      const monthEndDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      const monthStartStr = getDateStr(monthDate);
+      const monthEndStr = getDateStr(monthEndDate);
+
+      const monthRevenue = allBookings
+        .filter(
+          (b) => b.date >= monthStartStr && b.date <= monthEndStr &&
+                 (b.status === 'completed' || b.status === 'fully_paid')
+        )
+        .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+
       revenueByMonth.push({
         month: monthName.charAt(0).toUpperCase() + monthName.slice(1),
-        revenue: Math.floor(Math.random() * 2000) + 500,
+        revenue: monthRevenue,
       });
     }
 
-    // Daily bookings last 7 days
+    // Daily bookings last 7 days (real data)
     const dailyBookings: { day: string; date: string; bookings: number; revenue: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const dayDate = new Date();
       dayDate.setDate(dayDate.getDate() - i);
       const dayName = dayDate.toLocaleDateString('es', { weekday: 'short' });
-      const dateStr = dayDate.toISOString().split('T')[0];
-      const count = allBookings.filter((b) => b.date === dateStr).length;
+      const dateStr = getDateStr(dayDate);
+      const dayBookings = allBookings.filter((b) => b.date === dateStr);
+
+      const dayRevenue = dayBookings
+        .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
+        .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
 
       dailyBookings.push({
         day: dayName.charAt(0).toUpperCase() + dayName.slice(1),
         date: dateStr,
-        bookings: count,
-        revenue: count * 40,
+        bookings: dayBookings.length,
+        revenue: dayRevenue,
       });
     }
 
@@ -107,9 +160,10 @@ export async function GET() {
       totalBookings,
       todayBookings,
       todayRevenue,
-      pendingPayments,
       weeklyRevenue,
       monthlyRevenue,
+      totalRevenue,
+      pendingPayments,
       bookingsBySport,
       bookingsByStatus,
       topCourts,

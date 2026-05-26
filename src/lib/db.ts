@@ -181,7 +181,7 @@ async function setDocById(
   });
 }
 
-async function deleteDocById(collectionName: string, id: string): Promise<void> {
+export async function deleteDocById(collectionName: string, id: string): Promise<void> {
   await adminDb.collection(collectionName).doc(id).delete();
 }
 
