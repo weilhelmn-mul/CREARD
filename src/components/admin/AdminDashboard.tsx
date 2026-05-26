@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
+import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -50,7 +52,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'contenido'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -84,6 +86,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
+  { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
 ]
 
 /* ─── helpers ─── */
@@ -97,6 +100,364 @@ const fmtDateFull = (d: string) => {
   return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 const todayStr = () => new Date().toISOString().split('T')[0]
+
+/* ═══════════════════════════════════════════════════
+   CONTENT EDITOR TAB
+   ═══════════════════════════════════════════════════ */
+function ContentTab() {
+  const { settings, saveSection } = useSiteSettings()
+  const [editSection, setEditSection] = useState<'hero' | 'sportsSection' | 'promoBanner' | 'howItWorks' | null>(null)
+  const [editForm, setEditForm] = useState<Record<string, unknown> | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const sections = [
+    { key: 'hero' as const, label: 'Hero Principal', icon: 'hero', desc: 'Título, subtítulo, badge, estadísticas', color: 'text-cm-primary' },
+    { key: 'sportsSection' as const, label: 'Instalaciones', icon: 'emoji_events', desc: 'Deportes, precios, amenidades', color: 'text-green-400' },
+    { key: 'promoBanner' as const, label: 'Promociones', icon: 'workspace_premium', desc: 'Puntos de venta, métodos de pago, CTA', color: 'text-purple-400' },
+    { key: 'howItWorks' as const, label: 'Cómo Funciona', icon: 'auto_awesome', desc: 'Pasos del proceso de reserva', color: 'text-blue-400' },
+  ]
+
+  const openEditor = (sectionKey: 'hero' | 'sportsSection' | 'promoBanner' | 'howItWorks') => {
+    if (!settings) return
+    setEditSection(sectionKey)
+    setEditForm({ ...(settings[sectionKey] as Record<string, unknown>) })
+  }
+
+  const handleSave = async () => {
+    if (!editSection || !editForm) return
+    setSaving(true)
+    const ok = await saveSection(editSection, editForm as never)
+    setSaving(false)
+    if (ok) {
+      setEditSection(null)
+      setEditForm(null)
+      toast({ title: 'Contenido guardado', description: 'Los cambios se aplicaron correctamente' })
+    } else {
+      toast({ title: 'Error', description: 'No se pudo guardar el contenido', variant: 'destructive' })
+    }
+  }
+
+  const updateField = (path: string, value: unknown) => {
+    if (!editForm) return
+    const keys = path.split('.')
+    const copy = { ...editForm }
+    let target: Record<string, unknown> = copy
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!target[keys[i]] || typeof target[keys[i]] !== 'object') {
+        target[keys[i]] = {}
+      }
+      target = target[keys[i]] as Record<string, unknown>
+    }
+    target[keys[keys.length - 1]] = value
+    setEditForm(copy)
+  }
+
+  const getField = (path: string): string => {
+    if (!editForm) return ''
+    const keys = path.split('.')
+    let target: unknown = editForm
+    for (const key of keys) {
+      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) {
+        target = (target as Record<string, unknown>)[key]
+      } else {
+        return ''
+      }
+    }
+    return String(target ?? '')
+  }
+
+  const getArray = (path: string): unknown[] => {
+    if (!editForm) return []
+    const keys = path.split('.')
+    let target: unknown = editForm
+    for (const key of keys) {
+      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) {
+        target = (target as Record<string, unknown>)[key]
+      } else {
+        return []
+      }
+    }
+    return Array.isArray(target) ? target : []
+  }
+
+  const updateArrayItem = (path: string, idx: number, field: string, value: string | number) => {
+    const arr = getArray(path)
+    const copy = [...arr]
+    copy[idx] = { ...(copy[idx] as Record<string, unknown>), [field]: value }
+    updateField(path, copy)
+  }
+
+  const addArrayItem = (path: string, template: Record<string, unknown>) => {
+    const arr = getArray(path)
+    updateField(path, [...arr, template])
+  }
+
+  const removeArrayItem = (path: string, idx: number) => {
+    const arr = getArray(path)
+    updateField(path, arr.filter((_, i) => i !== idx))
+  }
+
+  const updateArrayString = (path: string, idx: number, value: string) => {
+    const arr = getArray(path) as string[]
+    const copy = [...arr]
+    copy[idx] = value
+    updateField(path, copy)
+  }
+
+  const addArrayString = (path: string) => {
+    const arr = getArray(path) as string[]
+    const val = prompt('Nuevo elemento:')
+    if (val?.trim()) updateField(path, [...arr, val.trim()])
+  }
+
+  const removeArrayString = (path: string, idx: number) => {
+    const arr = getArray(path) as string[]
+    updateField(path, arr.filter((_, i) => i !== idx))
+  }
+
+  if (!settings) {
+    return (
+      <div className="glass-card rounded-xl p-8 text-center">
+        <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 animate-pulse block mb-2">edit_note</span>
+        <p className="text-cm-on-surface-variant text-sm">Cargando contenido...</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <motion.div key="contenido" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+        <div className="mb-6">
+          <h2 className="font-[family-name:var(--font-sora)] font-bold text-xl text-cm-on-surface">Editor de Contenido</h2>
+          <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+            Modifica el contenido visible en la página de inicio
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {sections.map((sec, i) => (
+            <motion.button
+              key={sec.key}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => openEditor(sec.key)}
+              className="glass-card rounded-xl p-5 text-left hover:border-cm-primary/30 hover:shadow-[0_0_20px_rgba(0,255,65,0.08)] transition-all duration-300 group"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-cm-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-cm-primary/20 transition-colors">
+                  <span className={`material-symbols-outlined text-[24px] ${sec.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>
+                    {sec.icon}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface group-hover:text-cm-primary transition-colors">
+                    {sec.label}
+                  </h3>
+                  <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
+                    {sec.desc}
+                  </p>
+                  <div className="flex items-center gap-1 mt-2 text-cm-primary text-[10px] font-semibold">
+                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                    Editar
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-cm-on-surface-variant/30 group-hover:text-cm-primary group-hover:translate-x-0.5 transition-all">
+                  arrow_forward
+                </span>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Quick Preview */}
+        <div className="mt-6 glass-card rounded-xl p-5">
+          <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface mb-3">Vista previa rápida</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
+              <span className="text-cm-on-surface-variant font-semibold">Hero: </span>
+              <span className="text-cm-on-surface">{settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span></span>
+            </div>
+            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
+              <span className="text-cm-on-surface-variant font-semibold">Badge: </span>
+              <span className="text-cm-on-surface">{settings.hero.badge}</span>
+            </div>
+            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
+              <span className="text-cm-on-surface-variant font-semibold">Deportes: </span>
+              <span className="text-cm-on-surface">{settings.sportsSection.sports.map((s) => s.label).join(', ')}</span>
+            </div>
+            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
+              <span className="text-cm-on-surface-variant font-semibold">Pasos: </span>
+              <span className="text-cm-on-surface">{settings.howItWorks.steps.map((s) => s.title).join(' → ')}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══════════════ EDIT MODAL ═══════════════ */}
+      {editSection && editForm && (
+        <EditModal
+          open={true}
+          onClose={() => { setEditSection(null); setEditForm(null) }}
+          title={`Editar: ${sections.find((s) => s.key === editSection)?.label}`}
+          onSave={handleSave}
+          saving={saving}
+        >
+          {/* ─── Hero Editor ─── */}
+          {editSection === 'hero' && (
+            <>
+              <FormField label="Ubicación" value={getField('location')} onChange={(v) => updateField('location', v)} />
+              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Título" value={getField('headline')} onChange={(v) => updateField('headline', v)} />
+                <FormField label="Highlight" value={getField('headlineHighlight')} onChange={(v) => updateField('headlineHighlight', v)} />
+              </div>
+              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Promo Highlight" value={getField('promoHighlight')} onChange={(v) => updateField('promoHighlight', v)} />
+                <FormField label="Promo Text" value={getField('promoText')} onChange={(v) => updateField('promoText', v)} />
+              </div>
+
+              {/* Stats array */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estadísticas</label>
+                  <button type="button" onClick={() => addArrayItem('stats', { label: 'Nuevo', value: 0 })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+                  </button>
+                </div>
+                {(getArray('stats') as Array<{ label: string; value: number }>).map((stat, idx) => (
+                  <div key={idx} className="flex items-center gap-2 mb-2">
+                    <input value={stat.label} onChange={(e) => updateArrayItem('stats', idx, 'label', e.target.value)} placeholder="Etiqueta" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <input type="number" value={stat.value} onChange={(e) => updateArrayItem('stats', idx, 'value', parseInt(e.target.value) || 0)} className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <button type="button" onClick={() => removeArrayItem('stats', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ─── Sports Editor ─── */}
+          {editSection === 'sportsSection' && (
+            <>
+              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+
+              {(getArray('sports') as Array<{ id: string; label: string; count: number; priceRange: string; badge: string; amenities: string[] }>).map((sport, idx) => (
+                <div key={idx} className="p-3 rounded-xl border border-white/10 space-y-2">
+                  <div className="flex items-center gap-2 text-cm-primary text-xs font-bold font-[family-name:var(--font-sora)]">
+                    <span className="material-symbols-outlined text-[16px]">sports</span>
+                    {sport.label || `Deporte #${idx + 1}`}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField label="Nombre" value={sport.label} onChange={(v) => updateArrayItem('sports', idx, 'label', v)} />
+                    <FormField label="Precio" value={sport.priceRange} onChange={(v) => updateArrayItem('sports', idx, 'priceRange', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField label="Cantidad" value={String(sport.count)} onChange={(v) => updateArrayItem('sports', idx, 'count', v)} type="number" />
+                    <FormField label="Badge" value={sport.badge} onChange={(v) => updateArrayItem('sports', idx, 'badge', v)} />
+                  </div>
+                  <ArrayField label="Amenidades" items={sport.amenities} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ─── Promo Editor ─── */}
+          {editSection === 'promoBanner' && (
+            <>
+              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+              <FormField label="Texto CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} />
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Puntos de venta</label>
+                  <button type="button" onClick={() => addArrayItem('sellingPoints', { icon: 'star', title: '', description: '', highlight: false })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+                  </button>
+                </div>
+                {(getArray('sellingPoints') as Array<{ title: string; description: string; icon: string; highlight: boolean }>).map((pt, idx) => (
+                  <div key={idx} className="p-2 rounded-lg border border-white/10 mb-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-cm-on-surface-variant font-semibold">#{idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-[10px] text-cm-primary cursor-pointer">
+                          <input type="checkbox" checked={pt.highlight} onChange={(e) => updateArrayItem('sellingPoints', idx, 'highlight', e.target.checked)} className="accent-green-500" />
+                          Destacado
+                        </label>
+                        <button type="button" onClick={() => removeArrayItem('sellingPoints', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <FormField label="Icono" value={pt.icon} onChange={(v) => updateArrayItem('sellingPoints', idx, 'icon', v)} />
+                      <FormField label="Título" value={pt.title} onChange={(v) => updateArrayItem('sellingPoints', idx, 'title', v)} />
+                      <FormField label="Descripción" value={pt.description} onChange={(v) => updateArrayItem('sellingPoints', idx, 'description', v)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Métodos de pago</label>
+                  <button type="button" onClick={() => addArrayItem('paymentMethods', { name: '', icon: 'payments', color: 'text-gray-400' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+                  </button>
+                </div>
+                {(getArray('paymentMethods') as Array<{ name: string; icon: string; color: string }>).map((pm, idx) => (
+                  <div key={idx} className="flex items-center gap-2 mb-2">
+                    <input value={pm.name} onChange={(e) => updateArrayItem('paymentMethods', idx, 'name', e.target.value)} placeholder="Nombre" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <input value={pm.icon} onChange={(e) => updateArrayItem('paymentMethods', idx, 'icon', e.target.value)} placeholder="Icono" className="w-28 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <button type="button" onClick={() => removeArrayItem('paymentMethods', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ─── HowItWorks Editor ─── */}
+          {editSection === 'howItWorks' && (
+            <>
+              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+                <FormField label="Texto Soporte" value={getField('supportText')} onChange={(v) => updateField('supportText', v)} />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Pasos</label>
+                  <button type="button" onClick={() => addArrayItem('steps', { number: '', title: '', description: '', icon: 'star', detail: '' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+                  </button>
+                </div>
+                {(getArray('steps') as Array<{ number: string; title: string; description: string; icon: string; detail: string }>).map((step, idx) => (
+                  <div key={idx} className="p-3 rounded-xl border border-white/10 mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-cm-primary font-bold font-[family-name:var(--font-sora)]">Paso {step.number || idx + 1}</span>
+                      <button type="button" onClick={() => removeArrayItem('steps', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <FormField label="Título" value={step.title} onChange={(v) => updateArrayItem('steps', idx, 'title', v)} />
+                      <FormField label="Icono" value={step.icon} onChange={(v) => updateArrayItem('steps', idx, 'icon', v)} />
+                    </div>
+                    <FormField label="Descripción" value={step.description} onChange={(v) => updateArrayItem('steps', idx, 'description', v)} type="textarea" rows={2} />
+                    <FormField label="Detalle" value={step.detail} onChange={(v) => updateArrayItem('steps', idx, 'detail', v)} />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </EditModal>
+      )}
+    </>
+  )
+}
 
 /* ═══════════════════════════════════════════════════
    COMPONENT
@@ -805,6 +1166,11 @@ export default function AdminDashboard() {
                 )}
               </div>
             </motion.div>
+          )}
+
+          {/* ─── CONTENIDO (Edit Home Page) ─── */}
+          {activeTab === 'contenido' && (
+            <ContentTab />
           )}
         </AnimatePresence>
       </div>

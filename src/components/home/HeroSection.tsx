@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, useInView } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
+import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
+import { toast } from '@/hooks/use-toast'
 
 // --- Animated Counter Component ---
 function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
@@ -22,7 +25,6 @@ function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number
     function update(currentTime: number) {
       const elapsed = currentTime - startTime
       const progress = Math.min(elapsed / (duration * 1000), 1)
-      // easeOut cubic
       const eased = 1 - Math.pow(1 - progress, 3)
       const current = Math.round(from + (to - from) * eased)
       setCount(current)
@@ -94,12 +96,39 @@ function GradientMesh() {
 
 export default function HeroSection() {
   const { setView, setSportFilter, setSelectedDate } = useAppStore()
+  const { settings, saveSection } = useSiteSettings()
+  const { hero: defaults } = settings || {
+    hero: {
+      location: 'San Sebastián, Cusco',
+      badge: 'La #1 en reservas deportivas del Cusco',
+      headline: 'Reserva tu cancha',
+      headlineHighlight: 'en segundos',
+      subtitle: '4 canchas de fútbol 5 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+      promoHighlight: '50% de adelanto',
+      promoText: ', paga el resto al llegar',
+      stats: [
+        { label: 'Espacios', value: 6 },
+        { label: 'Fútbol 5', value: 4 },
+        { label: 'Vóley', value: 2 },
+      ],
+    },
+  }
+
   const [selectedSport, setSelectedSport] = useState('todos')
   const [selectedDateIdx, setSelectedDateIdx] = useState(0)
   const [availableSlots, setAvailableSlots] = useState<number | null>(null)
   const dateChips = getDateChips()
   const sectionRef = useRef<HTMLElement>(null)
   const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
+
+  // Edit state
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState(defaults)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (settings) setEditForm(settings.hero)
+  }, [settings])
 
   // Fetch available slots
   useEffect(() => {
@@ -122,6 +151,30 @@ export default function HeroSection() {
     setView('search')
   }, [selectedSport, selectedDateIdx, dateChips, setSportFilter, setSelectedDate, setView])
 
+  const handleSave = async () => {
+    setSaving(true)
+    const ok = await saveSection('hero', editForm)
+    setSaving(false)
+    if (ok) {
+      setEditOpen(false)
+      toast({ title: 'Sección actualizada', description: 'Los cambios del Hero fueron guardados' })
+    } else {
+      toast({ title: 'Error', description: 'No se pudieron guardar los cambios', variant: 'destructive' })
+    }
+  }
+
+  const updateStat = (idx: number, field: 'label' | 'value', val: string) => {
+    const copy = [...editForm.stats]
+    copy[idx] = { ...copy[idx], [field]: field === 'value' ? parseInt(val) || 0 : val }
+    setEditForm({ ...editForm, stats: copy })
+  }
+  const removeStat = (idx: number) => {
+    setEditForm({ ...editForm, stats: editForm.stats.filter((_, i) => i !== idx) })
+  }
+  const addStat = () => {
+    setEditForm({ ...editForm, stats: [...editForm.stats, { label: 'Nuevo', value: 0 }] })
+  }
+
   const containerVariants = {
     hidden: {},
     visible: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
@@ -133,158 +186,248 @@ export default function HeroSection() {
   }
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
-      <GradientMesh />
+    <>
+      <SectionEditButton onClick={() => setEditOpen(true)} label="Editar Hero" />
 
-      <motion.div
-        className="relative max-w-4xl mx-auto text-center"
-        variants={containerVariants}
-        initial="hidden"
-        animate={isSectionInView ? 'visible' : 'hidden'}
-      >
-        {/* Location Badge */}
-        <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
-          <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-            location_on
-          </span>
-          <span className="text-cm-on-surface-variant text-xs font-medium tracking-wide uppercase font-[family-name:var(--font-inter)]">
-            San Sebastián, Cusco
-          </span>
-        </motion.div>
+      <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
+        <GradientMesh />
 
-        {/* Hero Badge */}
         <motion.div
-          variants={itemVariants}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+          className="relative max-w-4xl mx-auto text-center"
+          variants={containerVariants}
+          initial="hidden"
+          animate={isSectionInView ? 'visible' : 'hidden'}
         >
-          <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-            bolt
-          </span>
-          <span className="text-xs font-semibold text-cm-primary uppercase tracking-wider font-[family-name:var(--font-inter)]">
-            La #1 en reservas deportivas del Cusco
-          </span>
-        </motion.div>
+          {/* Location Badge */}
+          <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
+            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+              location_on
+            </span>
+            <span className="text-cm-on-surface-variant text-xs font-medium tracking-wide uppercase font-[family-name:var(--font-inter)]">
+              {defaults.location}
+            </span>
+          </motion.div>
 
-        {/* Headline */}
-        <motion.h1
-          variants={itemVariants}
-          className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
-        >
-          Reserva tu cancha{' '}
-          <span className="text-cm-primary text-glow">en segundos</span>
-        </motion.h1>
+          {/* Hero Badge */}
+          <motion.div
+            variants={itemVariants}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+          >
+            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+              bolt
+            </span>
+            <span className="text-xs font-semibold text-cm-primary uppercase tracking-wider font-[family-name:var(--font-inter)]">
+              {defaults.badge}
+            </span>
+          </motion.div>
 
-        {/* Subtitle */}
-        <motion.p
-          variants={itemVariants}
-          className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
-        >
-          4 canchas de fútbol 5 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.
-        </motion.p>
+          {/* Headline */}
+          <motion.h1
+            variants={itemVariants}
+            className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
+          >
+            {defaults.headline}{' '}
+            <span className="text-cm-primary text-glow">{defaults.headlineHighlight}</span>
+          </motion.h1>
 
-        {/* Search Bar */}
-        <motion.div variants={itemVariants} className="glass-card rounded-2xl p-3 md:p-4 max-w-2xl mx-auto glow-border">
-          {/* Date Chips */}
-          <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar px-1">
-            {dateChips.map((chip, idx) => (
-              <button
-                key={idx}
-                onClick={() => setSelectedDateIdx(idx)}
-                className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[64px] ${
-                  selectedDateIdx === idx
-                    ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
-                    : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
-                }`}
-              >
-                <span className="text-[10px] uppercase tracking-wider font-bold">{chip.dayName}</span>
-                <span className="text-sm mt-0.5 font-semibold font-[family-name:var(--font-sora)]">{chip.label}</span>
-              </button>
-            ))}
-          </div>
+          {/* Subtitle */}
+          <motion.p
+            variants={itemVariants}
+            className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
+          >
+            {defaults.subtitle}
+          </motion.p>
 
-          {/* Sport Select + Search */}
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[20px]">
-                {sportOptions.find((s) => s.value === selectedSport)?.icon || 'sports'}
-              </span>
-              <select
-                value={selectedSport}
-                onChange={(e) => setSelectedSport(e.target.value)}
-                className="w-full pl-10 pr-4 py-3.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm appearance-none cursor-pointer focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all font-[family-name:var(--font-inter)]"
-              >
-                {sportOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-cm-surface-container-highest text-cm-on-surface">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+          {/* Search Bar */}
+          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-3 md:p-4 max-w-2xl mx-auto glow-border">
+            {/* Date Chips */}
+            <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar px-1">
+              {dateChips.map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedDateIdx(idx)}
+                  className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[64px] ${
+                    selectedDateIdx === idx
+                      ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                      : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
+                  }`}
+                >
+                  <span className="text-[10px] uppercase tracking-wider font-bold">{chip.dayName}</span>
+                  <span className="text-sm mt-0.5 font-semibold font-[family-name:var(--font-sora)]">{chip.label}</span>
+                </button>
+              ))}
             </div>
 
-            <button
-              onClick={handleSearch}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.97]"
-            >
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                search
-              </span>
-              <span className="hidden sm:inline">Buscar</span>
-            </button>
-          </div>
-        </motion.div>
+            {/* Sport Select + Search */}
+            <div className="flex gap-3">
+              <div className="relative flex-1">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[20px]">
+                  {sportOptions.find((s) => s.value === selectedSport)?.icon || 'sports'}
+                </span>
+                <select
+                  value={selectedSport}
+                  onChange={(e) => setSelectedSport(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm appearance-none cursor-pointer focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all font-[family-name:var(--font-inter)]"
+                >
+                  {sportOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-cm-surface-container-highest text-cm-on-surface">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        {/* Featured Promo Banner */}
-        <motion.div
-          variants={itemVariants}
-          className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cm-primary/10 via-cm-primary/5 to-transparent border border-cm-primary/15"
-        >
-          <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-            local_offer
-          </span>
-          <span className="text-cm-on-surface text-xs md:text-sm font-medium font-[family-name:var(--font-inter)]">
-            <span className="text-cm-primary font-bold">50% de adelanto</span>, paga el resto al llegar
-          </span>
+              <button
+                onClick={handleSearch}
+                className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.97]"
+              >
+                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                  search
+                </span>
+                <span className="hidden sm:inline">Buscar</span>
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Featured Promo Banner */}
+          <motion.div
+            variants={itemVariants}
+            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cm-primary/10 via-cm-primary/5 to-transparent border border-cm-primary/15"
+          >
+            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+              local_offer
+            </span>
+            <span className="text-cm-on-surface text-xs md:text-sm font-medium font-[family-name:var(--font-inter)]">
+              <span className="text-cm-primary font-bold">{defaults.promoHighlight}</span>{defaults.promoText}
+            </span>
+          </motion.div>
+
+          {/* Stats */}
+          <motion.div
+            variants={itemVariants}
+            className="flex flex-wrap justify-center gap-8 md:gap-14 mt-10 md:mt-14"
+          >
+            {defaults.stats.map((stat, idx) => (
+              <div key={idx} className="text-center">
+                <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+                  <AnimatedCounter target={stat.value} duration={2} />
+                </p>
+                <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+                  {stat.label}
+                </p>
+              </div>
+            ))}
+            <div className="text-center">
+              <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+                <AnimatedCounter target={availableSlots ?? 51} duration={2.5} />
+              </p>
+              <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+                Horarios hoy
+              </p>
+            </div>
+          </motion.div>
         </motion.div>
+      </section>
+
+      {/* ═══════ EDIT MODAL ═══════ */}
+      <EditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Editar Sección Hero"
+        onSave={handleSave}
+        saving={saving}
+      >
+        <FormField
+          label="Ubicación"
+          value={editForm.location}
+          onChange={(v) => setEditForm({ ...editForm, location: v })}
+          placeholder="Ej. San Sebastián, Cusco"
+        />
+        <FormField
+          label="Badge principal"
+          value={editForm.badge}
+          onChange={(v) => setEditForm({ ...editForm, badge: v })}
+          placeholder="Ej. La #1 en reservas deportivas del Cusco"
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            label="Título (headline)"
+            value={editForm.headline}
+            onChange={(v) => setEditForm({ ...editForm, headline: v })}
+            placeholder="Reserva tu cancha"
+          />
+          <FormField
+            label="Highlight"
+            value={editForm.headlineHighlight}
+            onChange={(v) => setEditForm({ ...editForm, headlineHighlight: v })}
+            placeholder="en segundos"
+          />
+        </div>
+        <FormField
+          label="Subtítulo"
+          value={editForm.subtitle}
+          onChange={(v) => setEditForm({ ...editForm, subtitle: v })}
+          type="textarea"
+          placeholder="Descripción principal..."
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            label="Promo highlight"
+            value={editForm.promoHighlight}
+            onChange={(v) => setEditForm({ ...editForm, promoHighlight: v })}
+            placeholder="50% de adelanto"
+          />
+          <FormField
+            label="Promo texto"
+            value={editForm.promoText}
+            onChange={(v) => setEditForm({ ...editForm, promoText: v })}
+            placeholder=", paga el resto al llegar"
+          />
+        </div>
 
         {/* Stats */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-wrap justify-center gap-8 md:gap-14 mt-10 md:mt-14"
-        >
-          <div className="text-center">
-            <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
-              <AnimatedCounter target={6} duration={2} />
-            </p>
-            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-              Espacios
-            </p>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
+              Estadísticas
+            </label>
+            <button
+              type="button"
+              onClick={addStat}
+              className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              Agregar
+            </button>
           </div>
-          <div className="text-center">
-            <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
-              <AnimatedCounter target={4} duration={2} />
-            </p>
-            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-              Fútbol 5
-            </p>
+          <div className="space-y-2">
+            {editForm.stats.map((stat, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  value={stat.label}
+                  onChange={(e) => updateStat(idx, 'label', e.target.value)}
+                  placeholder="Etiqueta"
+                  className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                />
+                <input
+                  type="number"
+                  value={stat.value}
+                  onChange={(e) => updateStat(idx, 'value', e.target.value)}
+                  placeholder="0"
+                  className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeStat(idx)}
+                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                </button>
+              </div>
+            ))}
           </div>
-          <div className="text-center">
-            <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
-              <AnimatedCounter target={2} duration={2} />
-            </p>
-            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-              Vóley
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
-              <AnimatedCounter target={availableSlots ?? 51} duration={2.5} />
-            </p>
-            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-              Horarios hoy
-            </p>
-          </div>
-        </motion.div>
-      </motion.div>
-    </section>
+        </div>
+      </EditModal>
+    </>
   )
 }

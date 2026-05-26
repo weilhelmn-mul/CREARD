@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sora, Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { SiteSettingsProvider } from "@/context/SiteSettingsContext";
 
 const sora = Sora({
   variable: "--font-sora",
@@ -47,7 +48,9 @@ export default function RootLayout({
       <body
         className={`${sora.variable} ${inter.variable} antialiased`}
       >
-        {children}
+        <SiteSettingsProvider>
+          {children}
+        </SiteSettingsProvider>
         <Toaster />
       </body>
     </html>
