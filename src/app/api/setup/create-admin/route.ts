@@ -8,17 +8,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { createUser as createUserInDb, getUserById, updateUser } from '@/lib/db';
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 const SETUP_SECRET = process.env.SETUP_SECRET || 'creard-setup-2025';
-
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,13 +42,13 @@ export async function POST(request: NextRequest) {
     let userRecord;
     try {
       userRecord = await adminAuth.getUserByEmail(ADMIN_EMAIL);
-      console.log('[SETUP] Usuario ya existe, actualizando rol a admin...');
+      console.log('[SETUP] Usuario ya existe, actualizando rol a super_admin...');
 
-      // Update Firestore document with admin role and approved status
-      await updateUser(userRecord.uid, { role: 'admin', status: 'approved', is_active: true });
+      // Update Firestore document with super_admin role and approved status
+      await updateUser(userRecord.uid, { role: 'super_admin', status: 'approved', is_active: true });
 
       // Also set Firebase custom claims
-      await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin', status: 'approved' });
+      await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
 
       // Enable the user in Firebase Auth in case they were disabled
       try {
@@ -65,7 +57,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Usuario existente actualizado a admin: ${ADMIN_EMAIL}`,
+        message: `Usuario existente actualizado a super_admin: ${ADMIN_EMAIL}`,
         uid: userRecord.uid,
       });
     } catch {
@@ -80,23 +72,24 @@ export async function POST(request: NextRequest) {
       displayName: ADMIN_NAME,
     });
 
-    // Create Firestore document with admin role
+    // Create Firestore document with super_admin role and approved status
     await createUserInDb({
       id: userRecord.uid,
       name: ADMIN_NAME,
       email: ADMIN_EMAIL,
       phone: null,
-      role: 'admin',
+      role: 'super_admin',
+      status: 'approved',
     });
 
     // Set Firebase custom claims
-    await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
+    await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
 
     console.log(`[SETUP] Admin creado: ${ADMIN_EMAIL} (UID: ${userRecord.uid})`);
 
     return NextResponse.json({
       success: true,
-      message: 'Administrador creado exitosamente',
+      message: 'Super Administrador creado exitosamente',
       uid: userRecord.uid,
       email: ADMIN_EMAIL,
       password: ADMIN_PASSWORD,

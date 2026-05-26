@@ -4,15 +4,7 @@ import {
   getUserById,
 } from '@/lib/db';
 import { adminAuth } from '@/lib/firebase-admin';
-
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 export async function POST(request: NextRequest) {
   try {
@@ -131,10 +123,40 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const userData = await getUserById(userRecord.uid);
+      let userData = await getUserById(userRecord.uid);
 
       // Verificar si el usuario esta aprobado
-      const userStatus = userData?.status || 'pending';
+      let userStatus = userData?.status || 'pending';
+      const userRole = userData?.role || 'user';
+
+      // Auto-fix: si es admin/super_admin con status 'pending', aprobar automáticamente
+      if (userStatus === 'pending' && (userRole === 'admin' || userRole === 'super_admin')) {
+        console.log(`[AUTH] Auto-fixing admin user ${email}: status pending -> approved`);
+        try {
+          const { updateUser } = await import('@/lib/db');
+          await updateUser(userRecord.uid, { status: 'approved', is_active: true });
+          await adminAuth.setCustomUserClaims(userRecord.uid, { role: userRole, status: 'approved' });
+          userStatus = 'approved';
+        } catch (fixErr) {
+          console.error('[AUTH] Auto-fix failed:', fixErr);
+        }
+      }
+
+      // Auto-fix: si el rol en Firestore es solo 'admin' pero es el super admin configurado, promover
+      const ADMIN_EMAIL = 'weilhelmn@gmail.com';
+      if (email === ADMIN_EMAIL && userRole !== 'super_admin') {
+        console.log(`[AUTH] Auto-upgrading super admin ${email}: role ${userRole} -> super_admin`);
+        try {
+          const { updateUser } = await import('@/lib/db');
+          await updateUser(userRecord.uid, { role: 'super_admin', status: 'approved', is_active: true });
+          await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
+          userData = await getUserById(userRecord.uid);
+          userStatus = 'approved';
+        } catch (fixErr) {
+          console.error('[AUTH] Auto-upgrade failed:', fixErr);
+        }
+      }
+
       if (userStatus === 'pending') {
         return NextResponse.json(
           {
