@@ -32,11 +32,12 @@ export async function POST(request: NextRequest) {
 
       // Demo mode: create a mock user (auto-approved)
       if (!isFirebaseAvailable()) {
-        const mockUserId = `demo-user-${Date.now()}`;
+        // Use a STABLE ID based on email hash (not random) so bookings persist across sessions
+        const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
         return NextResponse.json(
           {
             user: {
-              id: mockUserId,
+              id: stableUserId,
               name,
               email,
               phone: phone || null,
@@ -100,7 +101,8 @@ export async function POST(request: NextRequest) {
 
       // Demo mode: accept any login
       if (!isFirebaseAvailable()) {
-        const mockUserId = `demo-user-${Date.now()}`;
+        // Use a STABLE ID based on email hash (not random) so bookings persist across sessions
+        const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
 
         // Super admin hardcoded credentials for demo mode
         const DEMO_ADMIN_EMAIL = 'weilhelmn@gmail.com';
@@ -120,7 +122,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           user: {
-            id: mockUserId,
+            id: stableUserId,
             name: email.split('@')[0],
             email,
             phone: null,
@@ -229,9 +231,10 @@ export async function POST(request: NextRequest) {
 
       // Demo mode
       if (!isFirebaseAvailable()) {
+        const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
         return NextResponse.json({
           user: {
-            id: `demo-user-${Date.now()}`,
+            id: stableUserId,
             name: email.split('@')[0],
             email,
             phone: null,

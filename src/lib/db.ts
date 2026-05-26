@@ -53,6 +53,7 @@ export interface Booking {
   id: string;
   court_id: string;
   user_id: string;
+  user_email: string | null;
   date: string;
   start_time: string;
   end_time: string;
@@ -261,21 +262,24 @@ export async function createCourt(data: Partial<Court>): Promise<string> {
 export async function getBookings(filters?: {
   courtId?: string;
   userId?: string;
+  userEmail?: string;
   date?: string;
   status?: string;
 }): Promise<Partial<Booking>[]> {
   const constraints: Array<{ field: string; op: string; value: unknown }> = [];
   if (filters?.courtId) constraints.push({ field: 'court_id', op: '==', value: filters.courtId });
   if (filters?.userId) constraints.push({ field: 'user_id', op: '==', value: filters.userId });
+  if (filters?.userEmail) constraints.push({ field: 'user_email', op: '==', value: filters.userEmail });
   if (filters?.date) constraints.push({ field: 'date', op: '==', value: filters.date });
   if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
   return queryDocs('bookings', constraints, 'start_time');
 }
 
-export async function createBooking(data: Partial<Booking>): Promise<string> {
+export async function createBooking(data: Record<string, unknown>): Promise<string> {
   return addDoc('bookings', {
     court_id: data.court_id,
     user_id: data.user_id,
+    user_email: data.user_email || null, // Denormalized for fallback search
     date: data.date,
     start_time: data.start_time,
     end_time: data.end_time,

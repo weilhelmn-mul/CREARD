@@ -35,11 +35,6 @@ function toCamelBooking(b: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   try {
-    // If Firebase not configured, return empty array
-    if (!isFirebaseAvailable()) {
-      return NextResponse.json([]);
-    }
-
     const { searchParams } = new URL(request.url);
     const courtId = searchParams.get('courtId');
     const userId = searchParams.get('userId');
@@ -48,6 +43,7 @@ export async function GET(request: NextRequest) {
 
     // Court availability check (courtId + date) is public — no auth required
     if (courtId && date && !userId) {
+      if (!isFirebaseAvailable()) return NextResponse.json([]);
       const bookings = await getBookings({ courtId, date });
       return NextResponse.json(bookings.map(toCamelBooking));
     }
@@ -57,6 +53,11 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
     const authUser = authResult.user;
 
+    // If Firebase not configured, return empty (no database to query)
+    if (!isFirebaseAvailable()) {
+      return NextResponse.json([]);
+    }
+
     // Non-admin users can only see their own bookings
     if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       // If requesting by userId, it must be their own
@@ -65,7 +66,14 @@ export async function GET(request: NextRequest) {
       }
       // Default to own bookings
       const effectiveUserId = userId || authUser.id;
-      const bookings = await getBookings({ userId: effectiveUserId });
+      let bookings = await getBookings({ userId: effectiveUserId });
+
+      // Fallback: if no bookings found with userId, try searching by user email
+      // This handles cases where bookings were created with a different user ID format
+      if (bookings.length === 0 && authUser.email) {
+        bookings = await getBookings({ userEmail: authUser.email });
+      }
+
       const enriched = await Promise.all(
         bookings.map(async (b) => {
           const [court, user] = await Promise.all([
@@ -209,6 +217,7 @@ export async function POST(request: NextRequest) {
     const id = await createBooking({
       court_id: courtId,
       user_id: userId,
+      user_email: authUser.email, // Denormalized for fallback search
       date,
       start_time: startTime,
       end_time: endTime,
