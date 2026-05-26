@@ -114,15 +114,28 @@ export async function GET(request: NextRequest) {
       }
       // Default to own bookings
       const effectiveUserId = userId || authUser.id;
-      let bookings = useJson
+
+      // Search by BOTH userId and userEmail to handle ID mismatches
+      // (e.g., demo-mode IDs vs Firebase Auth UIDs for the same user)
+      const bookingsById = useJson
         ? await jsonGetBookings({ userId: effectiveUserId })
         : await getBookings({ userId: effectiveUserId });
 
-      // Fallback: if no bookings found with userId, try searching by user email
-      if (bookings.length === 0 && authUser.email) {
-        bookings = useJson
+      let bookingsByEmail: any[] = [];
+      if (authUser.email && authUser.email !== effectiveUserId) {
+        bookingsByEmail = useJson
           ? await jsonGetBookings({ userEmail: authUser.email })
           : await getBookings({ userEmail: authUser.email });
+      }
+
+      // Merge and deduplicate by booking ID
+      const seenIds = new Set<string>();
+      const bookings: any[] = [];
+      for (const b of [...bookingsById, ...bookingsByEmail]) {
+        if (!seenIds.has(b.id)) {
+          seenIds.add(b.id);
+          bookings.push(b);
+        }
       }
 
       // Enrich with court and user data
@@ -339,11 +352,20 @@ export async function PUT(request: NextRequest) {
     // Non-admin users can only cancel their own bookings
     if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       if (status === 'cancelled') {
-        // Verify the booking belongs to the user
-        const bookings = useJson
+        // Verify the booking belongs to the user (check by both userId and email)
+        const bookingsById = useJson
           ? await jsonGetBookings({ userId: authUser.id })
           : await getBookings({ userId: authUser.id });
-        const booking = bookings.find((b) => b.id === id);
+
+        let bookingsByEmail: any[] = [];
+        if (authUser.email) {
+          bookingsByEmail = useJson
+            ? await jsonGetBookings({ userEmail: authUser.email })
+            : await getBookings({ userEmail: authUser.email });
+        }
+
+        const allBookings = [...bookingsById, ...bookingsByEmail];
+        const booking = allBookings.find((b) => b.id === id);
         if (!booking) {
           return NextResponse.json(
             { error: 'No puedes modificar reservas de otros usuarios.' },
