@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 
 /* ─── types ─── */
 interface Booking {
@@ -74,8 +75,17 @@ const tabs: { key: TabType; label: string }[] = [
 ]
 
 /* ─── helpers ─── */
+// Parse date string as local date (avoids UTC timezone issues for Peru, UTC-5)
+function parseLocalDate(dateStr: string): Date {
+  const parts = dateStr.split('-')
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+  }
+  return new Date(dateStr + 'T00:00:00')
+}
+
 const fmt = (dateStr: string) => {
-  const d = new Date(dateStr + 'T00:00:00')
+  const d = parseLocalDate(dateStr)
   return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
@@ -99,7 +109,9 @@ export default function BookingsView() {
     if (!user) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/bookings?userId=${user.id}`)
+      const res = await fetch(`/api/bookings?userId=${user.id}`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data: Booking[] = await res.json()
         setBookings(data)
@@ -118,7 +130,7 @@ export default function BookingsView() {
   today.setHours(0, 0, 0, 0)
 
   const filtered = bookings.filter((b) => {
-    const bd = new Date(b.date + 'T00:00:00')
+    const bd = parseLocalDate(b.date)
     switch (activeTab) {
       case 'upcoming':
         return (
@@ -139,7 +151,7 @@ export default function BookingsView() {
     try {
       const res = await fetch('/api/bookings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id, status: 'cancelled' }),
       })
       if (res.ok) {
@@ -158,7 +170,7 @@ export default function BookingsView() {
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           bookingId: payModal.id,
           type: 'remaining',
@@ -184,7 +196,7 @@ export default function BookingsView() {
   /* ─── tab counts ─── */
   const tabCounts = {
     upcoming: bookings.filter((b) => {
-      const bd = new Date(b.date + 'T00:00:00')
+      const bd = parseLocalDate(b.date)
       return bd >= today && !['cancelled', 'completed', 'no_show', 'expired'].includes(b.status)
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,

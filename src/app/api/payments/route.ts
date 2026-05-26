@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPayment, getPayments, updateBooking, getBookings } from '@/lib/db';
-
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
+import { createPayment, updateBooking, getBookingById } from '@/lib/db';
+import { requireAnyAuth } from '@/lib/auth-middleware';
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 export async function POST(request: NextRequest) {
   try {
+    // Authenticate user
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+
     const body = await request.json();
     const { bookingId, userId, amount, type, method, status, externalRef } = body;
 
@@ -31,16 +29,20 @@ export async function POST(request: NextRequest) {
       }, { status: 201 });
     }
 
-    // Determine userId: from body or from booking
-    let effectiveUserId = userId;
-    if (!effectiveUserId) {
-      // Try to find the booking to get the userId
-      try {
-        const bookings = await getBookings({});
-        const booking = bookings.find((b) => b.id === bookingId);
-        if (booking) effectiveUserId = booking.user_id;
-      } catch { /* ignore */ }
+    // Verify user owns the booking (non-admin users) — O(1) direct lookup
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+      const booking = await getBookingById(bookingId);
+      if (!booking || booking.user_id !== authUser.id) {
+        return NextResponse.json(
+          { error: 'No puedes realizar pagos para reservas de otros usuarios.' },
+          { status: 403 }
+        );
+      }
     }
+
+    // Get the booking directly (O(1) instead of fetching all bookings)
+    const booking = await getBookingById(bookingId);
+    const effectiveUserId = userId || booking?.user_id || authUser.id;
 
     // Crear el pago en la subcolección
     const paymentId = await createPayment(bookingId, {
@@ -53,39 +55,31 @@ export async function POST(request: NextRequest) {
     });
 
     // Si es pago restante, actualizar la reserva
-    if (type === 'remaining') {
-      const bookings = await getBookings({});
-      const booking = bookings.find((b) => b.id === bookingId);
-      if (booking) {
-        const newAdvance = (booking.advance_amount || 0) + (parseFloat(amount) || 0);
-        let newRemaining = (booking.total_price || 0) - newAdvance;
-        let newStatus = booking.status || 'partially_paid';
+    if (type === 'remaining' && booking) {
+      const newAdvance = (booking.advance_amount || 0) + (parseFloat(amount) || 0);
+      let newRemaining = (booking.total_price || 0) - newAdvance;
+      let newStatus = booking.status || 'partially_paid';
 
-        if (newRemaining <= 0) {
-          newRemaining = 0;
-          newStatus = 'fully_paid';
-        }
-
-        await updateBooking(bookingId, {
-          advance_amount: newAdvance,
-          remaining_amount: newRemaining,
-          status: newStatus,
-        });
+      if (newRemaining <= 0) {
+        newRemaining = 0;
+        newStatus = 'fully_paid';
       }
+
+      await updateBooking(bookingId, {
+        advance_amount: newAdvance,
+        remaining_amount: newRemaining,
+        status: newStatus,
+      });
     }
 
     // Si es adelanto, actualizar estado de la reserva
-    if (type === 'advance') {
-      const bookings = await getBookings({});
-      const booking = bookings.find((b) => b.id === bookingId);
-      if (booking) {
-        await updateBooking(bookingId, {
-          status: 'partially_paid',
-          slot_status: 'reserved',
-          payment_method: method,
-          advance_amount: parseFloat(amount) || 0,
-        });
-      }
+    if (type === 'advance' && booking) {
+      await updateBooking(bookingId, {
+        status: 'partially_paid',
+        slot_status: 'reserved',
+        payment_method: method,
+        advance_amount: parseFloat(amount) || 0,
+      });
     }
 
     return NextResponse.json({ id: paymentId, success: true }, { status: 201 });

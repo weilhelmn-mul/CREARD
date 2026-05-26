@@ -125,3 +125,32 @@ Stage Summary:
 - Admin can: approve, reject, disable, enable users and change roles (user/admin/super_admin)
 - Role 'super_admin' can only be assigned by another super_admin
 - Registration now works end-to-end: create account → message "pending approval" → admin approves → user can login
+
+---
+Task ID: 1
+Agent: main
+Task: Analizar y reparar "Mis Reservas" - sistema de reservas de usuarios
+
+Work Log:
+- Exploró completamente el flujo de reservas: BookingsView, BookingForm, CourtDetail, API routes (/api/bookings, /api/payments), db.ts, auth-middleware
+- Identificó 7 problemas principales (3 críticos, 3 medios, 1 bajo)
+- Creó archivo compartido `/src/lib/firebase-check.ts` con utilidad `isFirebaseAvailable()`
+- Actualizó `auth-middleware.ts`: amplió UserRole para incluir 'user', creó `requireAnyAuth()` para rutas de usuarios
+- Protegió `/api/bookings` (GET/POST/PUT) con autenticación y validación de propiedad
+- Protegió `/api/payments` (POST) con autenticación y validación de propiedad
+- Agregó `getAuthHeaders()` en BookingsView.tsx (fetch bookings, cancel, pay remaining)
+- Agregó `getAuthHeaders()` en BookingForm.tsx (submit booking)
+- Agregó `getAuthHeaders()` en CourtDetail.tsx (fetch bookings for availability)
+- Corrigió problema de zona horaria UTC vs local en BookingsView con `parseLocalDate()`
+- Agregó `getBookingById()` a db.ts para consultas O(1) directas
+- Optimizó payments route de O(N) `getBookings({}).find()` a O(1) `getBookingById()`
+- Consolidó `isFirebaseAvailable()` duplicado en `firebase-check.ts` compartido
+- Verificó build exitoso con `next build`
+
+Stage Summary:
+- Archivos creados: `/src/lib/firebase-check.ts`
+- Archivos modificados: `auth-middleware.ts`, `db.ts`, `/api/bookings/route.ts`, `/api/payments/route.ts`, `BookingsView.tsx`, `BookingForm.tsx`, `CourtDetail.tsx`, `/api/auth/session/route.ts`, `/api/courts/route.ts`
+- Build exitoso sin errores nuevos
+- Todas las rutas de reservas ahora están protegidas con autenticación Firebase
+- Los usuarios regulares solo pueden acceder a sus propias reservas (no las de otros)
+- La disponibilidad de canchas (courtId+date) sigue siendo pública para usuarios no autenticados

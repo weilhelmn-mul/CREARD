@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { useAppStore, type User } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 
 /* ───────────── Interfaces ───────────── */
 
@@ -273,7 +274,9 @@ export default function CourtDetail() {
     if (!selectedCourtId) return
     const dateStr = formatDateISO(selectedDate)
     let cancelled = false
-    fetch(`/api/bookings?courtId=${selectedCourtId}&date=${dateStr}`)
+    fetch(`/api/bookings?courtId=${selectedCourtId}&date=${dateStr}`, {
+      headers: getAuthHeaders(),
+    })
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {

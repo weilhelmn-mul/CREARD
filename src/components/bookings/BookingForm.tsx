@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 
 /* ───────────── Interfaces ───────────── */
 
@@ -167,7 +168,7 @@ export default function BookingForm() {
     try {
       const res = await fetch('/api/bookings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           courtId: court.id,
           userId: user.id,

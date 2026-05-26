@@ -7,15 +7,8 @@ import {
   getUserById,
 } from '@/lib/db';
 import { createPayment } from '@/lib/db';
-
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
+import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 // Transformar snake_case (Firestore) a camelCase (frontend)
 function toCamelBooking(b: Record<string, unknown>) {
@@ -53,6 +46,39 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const status = searchParams.get('status');
 
+    // Court availability check (courtId + date) is public — no auth required
+    if (courtId && date && !userId) {
+      const bookings = await getBookings({ courtId, date });
+      return NextResponse.json(bookings.map(toCamelBooking));
+    }
+
+    // All other queries require authentication
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+
+    // Non-admin users can only see their own bookings
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+      // If requesting by userId, it must be their own
+      if (userId && userId !== authUser.id) {
+        return NextResponse.json({ error: 'No puedes ver reservas de otros usuarios.' }, { status: 403 });
+      }
+      // Default to own bookings
+      const effectiveUserId = userId || authUser.id;
+      const bookings = await getBookings({ userId: effectiveUserId });
+      const enriched = await Promise.all(
+        bookings.map(async (b) => {
+          const [court, user] = await Promise.all([
+            b.court_id ? getCourtById(b.court_id) : Promise.resolve(null),
+            b.user_id ? getUserById(b.user_id) : Promise.resolve(null),
+          ]);
+          const raw = { ...b, _court: court, _user: user };
+          return toCamelBooking(raw);
+        })
+      );
+      return NextResponse.json(enriched);
+    }
+
     const bookings = await getBookings({
       courtId: courtId || undefined,
       userId: userId || undefined,
@@ -82,8 +108,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // If Firebase not configured, create a simulated booking with a mock ID
     if (!isFirebaseAvailable()) {
-      // In demo mode, create a simulated booking with a mock ID
       const body = await request.json();
       const { courtId, userId, date, startTime, endTime, totalPrice, advanceAmount, remainingAmount, paymentMethod } = body;
 
@@ -115,6 +141,11 @@ export async function POST(request: NextRequest) {
       }, { status: 201 });
     }
 
+    // Authenticate user
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+
     const body = await request.json();
     const {
       courtId,
@@ -135,6 +166,16 @@ export async function POST(request: NextRequest) {
         { error: 'Faltan campos requeridos: courtId, userId, date, startTime, endTime' },
         { status: 400 }
       );
+    }
+
+    // Non-admin users can only create bookings for themselves
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+      if (userId !== authUser.id) {
+        return NextResponse.json(
+          { error: 'No puedes crear reservas para otros usuarios.' },
+          { status: 403 }
+        );
+      }
     }
 
     // Verificar solapamiento
@@ -211,7 +252,7 @@ export async function POST(request: NextRequest) {
     const err = error as { message?: string; code?: string; stack?: string };
     console.error('Error creating booking:', err?.message || err);
     console.error('Stack:', err?.stack || 'no stack');
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to create booking',
       detail: err?.message || 'Unknown error'
     }, { status: 500 });
@@ -224,11 +265,37 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // Authenticate user
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+
     const body = await request.json();
     const { id, status, slot_status } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
+    }
+
+    // Non-admin users can only cancel their own bookings
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+      if (status === 'cancelled') {
+        // Verify the booking belongs to the user
+        const bookings = await getBookings({ userId: authUser.id });
+        const booking = bookings.find((b) => b.id === id);
+        if (!booking) {
+          return NextResponse.json(
+            { error: 'No puedes modificar reservas de otros usuarios.' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Users can only cancel, not change other statuses
+        return NextResponse.json(
+          { error: 'Solo puedes cancelar tus propias reservas.' },
+          { status: 403 }
+        );
+      }
     }
 
     const updateData: Record<string, unknown> = {};

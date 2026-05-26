@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCourts, getCourtById, createCourt } from '@/lib/db';
 import { adminDb } from '@/lib/firebase-admin';
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 // Fallback courts for when Firebase is not configured
 const fallbackCourts = [
@@ -77,15 +78,6 @@ const fallbackCourts = [
     isActive: true,
   },
 ];
-
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
 
 // Transformar snake_case (Firestore) a camelCase (frontend) + enriquecer con branch
 async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, unknown>> {

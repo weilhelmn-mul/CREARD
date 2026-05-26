@@ -7,14 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserById } from '@/lib/db';
 import { adminAuth } from '@/lib/firebase-admin';
 
-function isFirebaseAvailable(): boolean {
-  try {
-    const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
-    return pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
-    return false;
-  }
-}
+import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 export async function POST(request: NextRequest) {
   try {

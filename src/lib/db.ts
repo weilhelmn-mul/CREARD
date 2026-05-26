@@ -293,6 +293,13 @@ export async function updateBooking(id: string, data: Partial<Booking>): Promise
   await updateDocById('bookings', id, data as Record<string, unknown>);
 }
 
+/**
+ * Get a single booking by its document ID (O(1) direct lookup)
+ */
+export async function getBookingById(id: string): Promise<Partial<Booking> | null> {
+  return getDocById('bookings', id);
+}
+
 // --- Payments (subcolección) ---
 export async function createPayment(
   bookingId: string,
