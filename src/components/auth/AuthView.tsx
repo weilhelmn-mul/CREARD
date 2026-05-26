@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
-import { isFirebaseClientAvailable, saveAuthSession, signOutFirebase, restoreSession } from '@/lib/auth-helpers'
+import { isFirebaseClientAvailable } from '@/lib/auth-helpers'
 
 export default function AuthView() {
   const { currentView, setView, setUser } = useAppStore()
@@ -50,14 +50,13 @@ export default function AuthView() {
     try {
       if (isFirebaseClientAvailable()) {
         // Firebase mode: authenticate client-side, then sync with server
-        const { signInWithEmailAndPassword, getIdToken } = await import('firebase/auth')
-        const { auth } = await import('@/lib/firebase')
+        const firebaseModule = await import('@/lib/firebase')
 
-        const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword)
+        const userCredential = await firebaseModule.firebaseSignIn(loginEmail, loginPassword)
         const firebaseUser = userCredential.user
 
         // Get ID token for session persistence
-        const token = await getIdToken(firebaseUser)
+        const token = await firebaseModule.firebaseGetIdToken(firebaseUser)
 
         // Sync with server to get Firestore profile data (name, role, phone)
         const res = await fetch('/api/auth?action=login', {
@@ -82,7 +81,9 @@ export default function AuthView() {
             })
             if (regRes.ok) {
               const regData = await regRes.json()
-              await saveAuthSession(regData.user, firebaseUser)
+              const store = useAppStore.getState()
+              store.setUser(regData.user)
+              store.setFirebaseToken(token)
               setView('home')
               return
             }
@@ -151,14 +152,13 @@ export default function AuthView() {
     setLoading(true)
     try {
       if (isFirebaseClientAvailable()) {
-        const { createUserWithEmailAndPassword, updateProfile, getIdToken } = await import('firebase/auth')
-        const { auth } = await import('@/lib/firebase')
+        const firebaseModule = await import('@/lib/firebase')
 
-        const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword)
-        await updateProfile(userCredential.user, { displayName: regName })
+        const userCredential = await firebaseModule.firebaseCreateUser(regEmail, regPassword)
+        await firebaseModule.firebaseUpdateProfile(userCredential.user, { displayName: regName })
 
         // Get ID token for session persistence
-        const token = await getIdToken(userCredential.user)
+        const token = await firebaseModule.firebaseGetIdToken(userCredential.user)
 
         const res = await fetch('/api/auth?action=register', {
           method: 'POST',

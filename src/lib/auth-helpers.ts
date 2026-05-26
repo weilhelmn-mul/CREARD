@@ -1,6 +1,8 @@
 // ============================================================
 // CREARD - Auth Helpers (Client-Side)
 // Funciones auxiliares para la autenticacion del lado del cliente
+// Usa solo @/lib/firebase (fully lazy) para evitar el error
+// "_canInitEmulator" de Firebase Auth en Next.js
 // ============================================================
 
 import { useAppStore } from '@/store/useAppStore';
@@ -18,23 +20,6 @@ export function isFirebaseClientAvailable(): boolean {
 }
 
 /**
- * Saves user data and Firebase ID token after successful auth
- */
-export async function saveAuthSession(user: { id: string; name: string; email: string; phone: string | null; role: string }, firebaseUser?: { getIdToken: () => Promise<string> }): Promise<void> {
-  const store = useAppStore.getState();
-  store.setUser(user as any);
-
-  if (firebaseUser) {
-    try {
-      const token = await firebaseUser.getIdToken();
-      store.setFirebaseToken(token);
-    } catch (err) {
-      console.warn('[CREARD] No se pudo obtener el ID token:', err);
-    }
-  }
-}
-
-/**
  * Signs out from Firebase Auth and clears local state
  */
 export async function signOutFirebase(): Promise<void> {
@@ -43,12 +28,8 @@ export async function signOutFirebase(): Promise<void> {
   // Try to sign out from Firebase Auth
   if (isFirebaseClientAvailable()) {
     try {
-      const { auth } = await import('@/lib/firebase');
-      const { signOut: firebaseSignOut } = await import('firebase/auth');
-      const authInstance = auth;
-      if (authInstance) {
-        await firebaseSignOut(authInstance);
-      }
+      const { firebaseSignOut } = await import('@/lib/firebase');
+      await firebaseSignOut();
     } catch (err) {
       console.warn('[CREARD] Error al cerrar sesion en Firebase:', err);
     }

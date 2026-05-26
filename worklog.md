@@ -79,3 +79,24 @@ Stage Summary:
 - Demo Admin button hidden in production (only visible in NODE_ENV=development)
 - Login credentials for admin: weilhelmn@gmail.com / Creard2025!
 - All APIs verified working after deployment
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix login error "Cannot redefine property: _canInitEmulator"
+
+Work Log:
+- Diagnosed error: Firebase Auth module was loaded twice (static import in firebase.ts + dynamic import in AuthView.tsx)
+- Firebase v12 marks _canInitEmulator as non-configurable; second import tried to redefine it
+- Rewrote /src/lib/firebase.ts: ALL Firebase imports are now fully lazy (dynamic import inside async functions)
+- Added wrapper functions: firebaseSignIn, firebaseCreateUser, firebaseUpdateProfile, firebaseSignOut, firebaseGetIdToken
+- Updated AuthView.tsx to use the new wrapper functions from @/lib/firebase
+- Updated auth-helpers.ts signOutFirebase to use the new wrapper
+- Build passed, deployed to Vercel
+- Browser test confirmed: login works, admin badge visible, Panel Admin accessible, no console errors
+
+Stage Summary:
+- Root cause: static import of firebase/auth in firebase.ts conflicted with dynamic imports in client components
+- Fix: Made all Firebase client SDK imports fully lazy (no static firebase/* imports)
+- Login verified working: weilhelmn@gmail.com / Creard2025! successfully authenticates
+- Admin panel accessible after login with role=admin
