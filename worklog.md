@@ -26,3 +26,26 @@ Stage Summary:
 - Falls back to sensible defaults if Firestore not configured
 - Files created: src/app/api/settings/route.ts, src/context/SiteSettingsContext.tsx, src/components/home/SectionEditor.tsx
 - Files modified: HeroSection.tsx, SportsSection.tsx, PromoBanner.tsx, HowItWorks.tsx, AdminDashboard.tsx, layout.tsx
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix "Reservar" buttons in FeaturedCourts and SearchView, fix Courts API camelCase, add missing db exports
+
+Work Log:
+- Analyzed full project structure: SPA with Zustand view routing, Firebase/Firestore backend
+- Found BUG 1: FeaturedCourts "Reservar" button navigated to booking-form without date/timeSlot, BookingForm immediately redirected back to court-detail
+- Found BUG 2: Courts API returned snake_case (price_per_hour, branch_id) but CourtDetail/BookingForm expected camelCase (pricePerHour) and branch object
+- Found BUG 3: SearchView "Reservar" button had no onClick handler, price showed as $ instead of S/.
+- Found BUG 4: Multiple admin API routes imported non-existent functions from db.ts (getNews, updateGalleryImage, etc.)
+- Fixed FeaturedCourts: handleReserve now navigates to court-detail (where user picks date/time) instead of booking-form
+- Fixed Courts API (/api/courts/route.ts): Added toCamelCourt transform that converts snake_case to camelCase and enriches with branch data from Firestore
+- Fixed FeaturedCourts data mapping: Uses c.pricePerHour || c.price_per_hour to handle both formats
+- Fixed SearchView: Added onClick to Reservar button, changed $ to S/., removed non-existent rating/reviewCount fields
+- Added 13 new exports to db.ts: getNews, getNewsById, createNewsItem, updateNewsItem, deleteNewsItem, getGalleryImages, getGalleryImageById, createGalleryImage, updateGalleryImage, deleteGalleryImage, getSiteSettings, updateSiteSettings, updateCourt, deleteCourt
+- Build verified: Compiled successfully with 0 errors
+- Deploy pending: No Vercel/GitHub credentials available in current session
+
+Stage Summary:
+- Booking flow now works: Home → FeaturedCourts "Reservar" → CourtDetail (select date/time) → BookingForm → Create booking in Firestore → Shows in Admin Panel Reservas
+- All admin API routes (news, gallery, settings, courts) now compile without errors
+- User needs to deploy manually via GitHub push or Vercel dashboard
