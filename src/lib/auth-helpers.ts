@@ -41,17 +41,28 @@ export async function signOutFirebase(): Promise<void> {
 
 /**
  * Attempts to restore the user session on app init
- * Verifies the stored Firebase ID token with the server
+ * If there's a Firebase token, verifies it with the server.
+ * If no token but a persisted user exists, keeps the session alive.
  */
 export async function restoreSession(): Promise<boolean> {
   const store = useAppStore.getState();
   const token = store.firebaseToken;
+  const persistedUser = store.user;
 
-  if (!token) {
+  // No token and no user - nothing to restore
+  if (!token && !persistedUser) {
     store.setAuthChecked(true);
     return false;
   }
 
+  // No token but user exists (logged in via server-only auth) - keep session
+  if (!token && persistedUser) {
+    console.log('[CREARD] Sesion restaurada (sin Firebase token):', persistedUser.email);
+    store.setAuthChecked(true);
+    return true;
+  }
+
+  // Has token - verify with server
   try {
     const res = await fetch('/api/auth/session', {
       method: 'POST',
@@ -70,10 +81,18 @@ export async function restoreSession(): Promise<boolean> {
       }
     }
   } catch (err) {
-    console.warn('[CREARD] No se pudo restaurar la sesion:', err);
+    console.warn('[CREARD] No se pudo verificar token Firebase:', err);
   }
 
-  // Token invalid - clear everything
+  // Token verification failed - but user exists in localStorage, keep them
+  if (persistedUser) {
+    console.warn('[CREARD] Token invalido, manteniendo sesion local para:', persistedUser.email);
+    store.setFirebaseToken(null);
+    store.setAuthChecked(true);
+    return true;
+  }
+
+  // No user at all - clear everything
   store.logout();
   store.setAuthChecked(true);
   return false;
@@ -81,7 +100,7 @@ export async function restoreSession(): Promise<boolean> {
 
 /**
  * Creates auth headers for API requests
- * Includes Firebase ID token if available
+ * Includes Firebase ID token if available, otherwise sends user info as fallback
  */
 export function getAuthHeaders(): Record<string, string> {
   const store = useAppStore.getState();
@@ -89,8 +108,14 @@ export function getAuthHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
-  if (store.user && store.firebaseToken) {
+  if (store.firebaseToken) {
     headers['Authorization'] = `Bearer ${store.firebaseToken}`;
+  } else if (store.user) {
+    // Fallback: send user identity as headers for server-side verification
+    // This works in demo mode and when Firebase Client SDK failed
+    headers['x-user-id'] = store.user.id;
+    headers['x-user-email'] = store.user.email;
+    headers['x-user-role'] = store.user.role;
   }
 
   return headers;

@@ -12,8 +12,10 @@ export default function TopAppBar() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+
   // Build nav items based on user role
-  const navItems: { view: ViewType; label: string; icon: string }[] = user?.role === 'admin'
+  const navItems: { view: ViewType; label: string; icon: string }[] = isAdmin
     ? [
         { view: 'home', label: 'Inicio', icon: 'home' },
         { view: 'admin', label: 'Panel Admin', icon: 'admin_panel_settings' },
@@ -222,13 +224,13 @@ export default function TopAppBar() {
                 <span className="hidden sm:inline text-sm font-medium text-cm-on-surface font-[family-name:var(--font-inter)] max-w-[120px] truncate">
                   {user.name}
                 </span>
-                {user.role === 'admin' && (
+                {isAdmin && (
                   <span className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-primary/15 border border-cm-primary/20">
                     <span className="material-symbols-outlined text-cm-primary text-[12px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                       shield
                     </span>
                     <span className="text-[10px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
-                      Admin
+                      {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                     </span>
                   </span>
                 )}
@@ -278,7 +280,7 @@ export default function TopAppBar() {
                         Mi Perfil
                       </button>
 
-                      {user.role === 'admin' && (
+                      {isAdmin && (
                         <button
                           onClick={() => {
                             setShowUserMenu(false)
@@ -291,7 +293,7 @@ export default function TopAppBar() {
                         </button>
                       )}
 
-                      {user.role === 'user' && (
+                      {!isAdmin && (
                         <button
                           onClick={() => {
                             setShowUserMenu(false)

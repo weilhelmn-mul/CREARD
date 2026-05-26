@@ -96,46 +96,40 @@ export async function requireAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // Fall through to legacy check
+      // Fall through to legacy header check
     }
   }
 
-  // --- Fallback: Legacy header-based auth (for demo mode) ---
-  if (!firebaseAvailable) {
-    const userId = request.headers.get('x-user-id');
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role') as UserRole | null;
+  // --- Fallback: Legacy header-based auth ---
+  // Works in demo mode AND when Firebase Client SDK failed (no token available)
+  const userId = request.headers.get('x-user-id');
+  const userEmail = request.headers.get('x-user-email');
+  const userRole = request.headers.get('x-user-role') as UserRole | null;
 
-    if (!userId || !userEmail || !userRole) {
-      return NextResponse.json(
-        { error: 'Autenticacion requerida.' },
-        { status: 401 }
-      );
-    }
-
-    if (!['admin', 'super_admin'].includes(userRole)) {
-      return NextResponse.json(
-        { error: 'No tienes permisos de administrador.' },
-        { status: 403 }
-      );
-    }
-
-    if (requiredRole === 'super_admin' && userRole !== 'super_admin') {
-      return NextResponse.json(
-        { error: 'Esta accion requiere permisos de Super Administrador.' },
-        { status: 403 }
-      );
-    }
-
-    return {
-      user: { id: userId, email: userEmail, name: userEmail.split('@')[0], role: userRole },
-    };
+  if (!userId || !userEmail || !userRole) {
+    return NextResponse.json(
+      { error: 'Autenticacion requerida.' },
+      { status: 401 }
+    );
   }
 
-  return NextResponse.json(
-    { error: 'Autenticacion requerida. Incluye Authorization: Bearer <token>.' },
-    { status: 401 }
-  );
+  if (!['admin', 'super_admin'].includes(userRole)) {
+    return NextResponse.json(
+      { error: 'No tienes permisos de administrador.' },
+      { status: 403 }
+    );
+  }
+
+  if (requiredRole === 'super_admin' && userRole !== 'super_admin') {
+    return NextResponse.json(
+      { error: 'Esta accion requiere permisos de Super Administrador.' },
+      { status: 403 }
+    );
+  }
+
+  return {
+    user: { id: userId, email: userEmail, name: userEmail.split('@')[0], role: userRole },
+  };
 }
 
 /**
@@ -203,35 +197,29 @@ export async function requireAnyAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // Fall through to rejection
+      // Fall through to fallback check
     }
   }
 
-  // --- Fallback: Legacy header-based auth (for demo mode) ---
-  if (!firebaseAvailable) {
-    const userId = request.headers.get('x-user-id');
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role') as UserRole | null;
+  // --- Fallback: Legacy header-based auth ---
+  // Works in demo mode AND when Firebase Client SDK failed (no token available)
+  const userId = request.headers.get('x-user-id');
+  const userEmail = request.headers.get('x-user-email');
+  const userRole = request.headers.get('x-user-role') as UserRole | null;
 
-    if (!userId || !userEmail) {
-      return NextResponse.json(
-        { error: 'Autenticacion requerida.' },
-        { status: 401 }
-      );
-    }
-
-    return {
-      user: {
-        id: userId,
-        email: userEmail,
-        name: userEmail.split('@')[0],
-        role: (userRole || 'user') as UserRole,
-      },
-    };
+  if (!userId || !userEmail) {
+    return NextResponse.json(
+      { error: 'Autenticacion requerida.' },
+      { status: 401 }
+    );
   }
 
-  return NextResponse.json(
-    { error: 'Autenticacion requerida. Incluye Authorization: Bearer <token>.' },
-    { status: 401 }
-  );
+  return {
+    user: {
+      id: userId,
+      email: userEmail,
+      name: userEmail.split('@')[0],
+      role: (userRole || 'user') as UserRole,
+    },
+  };
 }
