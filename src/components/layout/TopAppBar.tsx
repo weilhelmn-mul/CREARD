@@ -173,25 +173,27 @@ export default function TopAppBar() {
           {/* Auth section */}
           {!user ? (
             <div className="flex items-center gap-2">
-              {/* Admin Demo Button */}
-              <button
-                onClick={() => {
-                  useAppStore.getState().setUser({
-                    id: 'demo-admin',
-                    name: 'Administrador',
-                    email: 'admin@creard.com',
-                    phone: '+51 999 999 999',
-                    role: 'admin',
-                  })
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all duration-200 border border-amber-500/20"
-                title="Acceso demo como administrador"
-              >
-                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                  admin_panel_settings
-                </span>
-                <span className="hidden sm:inline">Admin Demo</span>
-              </button>
+              {/* Admin Demo Button - only visible in development */}
+              {process.env.NODE_ENV === 'development' && (
+                <button
+                  onClick={() => {
+                    useAppStore.getState().setUser({
+                      id: 'demo-admin',
+                      name: 'Administrador',
+                      email: 'admin@creard.com',
+                      phone: '+51 999 999 999',
+                      role: 'admin',
+                    })
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all duration-200 border border-amber-500/20"
+                  title="Acceso demo como administrador (solo desarrollo)"
+                >
+                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                    admin_panel_settings
+                  </span>
+                  <span className="hidden sm:inline">Admin Demo</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setView('login')}
@@ -306,9 +308,10 @@ export default function TopAppBar() {
                     {/* Logout */}
                     <div className="border-t border-white/10 py-1">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           setShowUserMenu(false)
-                          logout()
+                          const { signOutFirebase } = await import('@/lib/auth-helpers')
+                          await signOutFirebase()
                         }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cm-error hover:bg-cm-error-container/10 transition-colors font-[family-name:var(--font-inter)]"
                       >

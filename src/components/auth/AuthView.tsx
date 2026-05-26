@@ -1,17 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
-
-function isFirebaseClientAvailable(): boolean {
-  try {
-    const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || ''
-    return key.length > 5 && !key.includes('TU_') && !key.includes('AQUI')
-  } catch {
-    return false
-  }
-}
+import { isFirebaseClientAvailable, saveAuthSession, signOutFirebase, restoreSession } from '@/lib/auth-helpers'
 
 export default function AuthView() {
   const { currentView, setView, setUser } = useAppStore()
@@ -56,14 +48,18 @@ export default function AuthView() {
 
     setLoading(true)
     try {
-      // If Firebase client is available, use it
       if (isFirebaseClientAvailable()) {
-        const { signInWithEmailAndPassword } = await import('firebase/auth')
+        // Firebase mode: authenticate client-side, then sync with server
+        const { signInWithEmailAndPassword, getIdToken } = await import('firebase/auth')
         const { auth } = await import('@/lib/firebase')
+
         const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword)
         const firebaseUser = userCredential.user
 
-        // Obtener datos adicionales del perfil via API
+        // Get ID token for session persistence
+        const token = await getIdToken(firebaseUser)
+
+        // Sync with server to get Firestore profile data (name, role, phone)
         const res = await fetch('/api/auth?action=login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -74,6 +70,7 @@ export default function AuthView() {
 
         if (!res.ok) {
           if (res.status === 401) {
+            // User exists in Firebase Auth but not in Firestore - auto-register
             const regRes = await fetch('/api/auth?action=register', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -85,15 +82,18 @@ export default function AuthView() {
             })
             if (regRes.ok) {
               const regData = await regRes.json()
-              setUser(regData.user)
+              await saveAuthSession(regData.user, firebaseUser)
               setView('home')
               return
             }
           }
-          throw new Error(data.error || 'Error al iniciar sesión.')
+          throw new Error(data.error || 'Error al iniciar sesion.')
         }
 
-        setUser(data.user)
+        // Save session: user data + Firebase ID token
+        const store = useAppStore.getState()
+        store.setUser(data.user)
+        store.setFirebaseToken(token)
         setView('home')
       } else {
         // Demo mode: login via API only (no Firebase Auth)
@@ -106,7 +106,7 @@ export default function AuthView() {
         const data = await res.json()
 
         if (!res.ok) {
-          throw new Error(data.error || 'Error al iniciar sesión.')
+          throw new Error(data.error || 'Error al iniciar sesion.')
         }
 
         setUser(data.user)
@@ -115,14 +115,14 @@ export default function AuthView() {
     } catch (err) {
       if (err instanceof Error) {
         if (err.message.includes('auth/invalid-credential') || err.message.includes('auth/wrong-password') || err.message.includes('auth/user-not-found')) {
-          setError('Correo o contraseña inválidos.')
+          setError('Correo o contrasena invalidos.')
         } else if (err.message.includes('auth/too-many-requests')) {
-          setError('Demasiados intentos. Intenta más tarde.')
+          setError('Demasiados intentos. Intenta mas tarde.')
         } else {
           setError(err.message)
         }
       } else {
-        setError('Ocurrió un error inesperado.')
+        setError('Ocurrio un error inesperado.')
       }
     } finally {
       setLoading(false)
@@ -139,24 +139,26 @@ export default function AuthView() {
     }
 
     if (regPassword !== regConfirmPassword) {
-      setError('Las contraseñas no coinciden.')
+      setError('Las contrasenas no coinciden.')
       return
     }
 
     if (regPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
+      setError('La contrasena debe tener al menos 6 caracteres.')
       return
     }
 
     setLoading(true)
     try {
-      // If Firebase client is available, use it
       if (isFirebaseClientAvailable()) {
-        const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth')
+        const { createUserWithEmailAndPassword, updateProfile, getIdToken } = await import('firebase/auth')
         const { auth } = await import('@/lib/firebase')
 
         const userCredential = await createUserWithEmailAndPassword(auth, regEmail, regPassword)
         await updateProfile(userCredential.user, { displayName: regName })
+
+        // Get ID token for session persistence
+        const token = await getIdToken(userCredential.user)
 
         const res = await fetch('/api/auth?action=register', {
           method: 'POST',
@@ -176,7 +178,10 @@ export default function AuthView() {
           throw new Error(data.error || 'Error al registrar.')
         }
 
-        setUser(data.user)
+        // Save session: user data + Firebase ID token
+        const store = useAppStore.getState()
+        store.setUser(data.user)
+        store.setFirebaseToken(token)
         setView('home')
       } else {
         // Demo mode: register via API only
@@ -203,16 +208,16 @@ export default function AuthView() {
     } catch (err) {
       if (err instanceof Error) {
         if (err.message.includes('auth/email-already-in-use')) {
-          setError('Ya existe una cuenta con este correo electrónico.')
+          setError('Ya existe una cuenta con este correo electronico.')
         } else if (err.message.includes('auth/weak-password')) {
-          setError('La contraseña es demasiado débil.')
+          setError('La contrasena es demasiado debil.')
         } else if (err.message.includes('auth/invalid-email')) {
-          setError('El formato del correo electrónico no es válido.')
+          setError('El formato del correo electronico no es valido.')
         } else {
           setError(err.message)
         }
       } else {
-        setError('Ocurrió un error inesperado.')
+        setError('Ocurrio un error inesperado.')
       }
     } finally {
       setLoading(false)
@@ -261,7 +266,7 @@ export default function AuthView() {
                 CREARD
               </h1>
               <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-                {isLogin ? 'Inicia sesión en tu cuenta' : 'Crea tu cuenta'}
+                {isLogin ? 'Inicia sesion en tu cuenta' : 'Crea tu cuenta'}
               </p>
             </div>
 
@@ -289,7 +294,7 @@ export default function AuthView() {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Correo electrónico
+                    Correo electronico
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -307,7 +312,7 @@ export default function AuthView() {
 
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Contraseña
+                    Contrasena
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -315,7 +320,7 @@ export default function AuthView() {
                     </span>
                     <input
                       type="password"
-                      placeholder="••••••••"
+                      placeholder="........"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       className={`${inputClasses} pl-10`}
@@ -338,7 +343,7 @@ export default function AuthView() {
                       <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                         login
                       </span>
-                      Iniciar Sesión
+                      Iniciar Sesion
                     </>
                   )}
                 </button>
@@ -365,7 +370,7 @@ export default function AuthView() {
 
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Correo electrónico
+                    Correo electronico
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -383,7 +388,7 @@ export default function AuthView() {
 
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Teléfono
+                    Telefono
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -401,7 +406,7 @@ export default function AuthView() {
 
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Contraseña
+                    Contrasena
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -409,7 +414,7 @@ export default function AuthView() {
                     </span>
                     <input
                       type="password"
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Minimo 6 caracteres"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       className={`${inputClasses} pl-10`}
@@ -419,7 +424,7 @@ export default function AuthView() {
 
                 <div>
                   <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
-                    Confirmar contraseña
+                    Confirmar contrasena
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">
@@ -427,7 +432,7 @@ export default function AuthView() {
                     </span>
                     <input
                       type="password"
-                      placeholder="Repite tu contraseña"
+                      placeholder="Repite tu contrasena"
                       value={regConfirmPassword}
                       onChange={(e) => setRegConfirmPassword(e.target.value)}
                       className={`${inputClasses} pl-10`}
@@ -471,13 +476,13 @@ export default function AuthView() {
             >
               {isLogin ? (
                 <>
-                  ¿No tienes cuenta?{' '}
-                  <span className="text-cm-primary font-semibold">Regístrate</span>
+                  No tienes cuenta?{' '}
+                  <span className="text-cm-primary font-semibold">Registrate</span>
                 </>
               ) : (
                 <>
-                  ¿Ya tienes cuenta?{' '}
-                  <span className="text-cm-primary font-semibold">Inicia sesión</span>
+                  Ya tienes cuenta?{' '}
+                  <span className="text-cm-primary font-semibold">Inicia sesion</span>
                 </>
               )}
             </button>

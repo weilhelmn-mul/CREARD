@@ -17,6 +17,7 @@ import BookingsView from '@/components/bookings/BookingsView'
 import ProfileView from '@/components/profile/ProfileView'
 import AdminDashboard from '@/components/admin/AdminDashboard'
 import AuthView from '@/components/auth/AuthView'
+import AuthInitializer from '@/components/auth/AuthInitializer'
 
 function HomeView() {
   return (
@@ -87,6 +88,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-cm-background">
+      <AuthInitializer />
       {!isFullPage && <TopAppBar />}
       <main className={`flex-1 ${isFullPage ? '' : 'pt-16 pb-24 md:pb-8'}`}>
         <ViewRouter />

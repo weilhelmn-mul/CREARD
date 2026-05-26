@@ -47,3 +47,35 @@ Stage Summary:
 - Firestore seeded with production data
 - Complete reservation flow functional: browse courts → select date/time → book → persist → view in admin
 - No composite index needed (client-side sort optimization)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Analyze login/auth system, configure admin user, implement auth improvements
+
+Work Log:
+- Comprehensive analysis of auth system: AuthView, firebase.ts, firebase-admin.ts, auth-middleware.ts, useAppStore, API routes
+- Identified 5 critical issues: no session persistence, no token verification, no Firebase sign-out on logout, Demo Admin visible in production, no admin user
+- Created /src/lib/auth-helpers.ts: client-side auth utilities (session restore, signOutFirebase, getAuthHeaders)
+- Created /src/app/api/auth/session/route.ts: Firebase ID Token verification endpoint
+- Created /src/app/api/setup/create-admin/route.ts: one-time admin user creation (protected by SETUP_SECRET)
+- Created /src/components/auth/AuthInitializer.tsx: session restoration on app load
+- Updated /src/store/useAppStore.ts: localStorage persistence for user + firebaseToken
+- Updated /src/components/auth/AuthView.tsx: Firebase getIdToken() for session persistence
+- Updated /src/lib/auth-middleware.ts: real Firebase ID Token verification (verifyIdToken) + legacy fallback
+- Updated /src/components/layout/TopAppBar.tsx: hide Admin Demo button in production
+- Updated /src/components/profile/ProfileView.tsx: proper Firebase signOut on logout
+- Updated /src/app/page.tsx: integrated AuthInitializer component
+- Added SETUP_SECRET env var to Vercel
+- Built and deployed to Vercel: https://creard.vercel.app
+- Created admin user weilhelmn@gmail.com (UID: 2U5LLmP3cpRP3nKVGuE6LyE2lPI2) with password Creard2025! and role: admin
+- Verified login API returns admin role correctly
+- Verified courts API still functional (6 courts)
+
+Stage Summary:
+- Auth system fully upgraded: persistent sessions via localStorage + Firebase ID tokens
+- Admin user weilhelmn@gmail.com created with admin role in Firebase Auth + Firestore + Custom Claims
+- Firebase ID Token verification now enforced on admin API routes
+- Demo Admin button hidden in production (only visible in NODE_ENV=development)
+- Login credentials for admin: weilhelmn@gmail.com / Creard2025!
+- All APIs verified working after deployment

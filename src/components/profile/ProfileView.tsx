@@ -29,7 +29,12 @@ const sportIcons: Record<string, string> = {
 }
 
 export default function ProfileView() {
-  const { user, setView, logout } = useAppStore()
+  const { user, setView } = useAppStore()
+
+  const handleLogout = async () => {
+    const { signOutFirebase } = await import('@/lib/auth-helpers')
+    await signOutFirebase()
+  }
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
   const [totalSpent, setTotalSpent] = useState(0)
 
@@ -121,7 +126,7 @@ export default function ProfileView() {
           </div>
           <div className="mt-4 pt-4 border-t border-white/5">
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="flex items-center gap-2 text-red-400 text-sm hover:text-red-300 transition-colors font-[family-name:var(--font-inter)]"
             >
               <span className="material-symbols-outlined text-[18px]">logout</span>
