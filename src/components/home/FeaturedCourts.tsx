@@ -86,17 +86,17 @@ export default function FeaturedCourts() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          // Map API fields to our interface, add random available slots
+          // Map API fields (camelCase from API) to our interface, add random available slots
           const mapped = data.slice(0, 6).map((c: Record<string, unknown>) => ({
             id: c.id,
             name: c.name,
             sport: c.sport,
             description: c.description || '',
-            branch_id: c.branch_id,
+            branch_id: c.branchId || c.branch_id,
             images: Array.isArray(c.images) && c.images.length > 0 ? c.images : ['/cancha-futbol-1.png'],
-            price_per_hour: c.price_per_hour || 50,
+            price_per_hour: Number(c.pricePerHour || c.price_per_hour) || 50,
             amenities: Array.isArray(c.amenities) ? c.amenities : [],
-            is_active: c.is_active !== false,
+            is_active: c.isActive !== false && c.is_active !== false,
             availableToday: Math.floor(Math.random() * 6) + 5,
           }))
           setCourts(mapped)
@@ -117,7 +117,7 @@ export default function FeaturedCourts() {
 
   const handleReserve = (courtId: string) => {
     setSelectedCourt(courtId)
-    setView('booking-form')
+    setView('court-detail')
   }
 
   return (
@@ -212,7 +212,7 @@ export default function FeaturedCourts() {
 
                   {/* Amenities */}
                   <div className="flex flex-wrap gap-1.5 mb-3 min-h-[24px]">
-                    {court.amenities.slice(0, 3).map((amenity, i) => (
+                    {court.amenities.filter(Boolean).slice(0, 3).map((amenity: string, i: number) => (
                       <span
                         key={i}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/80 text-cm-on-surface-variant text-[10px] font-medium"

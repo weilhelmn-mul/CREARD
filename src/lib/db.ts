@@ -407,3 +407,90 @@ export async function getAllFromCollection(collectionName: string): Promise<Docu
   const snapshot = await adminDb.collection(collectionName).get();
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
+
+// --- News (noticias) ---
+export async function getNews(filters?: {
+  active?: boolean;
+  featured?: boolean;
+  category?: string;
+}): Promise<DocumentData[]> {
+  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.active !== undefined) constraints.push({ field: 'is_active', op: '==', value: filters.active });
+  if (filters?.featured !== undefined) constraints.push({ field: 'is_featured', op: '==', value: filters.featured });
+  if (filters?.category) constraints.push({ field: 'category', op: '==', value: filters.category });
+  return queryDocs('news', constraints, 'published_at', 'desc');
+}
+
+export async function getNewsById(id: string): Promise<DocumentData | null> {
+  return getDocById('news', id);
+}
+
+export async function createNewsItem(data: Record<string, unknown>): Promise<string> {
+  return addDoc('news', data);
+}
+
+export async function updateNewsItem(id: string, data: Record<string, unknown>): Promise<void> {
+  await updateDocById('news', id, data);
+}
+
+export async function deleteNewsItem(id: string): Promise<void> {
+  await deleteDocById('news', id);
+}
+
+// --- Gallery (imágenes) ---
+export async function getGalleryImages(filters?: {
+  active?: boolean;
+  category?: string;
+}): Promise<DocumentData[]> {
+  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.active !== undefined) constraints.push({ field: 'is_active', op: '==', value: filters.active });
+  if (filters?.category) constraints.push({ field: 'category', op: '==', value: filters.category });
+  return queryDocs('gallery', constraints, 'display_order', 'asc');
+}
+
+export async function getGalleryImageById(id: string): Promise<DocumentData | null> {
+  return getDocById('gallery', id);
+}
+
+export async function createGalleryImage(data: Record<string, unknown>): Promise<string> {
+  return addDoc('gallery', data);
+}
+
+export async function updateGalleryImage(id: string, data: Record<string, unknown>): Promise<void> {
+  await updateDocById('gallery', id, data);
+}
+
+export async function deleteGalleryImage(id: string): Promise<void> {
+  await deleteDocById('gallery', id);
+}
+
+// --- Site Settings ---
+export async function getSiteSettings(): Promise<DocumentData | null> {
+  return getDocById('site_settings', 'main');
+}
+
+export async function updateSiteSettings(data: Record<string, unknown>): Promise<void> {
+  const now = Timestamp.now();
+  try {
+    await adminDb.collection('site_settings').doc('main').update({
+      ...data,
+      updated_at: now,
+    });
+  } catch {
+    // Si no existe, crearlo
+    await adminDb.collection('site_settings').doc('main').set({
+      ...data,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+}
+
+// --- Court update/delete (admin) ---
+export async function updateCourt(id: string, data: Record<string, unknown>): Promise<void> {
+  await updateDocById('courts', id, data);
+}
+
+export async function deleteCourt(id: string): Promise<void> {
+  await deleteDocById('courts', id);
+}

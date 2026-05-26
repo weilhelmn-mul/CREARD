@@ -1,5 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCourts, getCourtById, createCourt } from '@/lib/db';
+import { adminDb } from '@/lib/firebase-admin';
+
+// Transformar snake_case (Firestore) a camelCase (frontend) + enriquecer con branch
+async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, unknown>> {
+  // Obtener datos de la sede (branch)
+  let branch: Record<string, unknown> | null = null;
+  const branchId = c.branch_id as string | null;
+  if (branchId) {
+    try {
+      const branchSnap = await adminDb.collection('branches').doc(branchId).get();
+      if (branchSnap.exists) {
+        const bData = branchSnap.data();
+        branch = {
+          id: branchId,
+          name: bData?.name || 'Sede',
+          city: bData?.city || 'San Sebastián',
+          address: bData?.address || '',
+        };
+      }
+    } catch {
+      // Si no se puede obtener la branch, usar datos por defecto
+      branch = { id: branchId, name: 'CREARD', city: 'San Sebastián', address: 'Cusco' };
+    }
+  }
+
+  return {
+    id: c.id,
+    name: c.name,
+    sport: c.sport,
+    description: c.description || '',
+    branchId: c.branch_id,
+    branch: branch || { id: c.branch_id || 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco' },
+    images: Array.isArray(c.images) ? c.images : [],
+    pricePerHour: Number(c.price_per_hour) || 0,
+    amenities: Array.isArray(c.amenities) ? c.amenities : [],
+    isActive: c.is_active !== false,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +54,8 @@ export async function GET(request: NextRequest) {
       if (!court) {
         return NextResponse.json({ error: 'Court not found' }, { status: 404 });
       }
-      return NextResponse.json(court);
+      const transformed = await toCamelCourt(court as Record<string, unknown>);
+      return NextResponse.json(transformed);
     }
 
     const courts = await getCourts({
@@ -24,7 +65,11 @@ export async function GET(request: NextRequest) {
       active: active === 'true' ? true : active === 'false' ? false : undefined,
     });
 
-    return NextResponse.json(courts);
+    const transformed = await Promise.all(
+      courts.map((c) => toCamelCourt(c as Record<string, unknown>))
+    );
+
+    return NextResponse.json(transformed);
   } catch (error) {
     console.error('Error fetching courts:', error);
     return NextResponse.json({ error: 'Failed to fetch courts' }, { status: 500 });

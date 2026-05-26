@@ -9,8 +9,6 @@ interface Court {
   id: string
   name: string
   sport: string
-  rating: number
-  reviewCount: number
   pricePerHour: number
   images: string[]
   description?: string
@@ -33,13 +31,13 @@ const sportTabs = [
   { value: 'voley', label: 'Vóley' },
 ]
 
-type SortType = 'rating' | 'price-asc' | 'price-desc' | 'name'
+type SortType = 'price-asc' | 'price-desc' | 'name'
 
 export default function SearchView() {
   const { sportFilter, setSportFilter, setSelectedCourt, setView } = useAppStore()
   const [courts, setCourts] = useState<Court[]>([])
   const [localSport, setLocalSport] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<SortType>('rating')
+  const [sortBy, setSortBy] = useState<SortType>('price-asc')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -69,9 +67,8 @@ export default function SearchView() {
     .filter((court) => activeSport === 'todos' || court.sport === activeSport)
     .sort((a, b) => {
       switch (sortBy) {
-        case 'rating': return b.rating - a.rating
-        case 'price-asc': return a.pricePerHour - b.pricePerHour
-        case 'price-desc': return b.pricePerHour - a.pricePerHour
+        case 'price-asc': return (a.pricePerHour || 0) - (b.pricePerHour || 0)
+        case 'price-desc': return (b.pricePerHour || 0) - (a.pricePerHour || 0)
         case 'name': return a.name.localeCompare(b.name)
         default: return 0
       }
@@ -129,7 +126,6 @@ export default function SearchView() {
               onChange={(e) => setSortBy(e.target.value as SortType)}
               className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-3 py-1.5 text-cm-on-surface text-sm appearance-none cursor-pointer focus:outline-none focus:border-cm-primary/50 transition-colors font-[family-name:var(--font-inter)]"
             >
-              <option value="rating">Mejor valoradas</option>
               <option value="price-asc">Precio: menor a mayor</option>
               <option value="price-desc">Precio: mayor a menor</option>
               <option value="name">Nombre A-Z</option>
@@ -193,13 +189,12 @@ export default function SearchView() {
                     </span>
                   </div>
 
-                  {/* Rating */}
+                  {/* Price Badge */}
                   <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-cm-surface/80 backdrop-blur-sm">
-                    <span className="material-symbols-outlined text-yellow-400 text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                      star
+                    <span className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
+                      S/. {court.pricePerHour}
                     </span>
-                    <span className="text-xs font-semibold text-cm-on-surface">{court.rating}</span>
-                    <span className="text-xs text-cm-on-surface-variant">({court.reviewCount})</span>
+                    <span className="text-[10px] text-cm-on-surface-variant">/hr</span>
                   </div>
                 </div>
 
@@ -221,10 +216,17 @@ export default function SearchView() {
                   )}
                   <div className="flex items-center justify-between">
                     <span className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-primary">
-                      ${court.pricePerHour}
+                      S/. {court.pricePerHour}
                       <span className="text-xs text-cm-on-surface-variant font-normal">/hr</span>
                     </span>
-                    <button className="px-4 py-1.5 bg-cm-primary/10 text-cm-primary text-xs font-semibold rounded-lg hover:bg-cm-primary/20 transition-colors">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedCourt(court.id)
+                        setView('court-detail')
+                      }}
+                      className="px-4 py-1.5 bg-cm-primary/10 text-cm-primary text-xs font-semibold rounded-lg hover:bg-cm-primary/20 transition-colors"
+                    >
                       Reservar
                     </button>
                   </div>
