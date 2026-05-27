@@ -199,3 +199,26 @@ Stage Summary:
 - Backends seguros: llave privada nunca expuesta al frontend
 - Webhook handler para confirmación de pagos Yape/Plin (pending → completed)
 - Pendiente: agregar CULQI_API_KEY (llave privada) en Vercel para activar pagos reales
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix administrators and users not seeing reservations in CREARD
+
+Work Log:
+- Explored full frontend chain: BookingsView, AdminDashboard, auth-helpers, auth-middleware
+- Identified Bug #1 (CRITICAL): getAuthHeaders() sent EITHER Bearer token OR fallback x-user-* headers, never both. When token expired, server got expired Bearer, no fallback → 401 → empty response
+- Identified Bug #2 (CRITICAL): AdminDashboard.fetchData() called fetch('/api/bookings') without ANY auth headers → 401 → empty bookings array for admin
+- Identified Bug #3: ProfileView also fetched bookings without auth headers
+- Fixed getAuthHeaders() to always include x-user-* fallback headers alongside Bearer token
+- Fixed AdminDashboard: added getAuthHeaders() to all 4 fetch calls (stats, bookings, expenses, courts) and to PUT/POST requests
+- Fixed ProfileView: added auth headers to bookings fetch
+- Added error logging for failed bookings fetch in admin dashboard
+- Build passed, committed 063d16c, pushed to GitHub
+
+Stage Summary:
+- Root cause: Missing auth headers in fetch calls caused 401 responses that were silently swallowed
+- 3 files modified: auth-helpers.ts, AdminDashboard.tsx, ProfileView.tsx
+- Admin will now see ALL bookings (API returns all for admin role)
+- Regular users will see their own bookings (searched by userId + userEmail)
+- Deployed via git push to GitHub (Vercel auto-deploy)
