@@ -12,6 +12,13 @@ import UsersTab from '@/components/admin/UsersTab'
 /* ═══════════════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════════════ */
+interface PricingScheduleItem {
+  label: string;
+  startHour: number;
+  endHour: number;
+  pricePerHour: number;
+}
+
 interface Booking {
   id: string
   courtId: string
@@ -111,10 +118,11 @@ function ContentTab() {
   const [editSection, setEditSection] = useState<'hero' | 'sportsSection' | 'promoBanner' | 'howItWorks' | null>(null)
   const [editForm, setEditForm] = useState<Record<string, unknown> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState<string | null>(null)
 
   const sections = [
-    { key: 'hero' as const, label: 'Hero Principal', icon: 'hero', desc: 'Título, subtítulo, badge, estadísticas', color: 'text-cm-primary' },
-    { key: 'sportsSection' as const, label: 'Instalaciones', icon: 'emoji_events', desc: 'Deportes, precios, amenidades', color: 'text-green-400' },
+    { key: 'hero' as const, label: 'Hero Principal', icon: 'hero', desc: 'Título, subtítulo, badge, estadísticas, imágenes', color: 'text-cm-primary' },
+    { key: 'sportsSection' as const, label: 'Instalaciones', icon: 'emoji_events', desc: 'Deportes, precios, amenidades, imágenes', color: 'text-green-400' },
     { key: 'promoBanner' as const, label: 'Promociones', icon: 'workspace_premium', desc: 'Puntos de venta, métodos de pago, CTA', color: 'text-purple-400' },
     { key: 'howItWorks' as const, label: 'Cómo Funciona', icon: 'auto_awesome', desc: 'Pasos del proceso de reserva', color: 'text-blue-400' },
   ]
@@ -136,6 +144,30 @@ function ContentTab() {
       toast({ title: 'Contenido guardado', description: 'Los cambios se aplicaron correctamente' })
     } else {
       toast({ title: 'Error', description: 'No se pudo guardar el contenido', variant: 'destructive' })
+    }
+  }
+
+  /* ─── Image upload handler ─── */
+  const handleUploadImage = async (file: File, targetPath: string) => {
+    setUploading(targetPath)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'site-images')
+      const headers = getAuthHeaders()
+      const res = await fetch('/api/upload', { method: 'POST', headers, body: formData })
+      if (res.ok) {
+        const data = await res.json()
+        updateField(targetPath, data.url)
+        toast({ title: 'Imagen subida', description: 'La imagen se ha cargado correctamente' })
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error al subir', description: err.error || 'No se pudo subir la imagen', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
+    } finally {
+      setUploading(null)
     }
   }
 
@@ -216,6 +248,56 @@ function ContentTab() {
     const arr = getArray(path) as string[]
     updateField(path, arr.filter((_, i) => i !== idx))
   }
+
+  /* ─── Reusable Image Uploader ─── */
+  const ImageUploader = ({ label, path, currentUrl }: { label: string; path: string; currentUrl?: string }) => (
+    <div>
+      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">{label}</label>
+      <div className="space-y-2">
+        {currentUrl && (
+          <div className="relative group rounded-xl overflow-hidden border border-white/10">
+            <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => updateField(path, '')}
+                className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+              </button>
+            </div>
+          </div>
+        )}
+        <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+          uploading === path
+            ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary'
+            : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
+        }`}>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleUploadImage(file, path)
+              e.target.value = ''
+            }}
+          />
+          {uploading === path ? (
+            <>
+              <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+              <span className="text-xs font-medium">Subiendo...</span>
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+              <span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span>
+            </>
+          )}
+        </label>
+      </div>
+    </div>
+  )
 
   if (!settings) {
     return (
@@ -320,6 +402,18 @@ function ContentTab() {
                 <FormField label="Promo Text" value={getField('promoText')} onChange={(v) => updateField('promoText', v)} />
               </div>
 
+              {/* Hero Images */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Imágenes del Hero</label>
+                  <span className="text-[10px] text-cm-on-surface-variant">Se muestran en la parte superior</span>
+                </div>
+                <div className="space-y-3">
+                  <ImageUploader label="Imagen de fondo principal" path="backgroundImage" currentUrl={getField('backgroundImage')} />
+                  <ImageUploader label="Imagen secundaria (lado derecho)" path="secondaryImage" currentUrl={getField('secondaryImage')} />
+                </div>
+              </div>
+
               {/* Stats array */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -361,6 +455,11 @@ function ContentTab() {
                     <FormField label="Badge" value={sport.badge} onChange={(v) => updateArrayItem('sports', idx, 'badge', v)} />
                   </div>
                   <ArrayField label="Amenidades" items={sport.amenities} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
+                  <ImageUploader
+                    label={`Imagen de ${sport.label || 'deporte'}`}
+                    path={`sports.${idx}.image`}
+                    currentUrl={(sport as Record<string, unknown>).image as string || ''}
+                  />
                 </div>
               ))}
             </>
@@ -507,7 +606,7 @@ export default function AdminDashboard() {
     totalPrice: '', advanceAmount: '', status: 'confirmed', paymentMethod: 'yape', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string }>>([])
-  const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number }>>([])
+  const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   /* advance payment modal */
@@ -575,6 +674,7 @@ export default function AdminDashboard() {
           name: c.name as string,
           sport: (c.sport as string) || '',
           pricePerHour: (c.pricePerHour as number) || 0,
+          pricingSchedule: Array.isArray(c.pricingSchedule) ? c.pricingSchedule as PricingScheduleItem[] : [],
         })))
       }
     } catch { /* silent */ }
@@ -592,18 +692,55 @@ export default function AdminDashboard() {
   const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
 
   /* ─── booking form handlers ─── */
+  const calculatePriceForTimeSlot = (schedule: PricingScheduleItem[], startTime: string, endTime: string): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } => {
+    const [startH, startM] = startTime.split(':').map(Number)
+    const [endH, endM] = endTime.split(':').map(Number)
+    const startDecimal = startH + startM / 60
+    const endDecimal = endH + endM / 60
+
+    if (schedule.length === 0) return { total: 0, breakdown: [] }
+
+    const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+    let total = 0
+    let cursor = startDecimal
+    const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
+
+    for (const slot of sorted) {
+      if (cursor >= slot.endHour) continue
+      const overlapStart = Math.max(cursor, slot.startHour)
+      const overlapEnd = Math.min(endDecimal, slot.endHour)
+      if (overlapEnd > overlapStart) {
+        const hours = overlapEnd - overlapStart
+        const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
+        breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
+        total += subtotal
+        cursor = overlapEnd
+      }
+    }
+    return { total: Math.round(total * 100) / 100, breakdown }
+  }
+
   const handleBookingFormChange = (field: string, value: string) => {
     setBookingForm((prev) => {
       const updated = { ...prev, [field]: value }
-      // Auto-calculate price when court changes
+      // Auto-calculate price when court or times change
       if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
         const court = bookingCourtDetails.find((c) => c.id === updated.courtId)
         if (court) {
-          const hours = calculateHours(updated.startTime, updated.endTime)
-          const price = court.pricePerHour * hours
-          updated.totalPrice = String(price)
-          if (!updated.advanceAmount || updated.advanceAmount === String(price * 0.5)) {
-            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+          if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+            const { total } = calculatePriceForTimeSlot(court.pricingSchedule, updated.startTime, updated.endTime)
+            const price = total > 0 ? total : court.pricePerHour * calculateHours(updated.startTime, updated.endTime)
+            updated.totalPrice = String(price)
+            if (!updated.advanceAmount || updated.advanceAmount === String(court.pricePerHour * calculateHours(prev.startTime, prev.endTime) * 0.5)) {
+              updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+            }
+          } else {
+            const hours = calculateHours(updated.startTime, updated.endTime)
+            const price = court.pricePerHour * hours
+            updated.totalPrice = String(price)
+            if (!updated.advanceAmount || updated.advanceAmount === String(court.pricePerHour * calculateHours(prev.startTime, prev.endTime) * 0.5)) {
+              updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+            }
           }
         }
       }
@@ -611,7 +748,6 @@ export default function AdminDashboard() {
       if (['totalPrice', 'advanceAmount'].includes(field)) {
         const total = parseFloat(updated.totalPrice) || 0
         const adv = parseFloat(updated.advanceAmount) || 0
-        // remainingAmount will be calculated server-side as total - advance
       }
       return updated
     })
@@ -1723,11 +1859,17 @@ export default function AdminDashboard() {
                     className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.courtId ? 'border-red-400' : 'border-white/10'}`}
                   >
                     <option value="">Selecciona una cancha</option>
-                    {bookingCourtDetails.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — {c.sport} — S/ {c.pricePerHour}/h
-                      </option>
-                    ))}
+                    {bookingCourtDetails.map((c) => {
+                      const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
+                      const priceLabel = hasSchedule
+                        ? c.pricingSchedule.map((s) => `${s.label} S/${s.pricePerHour}`).join(' / ')
+                        : `S/ ${c.pricePerHour}/h`
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — {c.sport} — {priceLabel}
+                        </option>
+                      )
+                    })}
                   </select>
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
                 </div>
@@ -1822,6 +1964,26 @@ export default function AdminDashboard() {
                 {/* Price preview */}
                 {bookingForm.totalPrice && (
                   <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1">
+                    {(() => {
+                      const court = bookingCourtDetails.find((c) => c.id === bookingForm.courtId)
+                      if (court && court.pricingSchedule && court.pricingSchedule.length > 0 && bookingForm.startTime && bookingForm.endTime) {
+                        const { breakdown } = calculatePriceForTimeSlot(court.pricingSchedule, bookingForm.startTime, bookingForm.endTime)
+                        if (breakdown.length > 0) {
+                          return (
+                            <>
+                              <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por horario:</p>
+                              {breakdown.map((b, i) => (
+                                <div key={i} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                                  <span className="text-cm-on-surface-variant">{b.label} ({b.hours}h × S/ {b.pricePerHour})</span>
+                                  <span className="text-cm-on-surface">S/ {b.subtotal.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </>
+                          )
+                        }
+                      }
+                      return null
+                    })()}
                     <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
                       <span className="text-cm-on-surface-variant">Adelanto</span>
                       <span className="text-cm-on-surface">{fmtCurrency(parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5)}</span>

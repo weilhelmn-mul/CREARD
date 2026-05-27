@@ -9,11 +9,19 @@ import CulqiPayButton from '@/components/payments/CulqiPayButton'
 
 /* ───────────── Interfaces ───────────── */
 
+interface PricingScheduleItem {
+  label: string
+  startHour: number
+  endHour: number
+  pricePerHour: number
+}
+
 interface Court {
   id: string
   name: string
   sport: string
   pricePerHour: number
+  pricingSchedule: PricingScheduleItem[]
   branch: { name: string; city: string }
   images: string[]
 }
@@ -77,6 +85,43 @@ function getRefCode(bookingId: string): string {
   return `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`
 }
 
+/**
+ * Calculate price for a time slot using a pricing schedule.
+ * Supports slots that span multiple schedules (e.g., 16:00-19:00).
+ * Returns { total, breakdown } where breakdown shows per-schedule detail.
+ */
+function calculatePriceForTimeSlot(
+  schedule: PricingScheduleItem[],
+  startTime: string,
+  endTime: string,
+): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } {
+  const [startH, startM] = startTime.split(':').map(Number)
+  const [endH, endM] = endTime.split(':').map(Number)
+  const startDecimal = startH + startM / 60
+  const endDecimal = endH + endM / 60
+
+  if (schedule.length === 0) return { total: 0, breakdown: [] }
+
+  const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+  let total = 0
+  let cursor = startDecimal
+  const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
+
+  for (const slot of sorted) {
+    if (cursor >= slot.endHour) continue
+    const overlapStart = Math.max(cursor, slot.startHour)
+    const overlapEnd = Math.min(endDecimal, slot.endHour)
+    if (overlapEnd > overlapStart) {
+      const hours = overlapEnd - overlapStart
+      const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
+      breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
+      total += subtotal
+      cursor = overlapEnd
+    }
+  }
+  return { total: Math.round(total * 100) / 100, breakdown }
+}
+
 /* ───────────── Component ───────────── */
 
 export default function BookingForm() {
@@ -113,7 +158,23 @@ export default function BookingForm() {
     return { start: parts[0] || '', end: parts[1] || '' }
   }, [selectedTimeSlot])
 
-  const totalPrice = court?.pricePerHour || 0
+  const { start: startStr, end: endStr } = timeParts
+
+  // Calculate time-based pricing
+  const pricingResult = useMemo(() => {
+    if (!court || !startStr || !endStr) return { total: court?.pricePerHour || 0, breakdown: [] }
+    if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+      const result = calculatePriceForTimeSlot(court.pricingSchedule, startStr, endStr)
+      if (result.total > 0) return result
+    }
+    // Fallback to flat pricePerHour
+    const [sh, sm] = startStr.split(':').map(Number)
+    const [eh, em] = endStr.split(':').map(Number)
+    const hours = Math.max((eh * 60 + em - sh * 60 - sm) / 60, 0.5)
+    return { total: court.pricePerHour * hours, breakdown: [] }
+  }, [court, startStr, endStr])
+
+  const totalPrice = pricingResult.total
   const advanceAmount = totalPrice * 0.5
   const remainingAmount = totalPrice * 0.5
 
@@ -437,14 +498,42 @@ export default function BookingForm() {
             </h2>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                  Precio por hora
-                </span>
-                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                  S/ {totalPrice.toFixed(2)}
-                </span>
-              </div>
+              {/* Time-based pricing breakdown */}
+              {pricingResult.breakdown.length > 0 && (
+                <>
+                  <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Desglose por horario:</p>
+                  {pricingResult.breakdown.map((b, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                        {b.label} ({b.hours}h × S/ {b.pricePerHour})
+                      </span>
+                      <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                        S/ {b.subtotal.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+                    <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                      Subtotal
+                    </span>
+                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                      S/ {totalPrice.toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* Simple price (no schedule) */}
+              {pricingResult.breakdown.length === 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                    Precio por hora
+                  </span>
+                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                    S/ {totalPrice.toFixed(2)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

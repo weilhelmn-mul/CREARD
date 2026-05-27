@@ -4,6 +4,16 @@ import { adminDb } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 // Fallback courts for when Firebase is not configured
+const futbolPricingSchedule = [
+  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 35 },
+  { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 50 },
+];
+
+const voleyPricingSchedule = [
+  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 30 },
+  { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 45 },
+];
+
 const fallbackCourts = [
   {
     id: 'cancha-1',
@@ -13,7 +23,8 @@ const fallbackCourts = [
     branchId: 'branch-1',
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/cancha-futbol-1.png'],
-    pricePerHour: 60,
+    pricePerHour: 40,
+    pricingSchedule: futbolPricingSchedule,
     amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios'],
     isActive: true,
   },
@@ -25,7 +36,8 @@ const fallbackCourts = [
     branchId: 'branch-1',
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/cancha-futbol-2.png'],
-    pricePerHour: 50,
+    pricePerHour: 40,
+    pricingSchedule: futbolPricingSchedule,
     amenities: ['Cesped sintetico', 'Iluminacion'],
     isActive: true,
   },
@@ -37,7 +49,8 @@ const fallbackCourts = [
     branchId: 'branch-1',
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/cancha-futbol-3.png'],
-    pricePerHour: 55,
+    pricePerHour: 40,
+    pricingSchedule: futbolPricingSchedule,
     amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'],
     isActive: true,
   },
@@ -49,7 +62,8 @@ const fallbackCourts = [
     branchId: 'branch-1',
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/cancha-futbol-4.png'],
-    pricePerHour: 65,
+    pricePerHour: 40,
+    pricingSchedule: futbolPricingSchedule,
     amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'],
     isActive: true,
   },
@@ -61,7 +75,8 @@ const fallbackCourts = [
     branchId: 'branch-1',
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/cancha-voley.png'],
-    pricePerHour: 40,
+    pricePerHour: 35,
+    pricingSchedule: voleyPricingSchedule,
     amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'],
     isActive: true,
   },
@@ -74,6 +89,7 @@ const fallbackCourts = [
     branch: { id: 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco, Perú' },
     images: ['/salon-eventos.png'],
     pricePerHour: 80,
+    pricingSchedule: [],
     amenities: ['Techado', 'Sonido', 'Iluminacion'],
     isActive: true,
   },
@@ -111,6 +127,7 @@ async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, 
     branch: branch || { id: c.branch_id || 'branch-1', name: 'CREARD', city: 'San Sebastián', address: 'Cusco' },
     images: Array.isArray(c.images) && c.images.length > 0 ? c.images : ['/cancha-futbol-1.png'],
     pricePerHour: Number(c.price_per_hour) || 0,
+    pricingSchedule: Array.isArray(c.pricing_schedule) ? c.pricing_schedule : [],
     amenities: Array.isArray(c.amenities) ? c.amenities : [],
     isActive: c.is_active !== false,
     createdAt: c.created_at,

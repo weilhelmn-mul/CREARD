@@ -23,6 +23,13 @@ export interface Branch {
   updated_at: Date;
 }
 
+export interface PricingScheduleItem {
+  label: string;
+  startHour: number;
+  endHour: number;
+  pricePerHour: number;
+}
+
 export interface Court {
   id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface Court {
   branch_id: string;
   images: string[];
   price_per_hour: number;
+  pricing_schedule?: PricingScheduleItem[];
   is_active: boolean;
   amenities: string[];
   created_at: Date;

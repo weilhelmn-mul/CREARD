@@ -106,6 +106,8 @@ export default function HeroSection() {
       subtitle: '4 canchas de fútbol 5 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
       promoHighlight: '50% de adelanto',
       promoText: ', paga el resto al llegar',
+      backgroundImage: '',
+      secondaryImage: '',
       stats: [
         { label: 'Espacios', value: 6 },
         { label: 'Fútbol 5', value: 4 },
@@ -191,6 +193,18 @@ export default function HeroSection() {
 
       <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
         <GradientMesh />
+
+        {/* Background image (uploaded by admin) */}
+        {defaults.backgroundImage && (
+          <div className="absolute inset-0 z-0">
+            <img
+              src={defaults.backgroundImage}
+              alt=""
+              className="w-full h-full object-cover opacity-30"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+          </div>
+        )}
 
         <motion.div
           className="relative max-w-4xl mx-auto text-center"
@@ -383,6 +397,91 @@ export default function HeroSection() {
             onChange={(v) => setEditForm({ ...editForm, promoText: v })}
             placeholder=", paga el resto al llegar"
           />
+        </div>
+
+        {/* Hero Images */}
+        <div>
+          <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+            Imágenes del Hero
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              {editForm.backgroundImage ? (
+                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+                  <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
+                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </div>
+              ) : null}
+              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const fd = new FormData()
+                    fd.append('file', file)
+                    fd.append('folder', 'hero')
+                    try {
+                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setEditForm({ ...editForm, backgroundImage: data.url })
+                      }
+                    } catch { /* silent */ }
+                    e.target.value = ''
+                  }}
+                />
+                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+                Fondo
+              </label>
+            </div>
+            <div>
+              {editForm.secondaryImage ? (
+                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+                  <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
+                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </div>
+              ) : null}
+              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const fd = new FormData()
+                    fd.append('file', file)
+                    fd.append('folder', 'hero')
+                    try {
+                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setEditForm({ ...editForm, secondaryImage: data.url })
+                      }
+                    } catch { /* silent */ }
+                    e.target.value = ''
+                  }}
+                />
+                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+                Secundaria
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* Stats */}

@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
 
     const body = await request.json();
-    const { id, name, description, images, price_per_hour, is_active, amenities } = body;
+    const { id, name, description, images, price_per_hour, pricing_schedule, is_active, amenities } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID de cancha requerido' }, { status: 400 });
@@ -34,6 +34,7 @@ export async function PUT(request: NextRequest) {
     if (price_per_hour !== undefined) updateData.price_per_hour = Number(price_per_hour);
     if (is_active !== undefined) updateData.is_active = is_active;
     if (amenities !== undefined) updateData.amenities = amenities;
+    if (pricing_schedule !== undefined) updateData.pricing_schedule = pricing_schedule;
 
     await updateCourt(id, updateData);
     const updated = await getCourtById(id);

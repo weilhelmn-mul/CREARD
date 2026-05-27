@@ -59,6 +59,8 @@ export interface SiteSettings {
     subtitle: string
     promoHighlight: string
     promoText: string
+    backgroundImage?: string
+    secondaryImage?: string
     stats: StatItem[]
   }
   sportsSection: {

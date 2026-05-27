@@ -110,6 +110,48 @@ async function searchBookingsForUser(userId: string, userEmail: string | null) {
   return Array.from(results.values());
 }
 
+/**
+ * Calculate the total price for a time slot using a pricing schedule.
+ * Supports slots that span multiple schedules (e.g., 16:00-19:00 = 1hr morning + 2hr night).
+ */
+function calculatePriceForTimeSlot(
+  schedule: Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }>,
+  startTime: string,
+  endTime: string,
+): number {
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  const startDecimal = startH + startM / 60;
+  const endDecimal = endH + endM / 60;
+
+  // Sort schedule by startHour
+  const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour);
+
+  let total = 0;
+  let cursor = startDecimal;
+
+  for (const slot of sorted) {
+    const slotStart = slot.startHour;
+    const slotEnd = slot.endHour;
+
+    if (cursor >= slotEnd) continue; // cursor already past this slot
+
+    // Overlap start/end
+    const overlapStart = Math.max(cursor, slotStart);
+    const overlapEnd = Math.min(endDecimal, slotEnd);
+
+    if (overlapEnd > overlapStart) {
+      const hours = overlapEnd - overlapStart;
+      total += hours * slot.pricePerHour;
+      cursor = overlapEnd;
+    }
+  }
+
+  // If cursor didn't reach endDecimal, the remaining time is uncovered by schedule
+  // (fall back to 0 or caller's default)
+  return Math.round(total * 100) / 100;
+}
+
 export async function GET(request: NextRequest) {
   const firebaseOk = isFirebaseAvailable();
 
@@ -238,11 +280,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get court price if not provided
+    // Get court price if not provided — use time-based pricing schedule
     let price = parseFloat(totalPrice) || 0;
     if (!totalPrice) {
       const court = await getCourtById(courtId);
-      price = (court?.price_per_hour as number) || 0;
+      if (court) {
+        const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
+        if (schedule && schedule.length > 0) {
+          price = calculatePriceForTimeSlot(schedule, startTime, endTime);
+          if (price <= 0) price = (court.price_per_hour as number) || 0;
+        } else {
+          price = (court.price_per_hour as number) || 0;
+        }
+      }
     }
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
