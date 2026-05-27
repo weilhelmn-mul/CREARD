@@ -472,7 +472,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
-  const [allCourts, setAllCourts] = useState<Array<{ id: string; name: string }>>([])
+  const [allCourts, setAllCourts] = useState<Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>>([])
 
   /* filters */
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -498,6 +498,24 @@ export default function AdminDashboard() {
   /* schedule modal */
   const [showSchedule, setShowSchedule] = useState(false)
   const [scheduleDate, setScheduleDate] = useState(todayStr())
+
+  /* admin booking form */
+  const [showBookingForm, setShowBookingForm] = useState(false)
+  const [submittingBooking, setSubmittingBooking] = useState(false)
+  const [bookingForm, setBookingForm] = useState({
+    courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
+    totalPrice: '', advanceAmount: '', status: 'confirmed', paymentMethod: 'yape', notes: '',
+  })
+  const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string }>>([])
+  const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number }>>([])
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+
+  /* advance payment modal */
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false)
+  const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
+  const [advanceAmount, setAdvanceAmount] = useState('')
+  const [advanceMethod, setAdvanceMethod] = useState('yape')
+  const [submittingAdvance, setSubmittingAdvance] = useState(false)
 
   /* ─── fetch all data ─── */
   const fetchData = useCallback(async () => {
@@ -537,6 +555,31 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  /* fetch users & court details for booking form */
+  const loadBookingFormData = useCallback(async () => {
+    try {
+      const headers = getAuthHeaders()
+      const [usersRes, courtsRes] = await Promise.all([
+        fetch('/api/admin/users', { headers }),
+        fetch('/api/courts', { headers }),
+      ])
+      if (usersRes.ok) {
+        const data = await usersRes.json()
+        setBookingUsers(Array.isArray(data) ? data : [])
+      }
+      if (courtsRes.ok) {
+        const data = await courtsRes.json()
+        const courtsList = Array.isArray(data) ? data : []
+        setBookingCourtDetails(courtsList.map((c: Record<string, unknown>) => ({
+          id: c.id as string,
+          name: c.name as string,
+          sport: (c.sport as string) || '',
+          pricePerHour: (c.pricePerHour as number) || 0,
+        })))
+      }
+    } catch { /* silent */ }
+  }, [])
+
   /* ─── computed ─── */
   const today = todayStr()
   const todayBookings = bookings.filter((b) => b.date === today && !['cancelled', 'expired'].includes(b.status))
@@ -547,6 +590,138 @@ export default function AdminDashboard() {
 
   const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
   const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
+
+  /* ─── booking form handlers ─── */
+  const handleBookingFormChange = (field: string, value: string) => {
+    setBookingForm((prev) => {
+      const updated = { ...prev, [field]: value }
+      // Auto-calculate price when court changes
+      if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
+        const court = bookingCourtDetails.find((c) => c.id === updated.courtId)
+        if (court) {
+          const hours = calculateHours(updated.startTime, updated.endTime)
+          const price = court.pricePerHour * hours
+          updated.totalPrice = String(price)
+          if (!updated.advanceAmount || updated.advanceAmount === String(price * 0.5)) {
+            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+          }
+        }
+      }
+      // Auto-recalculate remaining
+      if (['totalPrice', 'advanceAmount'].includes(field)) {
+        const total = parseFloat(updated.totalPrice) || 0
+        const adv = parseFloat(updated.advanceAmount) || 0
+        // remainingAmount will be calculated server-side as total - advance
+      }
+      return updated
+    })
+    if (formErrors[field]) setFormErrors((prev) => { const next = { ...prev }; delete next[field]; return next })
+  }
+
+  const calculateHours = (start: string, end: string): number => {
+    const [sh, sm] = start.split(':').map(Number)
+    const [eh, em] = end.split(':').map(Number)
+    const diff = (eh * 60 + em) - (sh * 60 + sm)
+    return Math.max(diff / 60, 0.5)
+  }
+
+  const validateBookingForm = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (!bookingForm.courtId) errors.courtId = 'Selecciona una cancha'
+    if (!bookingForm.userId) errors.userId = 'Selecciona un cliente'
+    if (!bookingForm.date) errors.date = 'Selecciona una fecha'
+    if (!bookingForm.startTime) errors.startTime = 'Hora de inicio requerida'
+    if (!bookingForm.endTime) errors.endTime = 'Hora de fin requerida'
+    if (bookingForm.startTime >= bookingForm.endTime) errors.endTime = 'La hora de fin debe ser posterior'
+    if (!bookingForm.totalPrice || parseFloat(bookingForm.totalPrice) <= 0) errors.totalPrice = 'El precio debe ser mayor a 0'
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleCreateBooking = async () => {
+    if (!validateBookingForm()) return
+    setSubmittingBooking(true)
+    try {
+      const body = {
+        courtId: bookingForm.courtId,
+        userId: bookingForm.userId,
+        date: bookingForm.date,
+        startTime: bookingForm.startTime,
+        endTime: bookingForm.endTime,
+        totalPrice: parseFloat(bookingForm.totalPrice),
+        advanceAmount: parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5,
+        remainingAmount: parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5),
+        status: bookingForm.status,
+        paymentMethod: bookingForm.paymentMethod,
+        notes: bookingForm.notes || null,
+      }
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
+        setShowBookingForm(false)
+        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'confirmed', paymentMethod: 'yape', notes: '' })
+        setFormErrors({})
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error al crear reserva', description: err.error || 'No se pudo crear la reserva', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo crear la reserva', variant: 'destructive' })
+    } finally {
+      setSubmittingBooking(false)
+    }
+  }
+
+  const openBookingForm = () => {
+    loadBookingFormData()
+    setShowBookingForm(true)
+  }
+
+  /* advance payment handlers */
+  const openAdvanceModal = (booking: Booking) => {
+    setAdvanceTarget(booking)
+    setAdvanceAmount(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
+    setAdvanceMethod('yape')
+    setShowAdvanceModal(true)
+  }
+
+  const handleSubmitAdvance = async () => {
+    if (!advanceTarget || !advanceAmount || parseFloat(advanceAmount) <= 0) return
+    setSubmittingAdvance(true)
+    try {
+      // Update booking status to partially_paid and adjust amounts
+      const newAdvance = advanceTarget.advanceAmount + parseFloat(advanceAmount)
+      const newRemaining = advanceTarget.totalPrice - newAdvance
+      const newStatus = newRemaining <= 0 ? 'fully_paid' : 'partially_paid'
+
+      const res = await fetch('/api/bookings', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: advanceTarget.id,
+          status: newStatus,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Pago registrado', description: `Adelanto de ${fmtCurrency(parseFloat(advanceAmount))} registrado. Estado: ${statusConfig[newStatus]?.label || newStatus}` })
+        setShowAdvanceModal(false)
+        setAdvanceTarget(null)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo registrar el pago', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo registrar el pago', variant: 'destructive' })
+    } finally {
+      setSubmittingAdvance(false)
+    }
+  }
 
   const filteredBookings = (() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
@@ -923,18 +1098,27 @@ export default function AdminDashboard() {
                 })}
               </div>
 
-              {/* Results count + Schedule button */}
-              <div className="flex items-center justify-between mb-4">
+              {/* Results count + action buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                   Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
                 </p>
-                <button
-                  onClick={() => setShowSchedule(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_timeline</span>
-                  Ver Horarios
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openBookingForm}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
+                    Nueva Reserva
+                  </button>
+                  <button
+                    onClick={() => setShowSchedule(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_timeline</span>
+                    Ver Horarios
+                  </button>
+                </div>
               </div>
 
               {/* ═══ View Modes ═══ */}
@@ -990,19 +1174,30 @@ export default function AdminDashboard() {
                               <td className={`px-4 py-3 text-right font-[family-name:var(--font-inter)] hidden sm:table-cell ${b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(b.remainingAmount)}</td>
                               <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(b.totalPrice)}</td>
                               <td className="px-4 py-3 text-center">
-                                <select
-                                  value={b.status}
-                                  onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
-                                  className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                                >
-                                  <option value="pending">Pendiente</option>
-                                  <option value="confirmed">Confirmada</option>
-                                  <option value="partially_paid">Parcial</option>
-                                  <option value="fully_paid">Completo</option>
-                                  <option value="completed">Completada</option>
-                                  <option value="cancelled">Cancelada</option>
-                                  <option value="no_show">No Asistió</option>
-                                </select>
+                                <div className="flex items-center justify-center gap-1">
+                                  {b.remainingAmount > 0 && (
+                                    <button
+                                      onClick={() => openAdvanceModal(b)}
+                                      className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                                      title="Registrar adelanto"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">payments</span>
+                                    </button>
+                                  )}
+                                  <select
+                                    value={b.status}
+                                    onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                                    className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                                  >
+                                    <option value="pending">Pendiente</option>
+                                    <option value="confirmed">Confirmada</option>
+                                    <option value="partially_paid">Parcial</option>
+                                    <option value="fully_paid">Completo</option>
+                                    <option value="completed">Completada</option>
+                                    <option value="cancelled">Cancelada</option>
+                                    <option value="no_show">No Asistió</option>
+                                  </select>
+                                </div>
                               </td>
                             </tr>
                           )
@@ -1078,20 +1273,31 @@ export default function AdminDashboard() {
                               <span className="text-cm-primary font-bold">{fmtCurrency(b.totalPrice)}</span>
                             </div>
                           </div>
-                          {/* Status dropdown */}
-                          <select
-                            value={b.status}
-                            onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
-                            className="w-full bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                          >
-                            <option value="pending">Pendiente</option>
-                            <option value="confirmed">Confirmada</option>
-                            <option value="partially_paid">Parcial</option>
-                            <option value="fully_paid">Completo</option>
-                            <option value="completed">Completada</option>
-                            <option value="cancelled">Cancelada</option>
-                            <option value="no_show">No Asistió</option>
-                          </select>
+                          {/* Status dropdown + Advance */}
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={b.status}
+                              onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                              className="flex-1 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            >
+                              <option value="pending">Pendiente</option>
+                              <option value="confirmed">Confirmada</option>
+                              <option value="partially_paid">Parcial</option>
+                              <option value="fully_paid">Completo</option>
+                              <option value="completed">Completada</option>
+                              <option value="cancelled">Cancelada</option>
+                              <option value="no_show">No Asistió</option>
+                            </select>
+                            {b.remainingAmount > 0 && (
+                              <button
+                                onClick={() => openAdvanceModal(b)}
+                                className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
+                                title="Registrar adelanto"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">payments</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     )
@@ -1130,12 +1336,21 @@ export default function AdminDashboard() {
                             <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
                           </div>
                           {/* Status + Price + Action */}
-                          <div className="flex items-center gap-3 sm:ml-auto flex-shrink-0">
+                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                               {st.label}
                             </span>
                             <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
+                            {b.remainingAmount > 0 && (
+                              <button
+                                onClick={() => openAdvanceModal(b)}
+                                className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                                title="Registrar adelanto"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">payments</span>
+                              </button>
+                            )}
                             <select
                               value={b.status}
                               onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
@@ -1459,6 +1674,366 @@ export default function AdminDashboard() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+           MODALS: Booking Form, Advance Payment, Schedule
+         ═══════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {/* ─── New Booking Modal ─── */}
+        {showBookingForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => !submittingBooking && setShowBookingForm(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-lg glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-cm-primary/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
+                  </div>
+                  <div>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Nueva Reserva</h3>
+                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Crear reserva manualmente</p>
+                  </div>
+                </div>
+                {!submittingBooking && (
+                  <button onClick={() => setShowBookingForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="overflow-auto flex-1 space-y-3">
+                {/* Court */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cancha *</label>
+                  <select
+                    value={bookingForm.courtId}
+                    onChange={(e) => handleBookingFormChange('courtId', e.target.value)}
+                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.courtId ? 'border-red-400' : 'border-white/10'}`}
+                  >
+                    <option value="">Selecciona una cancha</option>
+                    {bookingCourtDetails.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — {c.sport} — S/ {c.pricePerHour}/h
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
+                </div>
+
+                {/* Client */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cliente *</label>
+                  <select
+                    value={bookingForm.userId}
+                    onChange={(e) => handleBookingFormChange('userId', e.target.value)}
+                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
+                  >
+                    <option value="">Selecciona un cliente</option>
+                    {bookingUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} {u.email ? `(${u.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.userId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.userId}</p>}
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Fecha *</label>
+                  <input
+                    type="date"
+                    value={bookingForm.date}
+                    onChange={(e) => handleBookingFormChange('date', e.target.value)}
+                    min={todayStr()}
+                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.date ? 'border-red-400' : 'border-white/10'}`}
+                  />
+                  {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
+                </div>
+
+                {/* Time */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora inicio *</label>
+                    <select
+                      value={bookingForm.startTime}
+                      onChange={(e) => handleBookingFormChange('startTime', e.target.value)}
+                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
+                    >
+                      {Array.from({ length: 18 }, (_, i) => i + 6).map((h) => (
+                        <option key={h} value={`${String(h).padStart(2, '0')}:00`}>{`${String(h).padStart(2, '0')}:00`}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
+                    <select
+                      value={bookingForm.endTime}
+                      onChange={(e) => handleBookingFormChange('endTime', e.target.value)}
+                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
+                    >
+                      {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => (
+                        <option key={h} value={`${String(h).padStart(2, '0')}:00`}>{`${String(h).padStart(2, '0')}:00`}</option>
+                      ))}
+                    </select>
+                    {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
+                  </div>
+                </div>
+
+                {/* Price & Advance */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio total (S/) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={bookingForm.totalPrice}
+                      onChange={(e) => handleBookingFormChange('totalPrice', e.target.value)}
+                      placeholder="0.00"
+                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.totalPrice ? 'border-red-400' : 'border-white/10'}`}
+                    />
+                    {formErrors.totalPrice && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.totalPrice}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Adelanto (S/)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={bookingForm.advanceAmount}
+                      onChange={(e) => handleBookingFormChange('advanceAmount', e.target.value)}
+                      placeholder="50%"
+                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                    />
+                  </div>
+                </div>
+
+                {/* Price preview */}
+                {bookingForm.totalPrice && (
+                  <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1">
+                    <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant">Adelanto</span>
+                      <span className="text-cm-on-surface">{fmtCurrency(parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant">Restante</span>
+                      <span className="text-orange-400">{fmtCurrency(parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5))}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-[family-name:var(--font-sora)] pt-1 border-t border-white/5">
+                      <span className="text-cm-on-surface font-medium">Total</span>
+                      <span className="text-cm-primary font-bold">{fmtCurrency(parseFloat(bookingForm.totalPrice))}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Estado inicial</label>
+                  <select
+                    value={bookingForm.status}
+                    onChange={(e) => handleBookingFormChange('status', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                  >
+                    <option value="pending">Pendiente</option>
+                    <option value="confirmed">Confirmada</option>
+                    <option value="partially_paid">Parcialmente pagada</option>
+                    <option value="fully_paid">Completamente pagada</option>
+                    <option value="completed">Completada</option>
+                  </select>
+                </div>
+
+                {/* Payment method */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'yape', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
+                      { key: 'plin', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
+                      { key: 'cash', label: 'Efectivo', icon: 'payments', color: 'text-green-400' },
+                      { key: 'transfer', label: 'Transfer.', icon: 'account_balance', color: 'text-blue-400' },
+                      { key: 'culqi', label: 'Culqi', icon: 'credit_card', color: 'text-amber-400' },
+                      { key: 'card', label: 'Tarjeta', icon: 'credit_card', color: 'text-orange-400' },
+                    ].map((pm) => (
+                      <button
+                        key={pm.key}
+                        type="button"
+                        onClick={() => handleBookingFormChange('paymentMethod', pm.key)}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
+                          bookingForm.paymentMethod === pm.key
+                            ? 'bg-cm-primary/10 border-cm-primary/40 text-cm-primary'
+                            : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+                        }`}
+                      >
+                        <span className={`material-symbols-outlined text-[16px] ${bookingForm.paymentMethod === pm.key ? '' : pm.color}`}>{pm.icon}</span>
+                        {pm.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Notas</label>
+                  <textarea
+                    value={bookingForm.notes}
+                    onChange={(e) => handleBookingFormChange('notes', e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 resize-none font-[family-name:var(--font-inter)]"
+                    placeholder="Notas opcionales..."
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleCreateBooking}
+                disabled={submittingBooking}
+                className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2 flex-shrink-0"
+              >
+                {submittingBooking ? (
+                  <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando reserva...</>
+                ) : (
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Crear Reserva</>
+                )}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ─── Advance Payment Modal ─── */}
+        {showAdvanceModal && advanceTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => !submittingAdvance && setShowAdvanceModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-md glass-card rounded-2xl p-6 border-amber-400/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-amber-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
+                  </div>
+                  <div>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Registrar Adelanto</h3>
+                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Agregar pago a reserva existente</p>
+                  </div>
+                </div>
+                {!submittingAdvance && (
+                  <button onClick={() => setShowAdvanceModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Booking summary */}
+              <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 mb-4 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
+                  <span className="material-symbols-outlined text-[14px]">sports</span>
+                  <span className="font-medium">{advanceTarget.court?.name || 'N/A'}</span>
+                  <span className="text-cm-on-surface-variant">•</span>
+                  <span>{fmtDate(advanceTarget.date)}</span>
+                  <span className="text-cm-on-surface-variant">•</span>
+                  <span>{advanceTarget.startTime}-{advanceTarget.endTime}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                  <span className="material-symbols-outlined text-[14px]">person</span>
+                  {advanceTarget.user?.name || 'Sin nombre'} {advanceTarget.user?.email ? `(${advanceTarget.user.email})` : ''}
+                </div>
+                <div className="flex justify-between text-xs font-[family-name:var(--font-inter)] pt-1 border-t border-white/5">
+                  <span className="text-cm-on-surface-variant">Adelanto anterior</span>
+                  <span className="text-cm-on-surface">{fmtCurrency(advanceTarget.advanceAmount)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                  <span className="text-cm-on-surface-variant">Restante</span>
+                  <span className="text-orange-400 font-semibold">{fmtCurrency(advanceTarget.remainingAmount)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Monto del adelanto (S/) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={advanceAmount}
+                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                    max={advanceTarget.remainingAmount > 0 ? advanceTarget.remainingAmount : advanceTarget.totalPrice}
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                    placeholder="0.00"
+                  />
+                  {advanceTarget.remainingAmount > 0 && (
+                    <button
+                      onClick={() => setAdvanceAmount(String(advanceTarget.remainingAmount))}
+                      className="text-[10px] text-amber-400 font-semibold mt-1 hover:underline font-[family-name:var(--font-inter)]"
+                    >
+                      Completar saldo: {fmtCurrency(advanceTarget.remainingAmount)}
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'yape', label: 'Yape', icon: 'account_balance_wallet' },
+                      { key: 'plin', label: 'Plin', icon: 'account_balance_wallet' },
+                      { key: 'cash', label: 'Efectivo', icon: 'payments' },
+                      { key: 'transfer', label: 'Transfer.', icon: 'account_balance' },
+                      { key: 'culqi', label: 'Culqi', icon: 'credit_card' },
+                      { key: 'card', label: 'Tarjeta', icon: 'credit_card' },
+                    ].map((pm) => (
+                      <button
+                        key={pm.key}
+                        type="button"
+                        onClick={() => setAdvanceMethod(pm.key)}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
+                          advanceMethod === pm.key
+                            ? 'bg-amber-500/10 border-amber-400/40 text-amber-400'
+                            : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">{pm.icon}</span>
+                        {pm.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSubmitAdvance}
+                disabled={submittingAdvance || !advanceAmount || parseFloat(advanceAmount) <= 0}
+                className="w-full mt-5 py-3 bg-amber-500 text-white rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submittingAdvance ? (
+                  <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Registrando...</>
+                ) : (
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
+                )}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── Schedule Modal ─── */}
       <AnimatePresence>
