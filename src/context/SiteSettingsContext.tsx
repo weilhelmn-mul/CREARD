@@ -18,6 +18,12 @@ interface StatItem {
   value: number
 }
 
+export interface PricingDetail {
+  label: string
+  timeRange: string
+  price: number
+}
+
 interface SportItem {
   id: string
   label: string
@@ -27,6 +33,7 @@ interface SportItem {
   priceRange: string
   badge: string
   amenities: string[]
+  pricingDetails?: PricingDetail[]
 }
 
 interface SellingPoint {

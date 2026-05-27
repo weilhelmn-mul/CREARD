@@ -5,6 +5,13 @@ import Image from 'next/image'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, useInView } from 'framer-motion'
 
+interface PricingScheduleItem {
+  label: string
+  startHour: number
+  endHour: number
+  pricePerHour: number
+}
+
 interface Court {
   id: string
   name: string
@@ -13,18 +20,28 @@ interface Court {
   branch_id: string
   images: string[]
   price_per_hour: number
+  pricingSchedule: PricingScheduleItem[]
   amenities: string[]
   is_active: boolean
   availableToday?: number
 }
 
+const futbolSchedule: PricingScheduleItem[] = [
+  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 35 },
+  { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 50 },
+]
+const voleySchedule: PricingScheduleItem[] = [
+  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 30 },
+  { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 45 },
+]
+
 const fallbackCourts: Court[] = [
-  { id: '1', name: 'Cancha Fútbol 1', sport: 'futbol', description: 'Cancha premium con césped sintético', branch_id: 'branch-1', images: ['/cancha-futbol-1.png'], price_per_hour: 60, amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios'], is_active: true, availableToday: 9 },
-  { id: '2', name: 'Cancha Fútbol 2', sport: 'futbol', description: 'Cancha estándar', branch_id: 'branch-1', images: ['/cancha-futbol-2.png'], price_per_hour: 50, amenities: ['Cesped sintetico', 'Iluminacion'], is_active: true, availableToday: 7 },
-  { id: '3', name: 'Cancha Fútbol 3', sport: 'futbol', description: 'Techada parcial', branch_id: 'branch-1', images: ['/cancha-futbol-3.png'], price_per_hour: 55, amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'], is_active: true, availableToday: 6 },
-  { id: '4', name: 'Cancha Fútbol 4', sport: 'futbol', description: 'Nueva con mejores instalaciones', branch_id: 'branch-1', images: ['/cancha-futbol-4.png'], price_per_hour: 65, amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'], is_active: true, availableToday: 8 },
-  { id: '5', name: 'Cancha Vóley 1', sport: 'voley', description: 'Piso PVC profesional', branch_id: 'branch-1', images: ['/cancha-voley.png'], price_per_hour: 40, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'], is_active: true, availableToday: 10 },
-  { id: '6', name: 'Salón Eventos', sport: 'eventos', description: 'Espacio multiusos techado', branch_id: 'branch-1', images: ['/salon-eventos.png'], price_per_hour: 80, amenities: ['Techado', 'Sonido', 'Iluminacion'], is_active: true, availableToday: 5 },
+  { id: '1', name: 'Cancha Fútbol 1', sport: 'futbol', description: 'Cancha premium con césped sintético', branch_id: 'branch-1', images: ['/cancha-futbol-1.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios'], is_active: true, availableToday: 9 },
+  { id: '2', name: 'Cancha Fútbol 2', sport: 'futbol', description: 'Cancha estándar', branch_id: 'branch-1', images: ['/cancha-futbol-2.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped sintetico', 'Iluminacion'], is_active: true, availableToday: 7 },
+  { id: '3', name: 'Cancha Fútbol 3', sport: 'futbol', description: 'Techada parcial', branch_id: 'branch-1', images: ['/cancha-futbol-3.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'], is_active: true, availableToday: 6 },
+  { id: '4', name: 'Cancha Fútbol 4', sport: 'futbol', description: 'Nueva con mejores instalaciones', branch_id: 'branch-1', images: ['/cancha-futbol-4.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'], is_active: true, availableToday: 8 },
+  { id: '5', name: 'Cancha Vóley 1', sport: 'voley', description: 'Piso PVC profesional', branch_id: 'branch-1', images: ['/cancha-voley.png'], price_per_hour: 30, pricingSchedule: voleySchedule, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'], is_active: true, availableToday: 10 },
+  { id: '6', name: 'Salón Eventos', sport: 'eventos', description: 'Espacio multiusos techado', branch_id: 'branch-1', images: ['/salon-eventos.png'], price_per_hour: 80, pricingSchedule: [], amenities: ['Techado', 'Sonido', 'Iluminacion'], is_active: true, availableToday: 5 },
 ]
 
 const sportLabels: Record<string, string> = {
@@ -94,7 +111,8 @@ export default function FeaturedCourts() {
             description: c.description || '',
             branch_id: c.branchId || c.branch_id,
             images: Array.isArray(c.images) && c.images.length > 0 ? c.images : ['/cancha-futbol-1.png'],
-            price_per_hour: Number(c.pricePerHour || c.price_per_hour) || 50,
+            price_per_hour: Number(c.pricePerHour || c.price_per_hour) || 35,
+            pricingSchedule: Array.isArray(c.pricingSchedule) ? c.pricingSchedule : [],
             amenities: Array.isArray(c.amenities) ? c.amenities : [],
             is_active: c.isActive !== false && c.is_active !== false,
             availableToday: Math.floor(Math.random() * 6) + 5,
@@ -228,11 +246,27 @@ export default function FeaturedCourts() {
                   {/* Price + Reserve */}
                   <div className="mt-auto flex items-end justify-between gap-2 pt-2 border-t border-white/5">
                     <div>
-                      <p className="text-[10px] text-cm-on-surface-variant font-medium">Desde</p>
-                      <p className="font-[family-name:var(--font-sora)] text-lg md:text-xl font-bold text-cm-primary">
-                        S/. {court.price_per_hour}
-                        <span className="text-[10px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
-                      </p>
+                      {court.pricingSchedule && court.pricingSchedule.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {court.pricingSchedule.map((ps, psi) => (
+                            <div key={psi} className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-cm-on-surface-variant font-medium">{ps.label}</span>
+                              <span className="font-[family-name:var(--font-sora)] text-sm md:text-base font-bold text-cm-primary">
+                                S/. {ps.pricePerHour}
+                                <span className="text-[9px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-[10px] text-cm-on-surface-variant font-medium">Desde</p>
+                          <p className="font-[family-name:var(--font-sora)] text-lg md:text-xl font-bold text-cm-primary">
+                            S/. {court.price_per_hour}
+                            <span className="text-[10px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={(e) => {

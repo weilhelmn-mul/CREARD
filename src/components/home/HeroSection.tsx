@@ -64,7 +64,7 @@ function getDateChips() {
 // --- Sport Options ---
 const sportOptions = [
   { value: 'todos', label: 'Todos los deportes', icon: 'sports' },
-  { value: 'futbol', label: 'Fútbol 5', icon: 'sports_soccer' },
+  { value: 'futbol', label: 'Fútbol 7', icon: 'sports_soccer' },
   { value: 'voley', label: 'Vóley', icon: 'sports_volleyball' },
 ]
 
@@ -103,14 +103,14 @@ export default function HeroSection() {
       badge: 'La #1 en reservas deportivas del Cusco',
       headline: 'Reserva tu cancha',
       headlineHighlight: 'en segundos',
-      subtitle: '4 canchas de fútbol 5 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+      subtitle: '4 canchas de fútbol 7 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
       promoHighlight: '50% de adelanto',
       promoText: ', paga el resto al llegar',
       backgroundImage: '',
       secondaryImage: '',
       stats: [
         { label: 'Espacios', value: 6 },
-        { label: 'Fútbol 5', value: 4 },
+        { label: 'Fútbol 7', value: 4 },
         { label: 'Vóley', value: 2 },
       ],
     },

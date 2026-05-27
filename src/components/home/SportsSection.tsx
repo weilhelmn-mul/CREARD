@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, useInView } from 'framer-motion'
-import { useSiteSettings, type SportItem } from '@/context/SiteSettingsContext'
+import { useSiteSettings, type SportItem, type PricingDetail } from '@/context/SiteSettingsContext'
 import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
 import { toast } from '@/hooks/use-toast'
 
@@ -22,14 +22,22 @@ const amenityLabels: Record<string, string> = {
 // Default sports for when settings haven't loaded
 const defaultSports: SportItem[] = [
   {
-    id: 'futbol', label: 'Fútbol 5', icon: 'sports_soccer', image: '/cancha-futbol-1.png',
-    count: 4, priceRange: 'S/. 50', badge: '3ra cancha techada',
+    id: 'futbol', label: 'Fútbol 7', icon: 'sports_soccer', image: '/cancha-futbol-1.png',
+    count: 4, priceRange: 'S/. 35', badge: '3ra cancha techada',
     amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios', 'Duchas', 'Estacionamiento'],
+    pricingDetails: [
+      { label: 'Mañana', timeRange: '7:00 AM - 5:00 PM', price: 35 },
+      { label: 'Noche', timeRange: '6:00 PM - 10:00 PM', price: 50 },
+    ],
   },
   {
     id: 'voley', label: 'Vóley', icon: 'sports_volleyball', image: '/cancha-voley.png',
-    count: 2, priceRange: 'S/. 35', badge: '',
+    count: 2, priceRange: 'S/. 30', badge: '',
     amenities: ['Piso PVC profesional', 'Red reglamentaria', 'Iluminacion LED', 'Techado'],
+    pricingDetails: [
+      { label: 'Mañana', timeRange: '7:00 AM - 5:00 PM', price: 30 },
+      { label: 'Noche', timeRange: '6:00 PM - 10:00 PM', price: 45 },
+    ],
   },
 ]
 
@@ -179,11 +187,32 @@ export default function SportsSection() {
                         ))}
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <p className="text-cm-on-surface-variant text-[10px] md:text-xs font-medium">Desde</p>
-                        <p className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-bold text-cm-primary text-glow">
-                          {sport.priceRange}
-                          <span className="text-xs md:text-sm text-cm-on-surface-variant font-normal">/hr</span>
-                        </p>
+                        {sport.pricingDetails && sport.pricingDetails.length > 0 ? (
+                          <div className="space-y-1">
+                            {sport.pricingDetails.map((pd, pi) => (
+                              <div key={pi} className="flex items-center gap-2 justify-end">
+                                <span className="text-cm-on-surface-variant text-[10px] md:text-[11px] font-medium">
+                                  {pd.label}
+                                </span>
+                                <span className="font-[family-name:var(--font-sora)] text-lg md:text-xl font-bold text-cm-primary text-glow">
+                                  S/. {pd.price}
+                                  <span className="text-[10px] text-cm-on-surface-variant font-normal">/hr</span>
+                                </span>
+                              </div>
+                            ))}
+                            <p className="text-cm-on-surface-variant text-[9px] md:text-[10px] font-medium">
+                              {sport.pricingDetails[0].timeRange} / {sport.pricingDetails[sport.pricingDetails.length - 1].timeRange}
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-cm-on-surface-variant text-[10px] md:text-xs font-medium">Desde</p>
+                            <p className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-bold text-cm-primary text-glow">
+                              {sport.priceRange}
+                              <span className="text-xs md:text-sm text-cm-on-surface-variant font-normal">/hr</span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -237,7 +266,7 @@ export default function SportsSection() {
                   onChange={(v) => updateSport(idx, 'label', v)}
                 />
                 <FormField
-                  label="Precio"
+                  label="Precio Desde"
                   value={sport.priceRange}
                   onChange={(v) => updateSport(idx, 'priceRange', v)}
                 />
@@ -256,6 +285,87 @@ export default function SportsSection() {
                   placeholder="Dejar vacío si no tiene"
                 />
               </div>
+
+              {/* Pricing Details Editor */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
+                    Precios por turno
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const details = [...(sport.pricingDetails || []), { label: 'Nuevo', timeRange: '', price: 0 }]
+                      const copy = [...editForm.sports] as SportItem[]
+                      copy[idx] = { ...copy[idx], pricingDetails: details }
+                      setEditForm({ ...editForm, sports: copy })
+                    }}
+                    className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">add</span>
+                    Agregar turno
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {(sport.pricingDetails || []).map((pd: PricingDetail, pi: number) => (
+                    <div key={pi} className="flex items-center gap-1.5 p-1.5 rounded-lg bg-cm-surface-container-highest/30">
+                      <input
+                        value={pd.label}
+                        onChange={(e) => {
+                          const details = [...(sport.pricingDetails || [])]
+                          details[pi] = { ...details[pi], label: e.target.value }
+                          const copy = [...editForm.sports] as SportItem[]
+                          copy[idx] = { ...copy[idx], pricingDetails: details }
+                          setEditForm({ ...editForm, sports: copy })
+                        }}
+                        placeholder="Mañana"
+                        className="w-16 px-2 py-1 bg-transparent border border-white/10 rounded text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+                      />
+                      <input
+                        value={pd.timeRange}
+                        onChange={(e) => {
+                          const details = [...(sport.pricingDetails || [])]
+                          details[pi] = { ...details[pi], timeRange: e.target.value }
+                          const copy = [...editForm.sports] as SportItem[]
+                          copy[idx] = { ...copy[idx], pricingDetails: details }
+                          setEditForm({ ...editForm, sports: copy })
+                        }}
+                        placeholder="7:00 AM - 5:00 PM"
+                        className="flex-1 px-2 py-1 bg-transparent border border-white/10 rounded text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+                      />
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-[10px] text-cm-on-surface-variant">S/.</span>
+                        <input
+                          type="number"
+                          value={pd.price}
+                          onChange={(e) => {
+                            const details = [...(sport.pricingDetails || [])]
+                            details[pi] = { ...details[pi], price: parseInt(e.target.value) || 0 }
+                            const copy = [...editForm.sports] as SportItem[]
+                            copy[idx] = { ...copy[idx], pricingDetails: details }
+                            setEditForm({ ...editForm, sports: copy })
+                          }}
+                          placeholder="0"
+                          className="w-14 px-2 py-1 bg-transparent border border-white/10 rounded text-[10px] text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const details = (sport.pricingDetails || []).filter((_: PricingDetail, i: number) => i !== pi)
+                          const copy = [...editForm.sports] as SportItem[]
+                          copy[idx] = { ...copy[idx], pricingDetails: details }
+                          setEditForm({ ...editForm, sports: copy })
+                        }}
+                        className="p-0.5 rounded text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <ArrayField
                 label="Amenidades"
                 items={sport.amenities}

@@ -7,7 +7,7 @@ import { SectionEditButton, EditModal, FormField } from './SectionEditor'
 import { toast } from '@/hooks/use-toast'
 
 const defaultSteps: StepItem[] = [
-  { number: '01', title: 'Elige tu cancha', description: 'Explora nuestras 6 canchas por deporte y disponibilidad. Revisa fotos, amenidades y precios en tiempo real.', icon: 'search', detail: 'Fútbol 5, Vóley o Eventos' },
+  { number: '01', title: 'Elige tu cancha', description: 'Explora nuestras 6 canchas por deporte y disponibilidad. Revisa fotos, amenidades y precios en tiempo real.', icon: 'search', detail: 'Fútbol 7, Vóley o Eventos' },
   { number: '02', title: 'Selecciona fecha y hora', description: 'Consulta la disponibilidad en tiempo real y elige el horario perfecto. Horario de atención: 7:00 AM a 11:00 PM.', icon: 'calendar_month', detail: 'Reserva hasta 7 días adelante' },
   { number: '03', title: 'Paga 50% de adelanto', description: 'Realiza el pago con Yape, Plin, efectivo o tarjeta. Solo necesitas el 50% para confirmar tu reserva.', icon: 'payments', detail: 'Yape / Plin / Efectivo / Tarjeta' },
   { number: '04', title: 'Confirmación por WhatsApp', description: 'Recibe tu confirmación al instante por WhatsApp con todos los detalles. ¡Llega y juega!', icon: 'forum', detail: 'Confirmación en segundos' },

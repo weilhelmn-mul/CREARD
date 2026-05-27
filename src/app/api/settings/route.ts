@@ -21,12 +21,12 @@ function getDefaults() {
       headline: 'Reserva tu cancha',
       headlineHighlight: 'en segundos',
       subtitle:
-        '4 canchas de fútbol 5 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+        '4 canchas de fútbol 7 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
       promoHighlight: '50% de adelanto',
       promoText: ', paga el resto al llegar',
       stats: [
         { label: 'Espacios', value: 6 },
-        { label: 'Fútbol 5', value: 4 },
+        { label: 'Fútbol 7', value: 4 },
         { label: 'Vóley', value: 2 },
       ],
     },
@@ -37,13 +37,17 @@ function getDefaults() {
       sports: [
         {
           id: 'futbol',
-          label: 'Fútbol 5',
+          label: 'Fútbol 7',
           icon: 'sports_soccer',
           image: '/cancha-futbol-1.png',
           count: 4,
-          priceRange: 'S/. 50',
+          priceRange: 'S/. 35',
           badge: '3ra cancha techada',
           amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios', 'Duchas', 'Estacionamiento'],
+          pricingDetails: [
+            { label: 'Mañana', timeRange: '7:00 AM - 5:00 PM', price: 35 },
+            { label: 'Noche', timeRange: '6:00 PM - 10:00 PM', price: 50 },
+          ],
         },
         {
           id: 'voley',
@@ -51,9 +55,13 @@ function getDefaults() {
           icon: 'sports_volleyball',
           image: '/cancha-voley.png',
           count: 2,
-          priceRange: 'S/. 35',
+          priceRange: 'S/. 30',
           badge: '',
           amenities: ['Piso PVC profesional', 'Red reglamentaria', 'Iluminacion LED', 'Techado'],
+          pricingDetails: [
+            { label: 'Mañana', timeRange: '7:00 AM - 5:00 PM', price: 30 },
+            { label: 'Noche', timeRange: '6:00 PM - 10:00 PM', price: 45 },
+          ],
         },
       ],
     },
@@ -107,7 +115,7 @@ function getDefaults() {
           title: 'Elige tu cancha',
           description: 'Explora nuestras 6 canchas por deporte y disponibilidad. Revisa fotos, amenidades y precios en tiempo real.',
           icon: 'search',
-          detail: 'Fútbol 5, Vóley o Eventos',
+          detail: 'Fútbol 7, Vóley o Eventos',
         },
         {
           number: '02',
