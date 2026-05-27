@@ -114,14 +114,21 @@ export default function BookingsView() {
     if (!user) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/bookings?userId=${user.id}`, {
+      // Don't send userId as query param — let the server determine it from auth headers
+      // This avoids mismatch between old demo IDs and real Firebase UIDs
+      const res = await fetch('/api/bookings', {
         headers: getAuthHeaders(),
       })
       if (res.ok) {
         const data: Booking[] = await res.json()
         setBookings(data)
+        console.log('[CREARD] Bookings loaded:', data.length)
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+        console.error('[CREARD] Error loading bookings:', res.status, err)
       }
-    } catch {
+    } catch (err) {
+      console.error('[CREARD] Fetch bookings error:', err)
       toast({ title: 'Error', description: 'No se pudieron cargar las reservas', variant: 'destructive' })
     } finally {
       setLoading(false)

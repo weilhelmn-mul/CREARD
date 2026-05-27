@@ -57,6 +57,13 @@ export async function restoreSession(): Promise<boolean> {
 
   // No token but user exists (logged in via server-only auth) - keep session
   if (!token && persistedUser) {
+    // Force re-login if the user has a demo-style ID (Firebase is now configured)
+    if (persistedUser.id.startsWith('demo-') && isFirebaseClientAvailable()) {
+      console.log('[CREARD] Demo ID detected with Firebase available, forcing re-login:', persistedUser.email);
+      store.logout();
+      store.setAuthChecked(true);
+      return false;
+    }
     console.log('[CREARD] Sesion restaurada (sin Firebase token):', persistedUser.email);
     store.setAuthChecked(true);
     return true;
