@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
 
@@ -492,13 +493,18 @@ export default function AdminDashboard() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
+      const headers = getAuthHeaders()
       const [statsRes, bookingsRes, expensesRes, courtsRes] = await Promise.all([
-        fetch('/api/stats'),
-        fetch('/api/bookings'),
-        fetch('/api/expenses'),
-        fetch('/api/courts'),
+        fetch('/api/stats', { headers }),
+        fetch('/api/bookings', { headers }),
+        fetch('/api/expenses', { headers }),
+        fetch('/api/courts', { headers }),
       ])
 
+      if (!bookingsRes.ok) {
+        const errData = await bookingsRes.json().catch(() => ({ error: 'Error desconocido' }))
+        console.error('[CREARD Admin] Error loading bookings:', bookingsRes.status, errData)
+      }
       if (statsRes.ok) setStats(await statsRes.json())
       if (bookingsRes.ok) {
         const bookingsData = await bookingsRes.json()
@@ -564,7 +570,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('/api/bookings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ id, status }),
       })
       if (res.ok) {
@@ -586,7 +592,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('/api/expenses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(expForm),
       })
       if (res.ok) {

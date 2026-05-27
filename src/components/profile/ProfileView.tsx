@@ -40,18 +40,21 @@ export default function ProfileView() {
 
   useEffect(() => {
     if (!user) return
-    fetch(`/api/bookings?userId=${user.id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setRecentBookings(data.slice(0, 5))
-          const completed = data.filter((b: RecentBooking) =>
-            ['completed', 'fully_paid', 'partially_paid'].includes(b.status)
-          )
-          setTotalSpent(completed.reduce((sum: number, b: RecentBooking) => sum + b.totalPrice, 0))
-        }
-      })
-      .catch(console.error)
+    // Import getAuthHeaders dynamically to avoid circular dependency
+    import('@/lib/auth-helpers').then(({ getAuthHeaders }) => {
+      fetch(`/api/bookings?userId=${user.id}`, { headers: getAuthHeaders() })
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setRecentBookings(data.slice(0, 5))
+            const completed = data.filter((b: RecentBooking) =>
+              ['completed', 'fully_paid', 'partially_paid'].includes(b.status)
+            )
+            setTotalSpent(completed.reduce((sum: number, b: RecentBooking) => sum + b.totalPrice, 0))
+          }
+        })
+        .catch(console.error)
+    })
   }, [user])
 
   const formatDate = (dateStr: string) => {

@@ -115,11 +115,15 @@ export function getAuthHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
+  // Always send Bearer token if available
   if (store.firebaseToken) {
     headers['Authorization'] = `Bearer ${store.firebaseToken}`;
-  } else if (store.user) {
-    // Fallback: send user identity as headers for server-side verification
-    // This works in demo mode and when Firebase Client SDK failed
+  }
+
+  // ALWAYS include fallback headers when user exists.
+  // This ensures the server can still authenticate if the token expired
+  // (server tries Bearer first, falls back to x-user-* on failure).
+  if (store.user) {
     headers['x-user-id'] = store.user.id;
     headers['x-user-email'] = store.user.email;
     headers['x-user-role'] = store.user.role;
