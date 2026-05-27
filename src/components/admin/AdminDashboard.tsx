@@ -477,6 +477,16 @@ export default function AdminDashboard() {
   /* filters */
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
+  /* advanced filters */
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [courtFilter, setCourtFilter] = useState('all')
+  const [sportFilter, setSportFilter] = useState('all')
+  const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'compact'>('table')
+  const [showFilters, setShowFilters] = useState(false)
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'price_desc' | 'price_asc' | 'name_asc'>('date_desc')
+
   /* expense form */
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [expForm, setExpForm] = useState({ description: '', amount: '', category: 'mantenimiento', date: todayStr(), notes: '' })
@@ -535,7 +545,43 @@ export default function AdminDashboard() {
   const pendingPayments = bookings.filter((b) => ['confirmed', 'partially_paid'].includes(b.status))
   const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
 
-  const filteredBookings = statusFilter === 'all' ? bookings : bookings.filter((b) => b.status === statusFilter)
+  const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
+  const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
+
+  const filteredBookings = (() => {
+    let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter((b) =>
+        b.user?.name?.toLowerCase().includes(q) ||
+        b.user?.email?.toLowerCase().includes(q) ||
+        b.court?.name?.toLowerCase().includes(q) ||
+        b.id.toLowerCase().includes(q)
+      )
+    }
+    if (dateFrom) result = result.filter((b) => b.date >= dateFrom)
+    if (dateTo) result = result.filter((b) => b.date <= dateTo)
+    if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter)
+    if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
+    switch (sortBy) {
+      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)); break
+      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)); break
+      case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
+      case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
+      case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
+    }
+    return result
+  })()
+
+  const activeFilterCount = [searchQuery, dateFrom, dateTo, courtFilter !== 'all' && courtFilter, sportFilter !== 'all' && sportFilter].filter(Boolean).length
+
+  const clearAllFilters = () => {
+    setSearchQuery('')
+    setDateFrom('')
+    setDateTo('')
+    setCourtFilter('all')
+    setSportFilter('all')
+  }
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const totalIncome = bookings
@@ -723,6 +769,143 @@ export default function AdminDashboard() {
           {/* ─── RESERVAS ─── */}
           {activeTab === 'reservas' && (
             <motion.div key="reservas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+              {/* ─── Filter Bar ─── */}
+              <div className="glass-card rounded-xl p-4 mb-4">
+                {/* Top row: search, view toggle, sort, filter toggle */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Search */}
+                  <div className="relative flex-1">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[18px]">search</span>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Buscar por cliente, cancha o ID..."
+                      className="w-full pl-9 pr-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors">
+                        <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">close</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Sort dropdown */}
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                      className="bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                    >
+                      <option value="date_desc">Más recientes</option>
+                      <option value="date_asc">Más antiguos</option>
+                      <option value="price_desc">Mayor precio</option>
+                      <option value="price_asc">Menor precio</option>
+                      <option value="name_asc">Cliente A-Z</option>
+                    </select>
+
+                    {/* View mode toggle */}
+                    <div className="flex bg-cm-surface-container-highest/60 rounded-lg p-0.5">
+                      <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Tabla">
+                        <span className="material-symbols-outlined text-[18px]">table_list</span>
+                      </button>
+                      <button onClick={() => setViewMode('gallery')} className={`p-1.5 rounded-md transition-all ${viewMode === 'gallery' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Galería">
+                        <span className="material-symbols-outlined text-[18px]">grid_view</span>
+                      </button>
+                      <button onClick={() => setViewMode('compact')} className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Compacto">
+                        <span className="material-symbols-outlined text-[18px]">view_agenda</span>
+                      </button>
+                    </div>
+
+                    {/* Filter toggle */}
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${showFilters || activeFilterCount > 0 ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{showFilters ? 'filter_list_off' : 'filter_list'}</span>
+                      Filtros
+                      {activeFilterCount > 0 && (
+                        <span className="w-4 h-4 rounded-full bg-cm-primary text-cm-on-primary text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Advanced filters (collapsible) */}
+                <AnimatePresence>
+                  {showFilters && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3 pt-3 border-t border-white/5">
+                        <div>
+                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Desde</label>
+                          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hasta</label>
+                          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cancha</label>
+                          <select value={courtFilter} onChange={(e) => setCourtFilter(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]">
+                            <option value="all">Todas las canchas</option>
+                            {uniqueCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Deporte</label>
+                          <select value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]">
+                            <option value="all">Todos los deportes</option>
+                            {uniqueSports.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {activeFilterCount > 0 && (
+                        <button onClick={clearAllFilters} className="mt-2 text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)] hover:underline flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">filter_list_off</span>
+                          Limpiar todos los filtros
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Active filter badges */}
+                {!showFilters && activeFilterCount > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/5">
+                    {dateFrom && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+                        Desde: {fmtDate(dateFrom)}
+                        <button onClick={() => setDateFrom('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                      </span>
+                    )}
+                    {dateTo && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+                        Hasta: {fmtDate(dateTo)}
+                        <button onClick={() => setDateTo('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                      </span>
+                    )}
+                    {courtFilter !== 'all' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+                        {uniqueCourts.find(c => c.id === courtFilter)?.name || courtFilter}
+                        <button onClick={() => setCourtFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                      </span>
+                    )}
+                    {sportFilter !== 'all' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)] capitalize">
+                        {sportFilter}
+                        <button onClick={() => setSportFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Status filter */}
               <div className="flex flex-wrap gap-2 mb-4">
                 <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
@@ -740,37 +923,46 @@ export default function AdminDashboard() {
                 })}
               </div>
 
-              {/* Schedule button */}
-              <button
-                onClick={() => setShowSchedule(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors mb-4"
-              >
-                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_timeline</span>
-                Ver Todos los Horarios
-              </button>
+              {/* Results count + Schedule button */}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                  Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
+                </p>
+                <button
+                  onClick={() => setShowSchedule(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_timeline</span>
+                  Ver Horarios
+                </button>
+              </div>
 
-              {/* Bookings table */}
-              <div className="glass-card rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-white/5">
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden md:table-cell">Cliente</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
-                        <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Adelanto</th>
-                        <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Restante</th>
-                        <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
-                        <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredBookings.length === 0 ? (
-                        <tr><td colSpan={9} className="text-center py-12 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay reservas con este filtro</td></tr>
-                      ) : (
-                        filteredBookings.map((b) => {
+              {/* ═══ View Modes ═══ */}
+              {filteredBookings.length === 0 ? (
+                <div className="glass-card rounded-xl p-12 text-center">
+                  <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 block mb-2">search_off</span>
+                  <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay reservas con estos filtros</p>
+                </div>
+              ) : viewMode === 'table' ? (
+                /* ─── TABLE MODE ─── */
+                <div className="glass-card rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden md:table-cell">Cliente</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
+                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Adelanto</th>
+                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Restante</th>
+                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
+                          <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredBookings.map((b) => {
                           const st = statusConfig[b.status] || statusConfig.pending
                           return (
                             <tr key={b.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
@@ -814,14 +1006,159 @@ export default function AdminDashboard() {
                               </td>
                             </tr>
                           )
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              ) : viewMode === 'gallery' ? (
+                /* ─── GALLERY MODE ─── */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredBookings.map((b, i) => {
+                    const st = statusConfig[b.status] || statusConfig.pending
+                    const statusAccent = b.status === 'completed' || b.status === 'fully_paid' ? 'bg-green-400' : b.status === 'cancelled' || b.status === 'expired' ? 'bg-red-400' : b.status === 'confirmed' ? 'bg-amber-400' : b.status === 'partially_paid' ? 'bg-orange-400' : 'bg-gray-400'
+                    return (
+                      <motion.div
+                        key={b.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
+                        className="glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group"
+                      >
+                        {/* Top accent bar */}
+                        <div className={`h-1 ${statusAccent}`} />
+                        <div className="p-4 space-y-3">
+                          {/* Date & Time */}
+                          <div>
+                            <div className="flex items-center gap-1.5 text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
+                              <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                              {fmtDateFull(b.date)}
+                            </div>
+                            <p className="font-[family-name:var(--font-sora)] font-bold text-cm-on-surface text-lg mt-0.5">
+                              {b.startTime} - {b.endTime}
+                            </p>
+                          </div>
+                          {/* Court */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface truncate">{b.court?.name || 'N/A'}</p>
+                              {b.court?.branch && <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.court.branch.name}</p>}
+                            </div>
+                          </div>
+                          {/* Client */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+                              <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px]">person</span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+                            </div>
+                          </div>
+                          {/* Status badge */}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                            {st.label}
+                          </span>
+                          {/* Price breakdown */}
+                          <div className="pt-2 border-t border-white/5 space-y-1">
+                            <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+                              <span className="text-cm-on-surface-variant">Adelanto</span>
+                              <span className="text-cm-on-surface">{fmtCurrency(b.advanceAmount)}</span>
+                            </div>
+                            <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+                              <span className="text-cm-on-surface-variant">Restante</span>
+                              <span className={b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}>{fmtCurrency(b.remainingAmount)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs font-[family-name:var(--font-sora)] pt-1">
+                              <span className="text-cm-on-surface font-medium">Total</span>
+                              <span className="text-cm-primary font-bold">{fmtCurrency(b.totalPrice)}</span>
+                            </div>
+                          </div>
+                          {/* Status dropdown */}
+                          <select
+                            value={b.status}
+                            onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                            className="w-full bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                          >
+                            <option value="pending">Pendiente</option>
+                            <option value="confirmed">Confirmada</option>
+                            <option value="partially_paid">Parcial</option>
+                            <option value="fully_paid">Completo</option>
+                            <option value="completed">Completada</option>
+                            <option value="cancelled">Cancelada</option>
+                            <option value="no_show">No Asistió</option>
+                          </select>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* ─── COMPACT MODE ─── */
+                <div className="space-y-2">
+                  {filteredBookings.map((b, i) => {
+                    const st = statusConfig[b.status] || statusConfig.pending
+                    return (
+                      <motion.div
+                        key={b.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
+                        className="glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                          {/* Date & Time */}
+                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
+                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
+                            <div>
+                              <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</p>
+                            </div>
+                          </div>
+                          {/* Court */}
+                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
+                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">{b.court?.name || 'N/A'}</span>
+                          </div>
+                          {/* Client */}
+                          <div className="flex-1 min-w-0 hidden md:block">
+                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+                          </div>
+                          {/* Status + Price + Action */}
+                          <div className="flex items-center gap-3 sm:ml-auto flex-shrink-0">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                              {st.label}
+                            </span>
+                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
+                            <select
+                              value={b.status}
+                              onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            >
+                              <option value="pending">Pendiente</option>
+                              <option value="confirmed">Confirmada</option>
+                              <option value="partially_paid">Parcial</option>
+                              <option value="fully_paid">Completo</option>
+                              <option value="completed">Completada</option>
+                              <option value="cancelled">Cancelada</option>
+                              <option value="no_show">No Asistió</option>
+                            </select>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
+
 
           {/* ─── FINANZAS ─── */}
           {activeTab === 'finanzas' && (
