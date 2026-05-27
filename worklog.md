@@ -222,3 +222,24 @@ Stage Summary:
 - Admin will now see ALL bookings (API returns all for admin role)
 - Regular users will see their own bookings (searched by userId + userEmail)
 - Deployed via git push to GitHub (Vercel auto-deploy)
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Integrate Culqi payment for booking advance
+
+Work Log:
+- Verified Culqi API connection with Bearer auth — successful (returns empty charges list)
+- Updated CULQI_API_KEY in .env from placeholder to real test key
+- Modified BookingForm.tsx: 3-step flow (Form → Culqi Payment → Success)
+- Default payment method changed from 'yape' to 'culqi'
+- Booking created with status 'pending' first, then advance processed via Culqi
+- Manual methods (yape, cash, transfer) still supported as fallback
+- CulqiPayButton component reused for advance payment (paymentType='advance')
+- Fixed Turbopack parsing error by replacing nested ternary with separate && conditionals
+- Build passed, commits f81c02c and 6605ea7 pushed to GitHub
+
+Stage Summary:
+- Culqi integration complete for both advance (BookingForm) and remaining (BookingsView) payments
+- API key verified: sk_test_89M68pOw8Rh9IudC works with Culqi API
+- Vercel auto-deploy from GitHub push
