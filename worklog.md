@@ -1,21 +1,25 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: Main Agent
-Task: Implementar filtros avanzados y modos de visualización para reservas del admin
+Task: Implementar reserva manual por admin y registro de adelantos
 
 Work Log:
-- Exploró el AdminDashboard.tsx existente (1207 líneas) para entender la estructura
-- Identificó que solo existía filtro por estado (botones de status)
-- Implementó 8 nuevos estados: searchQuery, dateFrom, dateTo, courtFilter, sportFilter, viewMode, showFilters, sortBy
-- Creó lógica de filtrado combinado (IIFE) con búsqueda por texto, rango de fechas, cancha, deporte + ordenamiento
-- Implementó 3 modos de visualización: tabla (existente), galería (cards grid responsivo), compacto (lista densa)
-- Añadió barra de filtros con búsqueda, sort, toggle de vista, y botón de filtros avanzados
-- Implementó panel colapsable de filtros avanzados con animaciones Framer Motion
-- Añadió badges de filtros activos cuando el panel está cerrado
-- Contador de resultados "Mostrando X de Y reservas"
-- Commit f14f88f, push a Vercel exitoso
+- Exploró BookingForm.tsx, API /api/bookings (POST), /api/courts, /api/admin/users
+- Identificó que admins ya pueden crear reservas para cualquier userId vía API
+- Añadió 8 nuevos estados para formulario de reserva y modal de adelanto
+- Implementó loadBookingFormData() para obtener usuarios y canchas con precios
+- Creó handleBookingFormChange() con auto-cálculo de precio según cancha y horas
+- Creó validateBookingForm() con validación de campos requeridos
+- Creó handleCreateBooking() que envía POST a /api/bookings
+- Añadió botón "Nueva Reserva" (verde, primario) junto a "Ver Horarios"
+- Implementó modal completo de nueva reserva con: cancha, cliente, fecha, horas,
+  precio total, adelanto, estado inicial, 6 métodos de pago, notas
+- Implementó modal de "Registrar Adelanto" para reservas existentes con:
+  resumen de la reserva, monto, método de pago, botón completar saldo
+- Añadió botón de adelanto (ícono 💰) en los 3 modos de vista (tabla, galería, compacto)
+- Commit f48b1e5, push a Vercel exitoso
 
 Stage Summary:
-- AdminDashboard.tsx pasó de 1207 a 1544 líneas (+337)
-- Nuevas funcionalidades: búsqueda, 4 filtros adicionales, 3 modos de vista, 5 opciones de ordenamiento
+- AdminDashboard.tsx pasó de 1544 a 2119 líneas (+575)
+- Funcionalidades nuevas: crear reservas manualmente, registrar adelantos
 - Desplegado exitosamente a Vercel
