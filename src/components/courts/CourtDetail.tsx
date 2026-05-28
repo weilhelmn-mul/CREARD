@@ -606,16 +606,20 @@ export default function CourtDetail() {
             </span>
             <div>
               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Precio</p>
-              {court.pricingSchedule ? (
-                <div className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] space-y-0.5">
-                  <p>Mañana: S/ {court.pricingSchedule.morning.price}/hr</p>
-                  <p>Noche: S/ {court.pricingSchedule.night.price}/hr</p>
-                </div>
-              ) : (
-                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                  S/ {court.pricePerHour}/hr
-                </p>
-              )}
+              {(() => {
+                const items = normalizeSchedule(court.pricingSchedule)
+                return items.length > 0 ? (
+                  <div className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] space-y-0.5">
+                    {items.map((s, i) => (
+                      <p key={i}>{s.label}: S/ {s.pricePerHour}/hr</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                    S/ {court.pricePerHour}/hr
+                  </p>
+                )
+              })()}
             </div>
           </div>
           <div className="glass-card rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
