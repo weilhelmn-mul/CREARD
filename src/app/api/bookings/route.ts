@@ -212,6 +212,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Default server-side sort: most recent date first, then chronological time within day
+    enriched.sort((a, b) => {
+      const dateComp = String(b.date || '').localeCompare(String(a.date || ''));
+      if (dateComp !== 0) return dateComp;
+      return String(a.startTime || '').localeCompare(String(b.startTime || ''));
+    });
+
     return NextResponse.json(enriched);
   } catch (error) {
     console.error('[BOOKINGS] GET error:', error);
