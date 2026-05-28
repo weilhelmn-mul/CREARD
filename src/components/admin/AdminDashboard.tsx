@@ -31,6 +31,7 @@ interface Booking {
   remainingAmount: number
   status: string
   paymentMethod: string | null
+  createdAt?: unknown
   court: { id: string; name: string; sport: string; branch?: { name: string } } | null
   user: { id: string; name: string; email: string; phone?: string } | null
 }
@@ -109,6 +110,18 @@ const fmtDateFull = (d: string) => {
   return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 const todayStr = () => new Date().toISOString().split('T')[0]
+
+/** Compare Firestore Timestamps (seconds) or ISO strings for sorting */
+function compareTimestamps(a: unknown, b: unknown): number {
+  const toMs = (t: unknown): number => {
+    if (!t) return 0
+    if (typeof t === 'number') return t * 1000 // Firestore seconds
+    if (typeof t === 'object' && t !== null && '_seconds' in (t as Record<string, unknown>)) return (t as Record<string, unknown>)._seconds as number * 1000
+    if (typeof t === 'string') return new Date(t).getTime()
+    return 0
+  }
+  return toMs(a) - toMs(b)
+}
 
 /* ═══════════════════════════════════════════════════
    CONTENT EDITOR TAB
@@ -875,8 +888,8 @@ export default function AdminDashboard() {
     if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter)
     if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
     switch (sortBy) {
-      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)); break
-      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)); break
+      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime) || compareTimestamps(b.createdAt, a.createdAt)); break
+      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || compareTimestamps(a.createdAt, b.createdAt)); break
       case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
       case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
       case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
