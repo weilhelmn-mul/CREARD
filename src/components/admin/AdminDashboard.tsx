@@ -888,8 +888,36 @@ export default function AdminDashboard() {
     if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter)
     if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
     switch (sortBy) {
-      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || a.startTime.localeCompare(b.startTime) || compareTimestamps(a.createdAt, b.createdAt)); break
-      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || b.startTime.localeCompare(a.startTime) || compareTimestamps(b.createdAt, a.createdAt)); break
+      case 'date_desc': {
+        const today = todayStr();
+        result.sort((a, b) => {
+          const aDiff = a.date.localeCompare(today), bDiff = b.date.localeCompare(today);
+          if ((aDiff >= 0 && bDiff >= 0) || (aDiff < 0 && bDiff < 0)) {
+            const dc = aDiff >= 0 ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+            if (dc !== 0) return dc;
+          } else {
+            if (aDiff >= 0 && bDiff < 0) return -1;
+            if (aDiff < 0 && bDiff >= 0) return 1;
+          }
+          return a.startTime.localeCompare(b.startTime);
+        });
+        break;
+      }
+      case 'date_asc': {
+        const today = todayStr();
+        result.sort((a, b) => {
+          const aDiff = a.date.localeCompare(today), bDiff = b.date.localeCompare(today);
+          if ((aDiff >= 0 && bDiff >= 0) || (aDiff < 0 && bDiff < 0)) {
+            const dc = aDiff >= 0 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+            if (dc !== 0) return dc;
+          } else {
+            if (aDiff < 0 && bDiff >= 0) return -1;
+            if (aDiff >= 0 && bDiff < 0) return 1;
+          }
+          return b.startTime.localeCompare(a.startTime);
+        });
+        break;
+      }
       case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
       case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
       case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
