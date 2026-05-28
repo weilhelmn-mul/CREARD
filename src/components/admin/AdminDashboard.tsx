@@ -888,8 +888,8 @@ export default function AdminDashboard() {
     if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter)
     if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
     switch (sortBy) {
-      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime) || compareTimestamps(b.createdAt, a.createdAt)); break
-      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || compareTimestamps(a.createdAt, b.createdAt)); break
+      case 'date_desc': result.sort((a, b) => b.date.localeCompare(a.date) || a.startTime.localeCompare(b.startTime) || compareTimestamps(a.createdAt, b.createdAt)); break
+      case 'date_asc': result.sort((a, b) => a.date.localeCompare(b.date) || b.startTime.localeCompare(a.startTime) || compareTimestamps(b.createdAt, a.createdAt)); break
       case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
       case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
       case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
