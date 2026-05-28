@@ -8,6 +8,13 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 
 /* ───────────── Interfaces ───────────── */
 
+interface PricingScheduleItem {
+  label: string
+  startHour: number
+  endHour: number
+  pricePerHour: number
+}
+
 interface PricingSchedule {
   morning: { startHour: number; endHour: number; price: number }
   night: { startHour: number; endHour: number; price: number }
@@ -19,7 +26,7 @@ interface Court {
   sport: string
   description?: string
   pricePerHour: number
-  pricingSchedule?: PricingSchedule
+  pricingSchedule?: PricingSchedule | PricingScheduleItem[]
   images: string[]
   amenities: string[]
   branch: { name: string; city: string; address: string }
@@ -220,18 +227,29 @@ const adminStatusConfig: Record<
   },
 }
 
+function normalizeSchedule(schedule: Court['pricingSchedule']): PricingScheduleItem[] {
+  if (!schedule) return []
+  if (Array.isArray(schedule)) return schedule
+  // Legacy { morning, night } object format
+  const { morning, night } = schedule as PricingSchedule
+  return [
+    { label: 'Mañana', startHour: morning.startHour, endHour: morning.endHour, pricePerHour: morning.price },
+    { label: 'Noche', startHour: night.startHour, endHour: night.endHour, pricePerHour: night.price },
+  ]
+}
+
 function getMinPrice(court: Court): number {
-  if (court.pricingSchedule) {
-    return Math.min(court.pricingSchedule.morning.price, court.pricingSchedule.night.price)
+  const items = normalizeSchedule(court.pricingSchedule)
+  if (items.length > 0) {
+    return Math.min(...items.map(s => s.pricePerHour))
   }
   return court.pricePerHour
 }
 
 function getPriceForHour(court: Court, hour: number): number {
-  if (court.pricingSchedule) {
-    const { morning, night } = court.pricingSchedule
-    if (hour >= morning.startHour && hour < morning.endHour) return morning.price
-    if (hour >= night.startHour && hour < night.endHour) return night.price
+  const items = normalizeSchedule(court.pricingSchedule)
+  for (const slot of items) {
+    if (hour >= slot.startHour && hour < slot.endHour) return slot.pricePerHour
   }
   return court.pricePerHour
 }
@@ -276,6 +294,10 @@ export default function CourtDetail() {
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {
+          if (data.error) {
+            setView('search')
+            return
+          }
           setCourt(data)
           setLoading(false)
         }

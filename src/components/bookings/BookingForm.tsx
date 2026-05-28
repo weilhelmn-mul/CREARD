@@ -190,6 +190,10 @@ export default function BookingForm() {
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {
+          if (data.error) {
+            setView('court-detail')
+            return
+          }
           setCourt(data)
           setLoading(false)
         }

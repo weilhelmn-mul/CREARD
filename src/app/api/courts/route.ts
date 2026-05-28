@@ -166,11 +166,14 @@ export async function GET(request: NextRequest) {
 
     if (id) {
       const court = await getCourtById(id);
-      if (!court) {
-        return NextResponse.json({ error: 'Court not found' }, { status: 404 });
+      if (court) {
+        const transformed = await toCamelCourt(court as Record<string, unknown>);
+        return NextResponse.json(transformed);
       }
-      const transformed = await toCamelCourt(court as Record<string, unknown>);
-      return NextResponse.json(transformed);
+      // Court not in Firestore — search fallback courts as safety net
+      const fallback = fallbackCourts.find(c => c.id === id);
+      if (fallback) return NextResponse.json(fallback);
+      return NextResponse.json({ error: 'Court not found' }, { status: 404 });
     }
 
     const courts = await getCourts({
