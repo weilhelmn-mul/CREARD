@@ -52,13 +52,9 @@ const sportIcons: Record<string, string> = {
 }
 
 const paymentMethods = [
-  { value: 'yape', label: 'Yape', icon: 'phone_iphone', color: '#742db5' },
-  { value: 'plin', label: 'Plin', icon: 'phone_iphone', color: '#00c1d4' },
   { value: 'culqi', label: 'Culqi', icon: 'credit_card', color: '#f97316' },
-  { value: 'card', label: 'Tarjeta', icon: 'credit_card', color: '#6366f1' },
-  { value: 'cash', label: 'Efectivo', icon: 'payments', color: '#22c55e' },
-  { value: 'transfer', label: 'Transferencia', icon: 'account_balance', color: '#eab308' },
 ]
+
 
 /* ───────────── Helpers ───────────── */
 
@@ -261,18 +257,8 @@ export default function BookingForm() {
       setBookingRef(ref)
       setBookingData(created)
 
-      // Step 2: If paying via Culqi, go to payment step
-      if (paymentMethod === 'culqi' || paymentMethod === 'card') {
-        setFormStep('payment')
-      } else {
-        // Manual method: mark as partially_paid directly
-        setSuccess(true)
-        addNotification({
-          title: 'Reserva confirmada',
-          message: `Reserva en ${court.name} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${ref}`,
-          type: 'success',
-        })
-      }
+      // Step 2: Go to Culqi payment step
+      setFormStep('payment')
     } catch (error) {
       toast({
         title: 'Error al reservar',
@@ -582,19 +568,18 @@ export default function BookingForm() {
               >
                 payment
               </span>
-              Método de pago (adelanto)
+              Método de pago
             </h2>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {paymentMethods.map((pm) => {
                 const isSelected = paymentMethod === pm.value
                 return (
-                  <button
+                  <div
                     key={pm.value}
-                    onClick={() => setPaymentMethod(pm.value)}
-                    className={`flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all duration-200 ${
+                    className={`flex items-center gap-3 py-3 px-4 rounded-xl transition-all duration-200 ${
                       isSelected
                         ? 'bg-[#00ff41]/8 border border-[#00ff41]/30'
-                        : 'bg-cm-surface-container-highest/40 border border-transparent hover:border-white/10'
+                        : 'bg-cm-surface-container-highest/40 border border-transparent'
                     }`}
                   >
                     <div
@@ -620,7 +605,7 @@ export default function BookingForm() {
                     >
                       {pm.label}
                     </span>
-                  </button>
+                  </div>
                 )
               })}
             </div>
