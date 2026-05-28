@@ -891,30 +891,24 @@ export default function AdminDashboard() {
       case 'date_desc': {
         const today = todayStr();
         result.sort((a, b) => {
-          const aDiff = a.date.localeCompare(today), bDiff = b.date.localeCompare(today);
-          if ((aDiff >= 0 && bDiff >= 0) || (aDiff < 0 && bDiff < 0)) {
-            const dc = aDiff >= 0 ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
-            if (dc !== 0) return dc;
-          } else {
-            if (aDiff >= 0 && bDiff < 0) return -1;
-            if (aDiff < 0 && bDiff >= 0) return 1;
-          }
+          // Pin today's bookings first
+          const aIsToday = a.date === today, bIsToday = b.date === today;
+          if (aIsToday && !bIsToday) return -1;
+          if (!aIsToday && bIsToday) return 1;
+          // Otherwise: strict descending date order (correlativo)
+          const dc = b.date.localeCompare(a.date);
+          if (dc !== 0) return dc;
+          // Same date: chronological by start time
           return a.startTime.localeCompare(b.startTime);
         });
         break;
       }
       case 'date_asc': {
-        const today = todayStr();
+        // Strict ascending date order (correlativo)
         result.sort((a, b) => {
-          const aDiff = a.date.localeCompare(today), bDiff = b.date.localeCompare(today);
-          if ((aDiff >= 0 && bDiff >= 0) || (aDiff < 0 && bDiff < 0)) {
-            const dc = aDiff >= 0 ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
-            if (dc !== 0) return dc;
-          } else {
-            if (aDiff < 0 && bDiff >= 0) return -1;
-            if (aDiff >= 0 && bDiff < 0) return 1;
-          }
-          return b.startTime.localeCompare(a.startTime);
+          const dc = a.date.localeCompare(b.date);
+          if (dc !== 0) return dc;
+          return a.startTime.localeCompare(b.startTime);
         });
         break;
       }
