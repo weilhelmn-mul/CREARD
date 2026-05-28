@@ -5,12 +5,12 @@ import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 // Fallback courts for when Firebase is not configured
 const futbolPricingSchedule = [
-  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 35 },
+  { label: 'Mañana', startHour: 7, endHour: 18, pricePerHour: 35 },
   { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 50 },
 ];
 
 const voleyPricingSchedule = [
-  { label: 'Mañana', startHour: 7, endHour: 17, pricePerHour: 30 },
+  { label: 'Mañana', startHour: 7, endHour: 18, pricePerHour: 30 },
   { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 45 },
 ];
 
