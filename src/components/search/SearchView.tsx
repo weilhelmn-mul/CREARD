@@ -41,11 +41,11 @@ export default function SearchView() {
   const [loading, setLoading] = useState(true)
 
   const fallbackCourts: Court[] = [
-    { id: '1', name: 'Cancha Fútbol 1', sport: 'futbol', pricePerHour: 60, images: ['/cancha-futbol-1.png'], description: 'Cancha premium con césped sintético', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: '2', name: 'Cancha Fútbol 2', sport: 'futbol', pricePerHour: 50, images: ['/cancha-futbol-2.png'], description: 'Cancha estándar', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: '3', name: 'Cancha Fútbol 3', sport: 'futbol', pricePerHour: 55, images: ['/cancha-futbol-3.png'], description: 'Techada parcial', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: '4', name: 'Cancha Fútbol 4', sport: 'futbol', pricePerHour: 65, images: ['/cancha-futbol-4.png'], description: 'Nueva con mejores instalaciones', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: '5', name: 'Cancha Vóley 1', sport: 'voley', pricePerHour: 40, images: ['/cancha-voley.png'], description: 'Piso PVC profesional', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '1', name: 'Cancha Fútbol 1', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-1.png'], description: 'Cancha premium con césped sintético', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '2', name: 'Cancha Fútbol 2', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-2.png'], description: 'Cancha estándar', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '3', name: 'Cancha Fútbol 3', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-3.png'], description: 'Techada parcial', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '4', name: 'Cancha Fútbol 4', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-4.png'], description: 'Nueva con mejores instalaciones', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: '5', name: 'Cancha Vóley 1', sport: 'voley', pricePerHour: 30, images: ['/cancha-voley.png'], description: 'Piso PVC profesional', branch: { name: 'CREARD', city: 'San Sebastián' } },
     { id: '6', name: 'Salón Eventos', sport: 'eventos', pricePerHour: 80, images: ['/salon-eventos.png'], description: 'Espacio multiusos techado', branch: { name: 'CREARD', city: 'San Sebastián' } },
   ]
 

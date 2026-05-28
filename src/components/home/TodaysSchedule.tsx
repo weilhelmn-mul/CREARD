@@ -17,12 +17,12 @@ interface BookingSlot {
 }
 
 const mockBookings: BookingSlot[] = [
-  { id: 'b1', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '08:00', end_time: '09:00', status: 'confirmed', user_name: 'Carlos M.', total_price: 60 },
-  { id: 'b2', court_id: '3', court_name: 'Cancha Fútbol 3', sport: 'futbol', start_time: '09:00', end_time: '10:00', status: 'confirmed', user_name: 'Miguel R.', total_price: 55 },
-  { id: 'b3', court_id: '5', court_name: 'Cancha Vóley 1', sport: 'voley', start_time: '10:00', end_time: '11:00', status: 'pending', user_name: 'Ana L.', total_price: 40 },
+  { id: 'b1', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '08:00', end_time: '09:00', status: 'confirmed', user_name: 'Carlos M.', total_price: 35 },
+  { id: 'b2', court_id: '3', court_name: 'Cancha Fútbol 3', sport: 'futbol', start_time: '09:00', end_time: '10:00', status: 'confirmed', user_name: 'Miguel R.', total_price: 35 },
+  { id: 'b3', court_id: '5', court_name: 'Cancha Vóley 1', sport: 'voley', start_time: '10:00', end_time: '11:00', status: 'pending', user_name: 'Ana L.', total_price: 30 },
   { id: 'b4', court_id: '2', court_name: 'Cancha Fútbol 2', sport: 'futbol', start_time: '18:00', end_time: '19:00', status: 'confirmed', user_name: 'Diego P.', total_price: 50 },
-  { id: 'b5', court_id: '4', court_name: 'Cancha Fútbol 4', sport: 'futbol', start_time: '19:00', end_time: '20:00', status: 'pending', user_name: 'Luis G.', total_price: 65 },
-  { id: 'b6', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '20:00', end_time: '21:00', status: 'confirmed', user_name: 'Pedro S.', total_price: 60 },
+  { id: 'b5', court_id: '4', court_name: 'Cancha Fútbol 4', sport: 'futbol', start_time: '19:00', end_time: '20:00', status: 'pending', user_name: 'Luis G.', total_price: 50 },
+  { id: 'b6', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '20:00', end_time: '21:00', status: 'confirmed', user_name: 'Pedro S.', total_price: 50 },
 ]
 
 const sportIcons: Record<string, string> = {

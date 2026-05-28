@@ -8,12 +8,18 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 
 /* ───────────── Interfaces ───────────── */
 
+interface PricingSchedule {
+  morning: { startHour: number; endHour: number; price: number }
+  night: { startHour: number; endHour: number; price: number }
+}
+
 interface Court {
   id: string
   name: string
   sport: string
   description?: string
   pricePerHour: number
+  pricingSchedule?: PricingSchedule
   images: string[]
   amenities: string[]
   branch: { name: string; city: string; address: string }
@@ -212,6 +218,22 @@ const adminStatusConfig: Record<
     textClass: 'text-cm-on-surface-variant/30',
     borderClass: 'border-transparent',
   },
+}
+
+function getMinPrice(court: Court): number {
+  if (court.pricingSchedule) {
+    return Math.min(court.pricingSchedule.morning.price, court.pricingSchedule.night.price)
+  }
+  return court.pricePerHour
+}
+
+function getPriceForHour(court: Court, hour: number): number {
+  if (court.pricingSchedule) {
+    const { morning, night } = court.pricingSchedule
+    if (hour >= morning.startHour && hour < morning.endHour) return morning.price
+    if (hour >= night.startHour && hour < night.endHour) return night.price
+  }
+  return court.pricePerHour
 }
 
 /* ───────────── Component ───────────── */
@@ -480,8 +502,9 @@ export default function CourtDetail() {
 
           {/* Price Badge */}
           <div className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full bg-cm-surface/80 backdrop-blur-sm border border-white/10">
+            <span className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Desde </span>
             <span className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">
-              S/ {court.pricePerHour?.toFixed(2)}
+              S/ {getMinPrice(court)}
             </span>
             <span className="text-cm-on-surface-variant text-xs ml-1 font-[family-name:var(--font-inter)]">/hr</span>
           </div>
@@ -561,9 +584,16 @@ export default function CourtDetail() {
             </span>
             <div>
               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Precio</p>
-              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                S/ {court.pricePerHour?.toFixed(2)}/hr
-              </p>
+              {court.pricingSchedule ? (
+                <div className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] space-y-0.5">
+                  <p>Mañana: S/ {court.pricingSchedule.morning.price}/hr</p>
+                  <p>Noche: S/ {court.pricingSchedule.night.price}/hr</p>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                  S/ {court.pricePerHour}/hr
+                </p>
+              )}
             </div>
           </div>
           <div className="glass-card rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
@@ -791,7 +821,7 @@ export default function CourtDetail() {
                   {selectedTime} - {endTimeStr}
                 </p>
                 <p className="text-[#00ff41] font-bold font-[family-name:var(--font-sora)] text-glow">
-                  S/ {court.pricePerHour?.toFixed(2)}
+                  S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
                 </p>
               </div>
               <button
@@ -818,7 +848,7 @@ export default function CourtDetail() {
               <div>
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Slot disponible</p>
                 <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                  {selectedTime} - {endTimeStr} · S/ {court.pricePerHour?.toFixed(2)}
+                  {selectedTime} - {endTimeStr} · S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
                 </p>
               </div>
               <button
