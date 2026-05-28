@@ -154,6 +154,19 @@ export async function GET() {
 
     if (docSnap.exists) {
       const data = docSnap.data()
+      // Always patch sportsSection with latest pricing to keep prices in sync
+      const defaults = getDefaults()
+      if (data.sportsSection?.sports?.length) {
+        data.sportsSection = {
+          ...data.sportsSection,
+          sports: data.sportsSection.sports.map((sport: Record<string, unknown>, idx: number) => {
+            const defaultSport = defaults.sportsSection.sports[idx]
+            return defaultSport
+              ? { ...sport, pricingDetails: defaultSport.pricingDetails, priceRange: defaultSport.priceRange }
+              : sport
+          }),
+        }
+      }
       return NextResponse.json(data)
     }
 
