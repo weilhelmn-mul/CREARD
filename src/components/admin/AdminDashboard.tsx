@@ -598,6 +598,7 @@ export default function AdminDashboard() {
   const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'compact'>('table')
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'price_desc' | 'price_asc' | 'name_asc'>('date_desc')
+  const [showPastBookings, setShowPastBookings] = useState(false)
 
   /* expense form */
   const [showExpenseForm, setShowExpenseForm] = useState(false)
@@ -874,6 +875,11 @@ export default function AdminDashboard() {
 
   const filteredBookings = (() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
+    // Hide past bookings unless toggle is on
+    if (!showPastBookings) {
+      const today = todayStr();
+      result = result.filter((b) => b.date >= today);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter((b) =>
@@ -891,13 +897,20 @@ export default function AdminDashboard() {
       case 'date_desc': {
         const today = todayStr();
         result.sort((a, b) => {
-          // Pin today's bookings first
           const aIsToday = a.date === today, bIsToday = b.date === today;
+          const aFuture = a.date > today, bFuture = b.date > today;
+          const aPast = a.date < today, bPast = b.date < today;
+          // 1) Today always first
           if (aIsToday && !bIsToday) return -1;
           if (!aIsToday && bIsToday) return 1;
-          // Otherwise: strict descending date order (correlativo)
-          const dc = b.date.localeCompare(a.date);
-          if (dc !== 0) return dc;
+          // 2) Both on same side of today
+          if (aFuture && bFuture) {
+            const dc = a.date.localeCompare(b.date);
+            if (dc !== 0) return dc;
+          } else if (aPast && bPast) {
+            const dc = b.date.localeCompare(a.date);
+            if (dc !== 0) return dc;
+          }
           // Same date: chronological by start time
           return a.startTime.localeCompare(b.startTime);
         });
@@ -1275,6 +1288,13 @@ export default function AdminDashboard() {
                   Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
                 </p>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowPastBookings(!showPastBookings)}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all ${showPastBookings ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{showPastBookings ? 'history_toggle_off' : 'history'}</span>
+                    {showPastBookings ? 'Ocultar pasadas' : 'Ver pasadas'}
+                  </button>
                   <button
                     onClick={openBookingForm}
                     className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:brightness-110 transition-all"

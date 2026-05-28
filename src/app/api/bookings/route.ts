@@ -212,18 +212,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Default server-side sort: today first, then all other dates descending (correlativo)
+    // Default server-side sort: today first, future ascending, past descending
     // Within each date: chronological time
     const today = new Date().toISOString().split('T')[0];
     enriched.sort((a, b) => {
       const dA = String(a.date || ''), dB = String(b.date || '');
-      // Pin today's bookings first
       const aIsToday = dA === today, bIsToday = dB === today;
+      const aFuture = dA > today, bFuture = dB > today;
+      const aPast = dA < today, bPast = dB < today;
+      // 1) Today always first
       if (aIsToday && !bIsToday) return -1;
       if (!aIsToday && bIsToday) return 1;
-      // Otherwise: strict descending date order
-      const dateComp = dB.localeCompare(dA);
-      if (dateComp !== 0) return dateComp;
+      // 2) Both on same side of today
+      if (aFuture && bFuture) {
+        // Future dates: ascending (correlativo)
+        const dc = dA.localeCompare(dB);
+        if (dc !== 0) return dc;
+      } else if (aPast && bPast) {
+        // Past dates: descending (most recent past first)
+        const dc = dB.localeCompare(dA);
+        if (dc !== 0) return dc;
+      }
       // Same date: chronological by start time
       return String(a.startTime || '').localeCompare(String(b.startTime || ''));
     });
