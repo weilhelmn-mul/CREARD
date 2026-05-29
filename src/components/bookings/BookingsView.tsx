@@ -34,14 +34,9 @@ type TabType = 'upcoming' | 'completed' | 'cancelled'
 
 /* ─── config ─── */
 const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
-  pending:         { label: 'Pendiente',           color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',      icon: 'schedule' },
-  confirmed:       { label: 'Confirmada',           color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',   icon: 'check_circle' },
-  partially_paid:  { label: 'Pagado Parcialmente', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'pending_actions' },
-  fully_paid:      { label: 'Pagado Totalmente',    color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'verified' },
-  completed:       { label: 'Completada',           color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',      icon: 'done_all' },
-  cancelled:       { label: 'Cancelada',            color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
-  no_show:         { label: 'No Asistió',           color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'person_off' },
-  expired:         { label: 'Expirada',             color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',      icon: 'timer_off' },
+  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',   icon: 'check_circle' },
+  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'verified' },
+  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -147,7 +142,7 @@ export default function BookingsView() {
       case 'upcoming':
         return (
           bd >= today &&
-          !['cancelled', 'completed', 'no_show', 'expired'].includes(b.status)
+          !['cancelled', 'completed'].includes(b.status)
         )
       case 'completed':
         return b.status === 'completed'
@@ -209,7 +204,7 @@ export default function BookingsView() {
   const tabCounts = {
     upcoming: bookings.filter((b) => {
       const bd = parseLocalDate(b.date)
-      return bd >= today && !['cancelled', 'completed', 'no_show', 'expired'].includes(b.status)
+      return bd >= today && b.status === 'reserved'
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,
     cancelled: bookings.filter((b) => b.status === 'cancelled').length,
@@ -295,7 +290,7 @@ export default function BookingsView() {
           <div className="space-y-3">
             <AnimatePresence mode="popLayout">
               {filtered.map((booking) => {
-                const status = statusConfig[booking.status] || statusConfig.pending
+                const status = statusConfig[booking.status] || statusConfig.reserved
                 const isExpanded = expandedId === booking.id
                 const progressPercent = booking.totalPrice > 0
                   ? (booking.advanceAmount / booking.totalPrice) * 100
@@ -363,7 +358,7 @@ export default function BookingsView() {
                       </div>
 
                       {/* Progress bar (always visible for payment statuses) */}
-                      {['confirmed', 'partially_paid', 'fully_paid'].includes(booking.status) && (
+                      {['reserved', 'completed'].includes(booking.status) && (
                         <div className="mt-3 ml-[60px]">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
@@ -436,7 +431,7 @@ export default function BookingsView() {
                             </div>
 
                             {/* Remaining payment warning */}
-                            {booking.status === 'partially_paid' && booking.remainingAmount > 0 && (
+                            {booking.status === 'reserved' && booking.remainingAmount > 0 && (
                               <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
                                 <span className="material-symbols-outlined text-orange-400 text-[20px]">warning</span>
                                 <p className="text-sm text-orange-300 font-[family-name:var(--font-inter)]">
@@ -447,7 +442,7 @@ export default function BookingsView() {
 
                             {/* Actions */}
                             <div className="flex gap-2 pt-1">
-                              {booking.status === 'partially_paid' && booking.remainingAmount > 0 && (
+                              {booking.status === 'reserved' && booking.remainingAmount > 0 && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -459,7 +454,7 @@ export default function BookingsView() {
                                   Pagar Restante
                                 </button>
                               )}
-                              {(booking.status === 'confirmed' || booking.status === 'partially_paid') && (
+                              {booking.status === 'reserved' && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()

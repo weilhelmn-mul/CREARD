@@ -68,14 +68,9 @@ type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'contenido'
    CONFIG
    ═══════════════════════════════════════════════════ */
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
-  pending:        { label: 'Pendiente',           color: 'bg-gray-500/20 text-gray-400',      dot: 'bg-gray-400' },
-  confirmed:      { label: 'Confirmada',          color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
-  partially_paid: { label: 'Parcial',             color: 'bg-orange-500/20 text-orange-400',  dot: 'bg-orange-400' },
-  fully_paid:     { label: 'Completo',            color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
-  completed:      { label: 'Completada',          color: 'bg-blue-500/20 text-blue-400',      dot: 'bg-blue-400' },
-  cancelled:      { label: 'Cancelada',           color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
-  no_show:        { label: 'No Asistió',          color: 'bg-orange-500/20 text-orange-400',  dot: 'bg-orange-400' },
-  expired:        { label: 'Expirada',            color: 'bg-gray-500/20 text-gray-500',      dot: 'bg-gray-500' },
+  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
+  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
+  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -617,7 +612,7 @@ export default function AdminDashboard() {
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [bookingForm, setBookingForm] = useState({
     courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
-    totalPrice: '', advanceAmount: '', status: 'confirmed', paymentMethod: 'yape', notes: '',
+    totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string }>>([])
   const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
@@ -696,10 +691,10 @@ export default function AdminDashboard() {
 
   /* ─── computed ─── */
   const today = todayStr()
-  const todayBookings = bookings.filter((b) => b.date === today && !['cancelled', 'expired'].includes(b.status))
-  const todayPaid = bookings.filter((b) => b.date === today && ['completed', 'fully_paid'].includes(b.status))
+  const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled')
+  const todayPaid = bookings.filter((b) => b.date === today && b.status === 'completed')
   const todayRevenue = todayPaid.reduce((s, b) => s + b.totalPrice, 0)
-  const pendingPayments = bookings.filter((b) => ['confirmed', 'partially_paid'].includes(b.status))
+  const pendingPayments = bookings.filter((b) => b.status === 'reserved' && b.remainingAmount > 0)
   const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
 
   const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
@@ -813,7 +808,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'confirmed', paymentMethod: 'yape', notes: '' })
+        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
         setFormErrors({})
         fetchData()
       } else {
@@ -844,10 +839,10 @@ export default function AdminDashboard() {
     if (!advanceTarget || !advanceAmount || parseFloat(advanceAmount) <= 0) return
     setSubmittingAdvance(true)
     try {
-      // Update booking status to partially_paid and adjust amounts
+      // Update booking status and adjust amounts
       const newAdvance = advanceTarget.advanceAmount + parseFloat(advanceAmount)
       const newRemaining = advanceTarget.totalPrice - newAdvance
-      const newStatus = newRemaining <= 0 ? 'fully_paid' : 'partially_paid'
+      const newStatus = newRemaining <= 0 ? 'completed' : 'reserved'
 
       const res = await fetch('/api/bookings', {
         method: 'PUT',
@@ -944,10 +939,10 @@ export default function AdminDashboard() {
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const totalIncome = bookings
-    .filter((b) => ['completed', 'fully_paid'].includes(b.status))
+    .filter((b) => b.status === 'completed')
     .reduce((s, b) => s + b.totalPrice, 0)
   const totalAdvances = bookings
-    .filter((b) => ['partially_paid', 'fully_paid', 'completed'].includes(b.status))
+    .filter((b) => ['reserved', 'completed'].includes(b.status))
     .reduce((s, b) => s + b.advanceAmount, 0)
   const balance = totalIncome - totalExpenses
 
@@ -963,7 +958,7 @@ export default function AdminDashboard() {
       acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
     }
     acc[b.user.id].bookingCount++
-    if (['completed', 'fully_paid'].includes(b.status)) {
+    if (b.status === 'completed') {
       acc[b.user.id].totalSpent += b.totalPrice
     }
     return acc
@@ -1017,7 +1012,7 @@ export default function AdminDashboard() {
   }
 
   /* schedule bookings for a given date */
-  const scheduleBookings = bookings.filter((b) => b.date === scheduleDate && !['cancelled', 'expired'].includes(b.status))
+  const scheduleBookings = bookings.filter((b) => b.date === scheduleDate && b.status !== 'cancelled')
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
   const scheduleCourts = allCourts.map((c) => ({
     ...c,
@@ -1338,7 +1333,7 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody>
                         {filteredBookings.map((b) => {
-                          const st = statusConfig[b.status] || statusConfig.pending
+                          const st = statusConfig[b.status] || statusConfig.reserved
                           return (
                             <tr key={b.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
                               <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</td>
@@ -1380,13 +1375,9 @@ export default function AdminDashboard() {
                                     onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
                                     className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                                   >
-                                    <option value="pending">Pendiente</option>
-                                    <option value="confirmed">Confirmada</option>
-                                    <option value="partially_paid">Parcial</option>
-                                    <option value="fully_paid">Completo</option>
-                                    <option value="completed">Completada</option>
-                                    <option value="cancelled">Cancelada</option>
-                                    <option value="no_show">No Asistió</option>
+                                    <option value="reserved">Reservado</option>
+                                    <option value="completed">Completo</option>
+                                    <option value="cancelled">Cancelado</option>
                                   </select>
                                 </div>
                               </td>
@@ -1401,8 +1392,8 @@ export default function AdminDashboard() {
                 /* ─── GALLERY MODE ─── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredBookings.map((b, i) => {
-                    const st = statusConfig[b.status] || statusConfig.pending
-                    const statusAccent = b.status === 'completed' || b.status === 'fully_paid' ? 'bg-green-400' : b.status === 'cancelled' || b.status === 'expired' ? 'bg-red-400' : b.status === 'confirmed' ? 'bg-amber-400' : b.status === 'partially_paid' ? 'bg-orange-400' : 'bg-gray-400'
+                    const st = statusConfig[b.status] || statusConfig.reserved
+                    const statusAccent = b.status === 'completed' ? 'bg-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
                     return (
                       <motion.div
                         key={b.id}
@@ -1471,13 +1462,9 @@ export default function AdminDashboard() {
                               onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
                               className="flex-1 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                             >
-                              <option value="pending">Pendiente</option>
-                              <option value="confirmed">Confirmada</option>
-                              <option value="partially_paid">Parcial</option>
-                              <option value="fully_paid">Completo</option>
-                              <option value="completed">Completada</option>
-                              <option value="cancelled">Cancelada</option>
-                              <option value="no_show">No Asistió</option>
+                              <option value="reserved">Reservado</option>
+                              <option value="completed">Completo</option>
+                              <option value="cancelled">Cancelado</option>
                             </select>
                             {b.remainingAmount > 0 && (
                               <button
@@ -1498,7 +1485,7 @@ export default function AdminDashboard() {
                 /* ─── COMPACT MODE ─── */
                 <div className="space-y-2">
                   {filteredBookings.map((b, i) => {
-                    const st = statusConfig[b.status] || statusConfig.pending
+                    const st = statusConfig[b.status] || statusConfig.reserved
                     return (
                       <motion.div
                         key={b.id}
@@ -1547,13 +1534,9 @@ export default function AdminDashboard() {
                               onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
                               className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                             >
-                              <option value="pending">Pendiente</option>
-                              <option value="confirmed">Confirmada</option>
-                              <option value="partially_paid">Parcial</option>
-                              <option value="fully_paid">Completo</option>
-                              <option value="completed">Completada</option>
-                              <option value="cancelled">Cancelada</option>
-                              <option value="no_show">No Asistió</option>
+                              <option value="reserved">Reservado</option>
+                              <option value="completed">Completo</option>
+                              <option value="cancelled">Cancelado</option>
                             </select>
                           </div>
                         </div>
@@ -2062,11 +2045,9 @@ export default function AdminDashboard() {
                     onChange={(e) => handleBookingFormChange('status', e.target.value)}
                     className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                   >
-                    <option value="pending">Pendiente</option>
-                    <option value="confirmed">Confirmada</option>
-                    <option value="partially_paid">Parcialmente pagada</option>
-                    <option value="fully_paid">Completamente pagada</option>
-                    <option value="completed">Completada</option>
+                    <option value="reserved">Reservado</option>
+                    <option value="completed">Completo</option>
+                    <option value="cancelled">Cancelado</option>
                   </select>
                 </div>
 

@@ -17,12 +17,12 @@ interface BookingSlot {
 }
 
 const mockBookings: BookingSlot[] = [
-  { id: 'b1', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '08:00', end_time: '09:00', status: 'confirmed', user_name: 'Carlos M.', total_price: 35 },
-  { id: 'b2', court_id: '3', court_name: 'Cancha Fútbol 3', sport: 'futbol', start_time: '09:00', end_time: '10:00', status: 'confirmed', user_name: 'Miguel R.', total_price: 35 },
-  { id: 'b3', court_id: '5', court_name: 'Cancha Vóley 1', sport: 'voley', start_time: '10:00', end_time: '11:00', status: 'pending', user_name: 'Ana L.', total_price: 30 },
-  { id: 'b4', court_id: '2', court_name: 'Cancha Fútbol 2', sport: 'futbol', start_time: '18:00', end_time: '19:00', status: 'confirmed', user_name: 'Diego P.', total_price: 50 },
-  { id: 'b5', court_id: '4', court_name: 'Cancha Fútbol 4', sport: 'futbol', start_time: '19:00', end_time: '20:00', status: 'pending', user_name: 'Luis G.', total_price: 50 },
-  { id: 'b6', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '20:00', end_time: '21:00', status: 'confirmed', user_name: 'Pedro S.', total_price: 50 },
+  { id: 'b1', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '08:00', end_time: '09:00', status: 'reserved', user_name: 'Carlos M.', total_price: 35 },
+  { id: 'b2', court_id: '3', court_name: 'Cancha Fútbol 3', sport: 'futbol', start_time: '09:00', end_time: '10:00', status: 'reserved', user_name: 'Miguel R.', total_price: 35 },
+  { id: 'b3', court_id: '5', court_name: 'Cancha Vóley 1', sport: 'voley', start_time: '10:00', end_time: '11:00', status: 'reserved', user_name: 'Ana L.', total_price: 30 },
+  { id: 'b4', court_id: '2', court_name: 'Cancha Fútbol 2', sport: 'futbol', start_time: '18:00', end_time: '19:00', status: 'reserved', user_name: 'Diego P.', total_price: 50 },
+  { id: 'b5', court_id: '4', court_name: 'Cancha Fútbol 4', sport: 'futbol', start_time: '19:00', end_time: '20:00', status: 'completed', user_name: 'Luis G.', total_price: 50 },
+  { id: 'b6', court_id: '1', court_name: 'Cancha Fútbol 1', sport: 'futbol', start_time: '20:00', end_time: '21:00', status: 'reserved', user_name: 'Pedro S.', total_price: 50 },
 ]
 
 const sportIcons: Record<string, string> = {
@@ -63,7 +63,7 @@ export default function TodaysSchedule() {
             sport: (b.court as Record<string, unknown>)?.sport || 'futbol',
             start_time: b.start_time || '',
             end_time: b.end_time || '',
-            status: b.status || 'pending',
+            status: b.status || 'reserved',
             user_name: b.user_name || '',
             total_price: b.total_price || 0,
           }))
@@ -78,8 +78,8 @@ export default function TodaysSchedule() {
       .finally(() => setLoading(false))
   }, [])
 
-  const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length
-  const pendingCount = bookings.filter((b) => b.status === 'pending').length
+  const confirmedCount = bookings.filter((b) => b.status === 'reserved').length
+  const pendingCount = bookings.filter((b) => b.status === 'reserved').length
 
   return (
     <section ref={sectionRef} className="py-12 md:py-16 px-4">
@@ -198,15 +198,15 @@ export default function TodaysSchedule() {
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          booking.status === 'confirmed'
+                          booking.status === 'completed'
                             ? 'bg-green-500/15 text-green-400 border border-green-500/20'
-                            : booking.status === 'pending'
-                              ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20'
-                              : 'bg-cm-surface-container text-cm-on-surface-variant border border-white/10'
+                            : booking.status === 'cancelled'
+                              ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                              : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                         }`}
                       >
-                        <div className={`w-1.5 h-1.5 rounded-full ${booking.status === 'confirmed' ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                        {booking.status === 'confirmed' ? 'Confirmada' : booking.status === 'pending' ? 'Pendiente' : booking.status}
+                        <div className={`w-1.5 h-1.5 rounded-full ${booking.status === 'completed' ? 'bg-green-400' : booking.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                        {booking.status === 'reserved' ? 'Reservado' : booking.status === 'completed' ? 'Completo' : booking.status === 'cancelled' ? 'Cancelado' : booking.status}
                       </span>
                       <span className="text-cm-on-surface-variant text-[10px] font-medium font-[family-name:var(--font-inter)]">
                         S/. {booking.total_price}

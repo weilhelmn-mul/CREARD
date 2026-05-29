@@ -48,7 +48,7 @@ export default function ProfileView() {
           if (Array.isArray(data)) {
             setRecentBookings(data.slice(0, 5))
             const completed = data.filter((b: RecentBooking) =>
-              ['completed', 'fully_paid', 'partially_paid'].includes(b.status)
+              ['completed', 'reserved'].includes(b.status)
             )
             setTotalSpent(completed.reduce((sum: number, b: RecentBooking) => sum + b.totalPrice, 0))
           }

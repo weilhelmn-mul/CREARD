@@ -165,10 +165,9 @@ function getAdminSlotInfo(
   }
 
   if (booking.status === 'cancelled') return { status: 'blocked', booking }
-  if (booking.status === 'expired' || booking.status === 'no_show') return { status: 'expired', booking }
   if (booking.status === 'completed') return { status: 'completed', booking }
 
-  // Active: pending, confirmed, partially_paid, fully_paid
+  // Active: reserved
   if (isTodayDate && hour === currentHour) return { status: 'in_play', booking }
   return { status: 'reserved', booking }
 }
@@ -927,35 +926,23 @@ export default function CourtDetail() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold font-[family-name:var(--font-inter)] ${
-                      popupBooking.status === 'confirmed' || popupBooking.status === 'partially_paid'
-                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : popupBooking.status === 'fully_paid'
-                        ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
-                        : popupBooking.status === 'completed'
-                        ? 'bg-zinc-500/15 text-zinc-400 border border-zinc-500/30'
+                      popupBooking.status === 'completed'
+                        ? 'bg-green-500/15 text-green-400 border border-green-500/30'
                         : popupBooking.status === 'cancelled'
                         ? 'bg-red-500/15 text-red-400 border border-red-500/30'
-                        : popupBooking.status === 'expired' || popupBooking.status === 'no_show'
-                        ? 'bg-zinc-600/15 text-zinc-500 border border-zinc-600/30'
                         : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[12px]">
-                      {popupBooking.status === 'confirmed' || popupBooking.status === 'partially_paid'
+                      {popupBooking.status === 'reserved'
                         ? 'check_circle'
-                        : popupBooking.status === 'fully_paid'
-                        ? 'verified'
                         : popupBooking.status === 'completed'
-                        ? 'task_alt'
+                        ? 'verified'
                         : popupBooking.status === 'cancelled'
                         ? 'cancel'
-                        : popupBooking.status === 'expired'
-                        ? 'schedule'
-                        : popupBooking.status === 'no_show'
-                        ? 'person_off'
                         : 'pending'}
                     </span>
-                    {popupBooking.status.charAt(0).toUpperCase() + popupBooking.status.slice(1).replace(/_/g, ' ')}
+                    {popupBooking.status === 'reserved' ? 'Reservado' : popupBooking.status === 'completed' ? 'Completo' : popupBooking.status === 'cancelled' ? 'Cancelado' : popupBooking.status.charAt(0).toUpperCase() + popupBooking.status.slice(1).replace(/_/g, ' ')}
                   </span>
                   <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-mono">
                     #{popupBooking.id.slice(-6)}

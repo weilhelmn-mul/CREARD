@@ -242,7 +242,7 @@ export default function BookingForm() {
           totalPrice,
           advanceAmount,
           remainingAmount,
-          status: 'pending',
+          status: 'reserved',
           paymentMethod,
         }),
       })

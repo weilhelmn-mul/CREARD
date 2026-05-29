@@ -10,6 +10,24 @@ import {
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
+// Migrate old status values to the new 3-status system
+function migrateStatus(s: string): string {
+  switch (s) {
+    case 'confirmed':
+    case 'pending':
+    case 'partially_paid':
+      return 'reserved';
+    case 'fully_paid':
+    case 'completed':
+      return 'completed';
+    case 'no_show':
+    case 'expired':
+      return 'cancelled';
+    default:
+      return s; // 'reserved', 'completed', 'cancelled' pass through
+  }
+}
+
 // Transformar snake_case (Firestore) a camelCase (frontend)
 function toCamelBooking(b: Record<string, unknown>) {
   const courtRaw = b._court as Record<string, unknown> | null;
@@ -40,7 +58,7 @@ function toCamelBooking(b: Record<string, unknown>) {
     totalPrice: b.total_price || 0,
     advanceAmount: b.advance_amount || 0,
     remainingAmount: b.remaining_amount || 0,
-    status: b.status || 'pending',
+    status: migrateStatus(b.status || 'reserved'),
     slotStatus: b.slot_status,
     paymentMethod: b.payment_method,
     notes: b.notes,
@@ -291,9 +309,7 @@ export async function POST(request: NextRequest) {
     const existing = await getBookings({ courtId, date });
     const overlapping = existing.filter(
       (b) =>
-        !['cancelled', 'expired'].includes(b.status || '') &&
-        (b.status === 'pending' || b.status === 'confirmed' ||
-         b.status === 'partially_paid' || b.status === 'fully_paid') &&
+        !['cancelled'].includes(migrateStatus(b.status || '')) &&
         (b.start_time || '') < endTime &&
         (b.end_time || '') > startTime
     );
@@ -322,7 +338,7 @@ export async function POST(request: NextRequest) {
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
     const rem = parseFloat(remainingAmount) || price - adv;
-    const bookingStatus = status || 'pending';
+    const bookingStatus = migrateStatus(status || 'reserved');
 
     // Save to Firestore
     const id = await createBooking({
@@ -417,7 +433,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const updateData: Record<string, unknown> = {};
-    if (status) updateData.status = status;
+    if (status) updateData.status = migrateStatus(status);
     if (slot_status) updateData.slot_status = slot_status;
 
     await updateBooking(id, updateData);
