@@ -258,9 +258,13 @@ function getPriceForHour(court: Court, hour: number): number {
 export default function CourtDetail() {
   const {
     selectedCourtId,
+    selectedCourtIds,
     user,
     setView,
     setSelectedCourt,
+    setSelectedCourtIds,
+    addSelectedCourtId,
+    removeSelectedCourtId,
     setSelectedDate,
     setSelectedTimeSlot,
   } = useAppStore()
@@ -409,13 +413,20 @@ export default function CourtDetail() {
 
   const handleReservar = useCallback(() => {
     if (!selectedTime || !selectedCourtId) return
+    // Add this court to the multi-court selection cart
     const endHour = parseInt(selectedTime.split(':')[0], 10) + 1
     const endTime = `${String(endHour).padStart(2, '0')}:00`
-    setSelectedCourt(selectedCourtId)
     setSelectedDate(formatDateISO(selectedDate))
     setSelectedTimeSlot(`${selectedTime} - ${endTime}`)
+    addSelectedCourtId(selectedCourtId)
+  }, [selectedTime, selectedCourtId, selectedDate, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
+
+  // Navigate to booking form with all selected courts
+  const handleGoToBooking = useCallback(() => {
+    if (selectedCourtIds.length === 0) return
+    setSelectedCourtIds(selectedCourtIds)
     setView('booking-form')
-  }, [selectedTime, selectedCourtId, selectedDate, setSelectedCourt, setSelectedDate, setSelectedTimeSlot, setView])
+  }, [selectedCourtIds, setSelectedCourtIds, setView])
 
   const handleClosePopup = useCallback(() => setPopupBooking(null), [])
 
@@ -832,7 +843,7 @@ export default function CourtDetail() {
         </motion.div>
       </div>
 
-      {/* ─── Reservar Button (User / Guest) ─── */}
+      {/* ─── Add to Cart Button (User: select slot) ─── */}
       {selectedTime && !isAdmin && (
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -853,9 +864,52 @@ export default function CourtDetail() {
                 onClick={handleReservar}
                 className="px-6 py-3 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
               >
-                <span className="material-symbols-outlined text-[20px]">sports</span>
-                Reservar
+                <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+                Agregar
               </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ─── Cart Bar: shows when courts are selected ─── */}
+      {selectedCourtIds.length > 0 && !isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-[#00ff41]/30"
+        >
+          <div className="max-w-4xl mx-auto p-4">
+            <div className="glass-card rounded-2xl p-4 border border-[#00ff41]/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">shopping_cart</span>
+                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                    {selectedCourtIds.length} cancha{selectedCourtIds.length > 1 ? 's' : ''} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeSelectedCourtId(selectedCourtId!)}
+                  className="text-xs text-cm-on-surface-variant hover:text-red-400 transition-colors font-[family-name:var(--font-inter)] flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Quitar última
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                    {selectedCourtIds.length}x {selectedTime} - {endTimeStr}
+                  </p>
+                </div>
+                <button
+                  onClick={handleGoToBooking}
+                  className="px-6 py-3 bg-[#00ff41] text-[#003907] font-bold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[20px]">sports</span>
+                  Reservar {selectedCourtIds.length} cancha{selectedCourtIds.length > 1 ? 's' : ''}
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>

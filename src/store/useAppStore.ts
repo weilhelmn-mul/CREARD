@@ -65,6 +65,7 @@ export interface User {
 interface AppState {
   currentView: ViewType
   selectedCourtId: string | null
+  selectedCourtIds: string[]  // Multiple courts for same date/time
   selectedDate: string | null
   selectedTimeSlot: string | null
   user: User | null
@@ -76,6 +77,10 @@ interface AppState {
 
   setView: (view: ViewType) => void
   setSelectedCourt: (courtId: string | null) => void
+  setSelectedCourtIds: (courtIds: string[]) => void
+  addSelectedCourtId: (courtId: string) => void
+  removeSelectedCourtId: (courtId: string) => void
+  clearSelectedCourtIds: () => void
   setSelectedDate: (date: string | null) => void
   setSelectedTimeSlot: (time: string | null) => void
   setUser: (user: User | null) => void
@@ -95,6 +100,7 @@ const persistedToken = loadFromStorage<string>(STORAGE_KEY_TOKEN)
 export const useAppStore = create<AppState>((set) => ({
   currentView: 'home',
   selectedCourtId: null,
+  selectedCourtIds: [],
   selectedDate: null,
   selectedTimeSlot: null,
   user: persistedUser,
@@ -123,6 +129,17 @@ export const useAppStore = create<AppState>((set) => ({
 
   setView: (view) => set({ currentView: view }),
   setSelectedCourt: (courtId) => set({ selectedCourtId: courtId }),
+  setSelectedCourtIds: (courtIds) => set({ selectedCourtIds: courtIds }),
+  addSelectedCourtId: (courtId) => set((state) => {
+    const ids = state.selectedCourtIds.includes(courtId)
+      ? state.selectedCourtIds
+      : [...state.selectedCourtIds, courtId]
+    return { selectedCourtIds: ids }
+  }),
+  removeSelectedCourtId: (courtId) => set((state) => ({
+    selectedCourtIds: state.selectedCourtIds.filter((id) => id !== courtId),
+  })),
+  clearSelectedCourtIds: () => set({ selectedCourtIds: [] }),
   setSelectedDate: (date) => set({ selectedDate: date }),
   setSelectedTimeSlot: (time) => set({ selectedTimeSlot: time }),
   setUser: (user) => {

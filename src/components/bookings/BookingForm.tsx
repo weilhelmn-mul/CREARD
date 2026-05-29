@@ -123,6 +123,7 @@ function calculatePriceForTimeSlot(
 export default function BookingForm() {
   const {
     selectedCourtId,
+    selectedCourtIds,
     selectedDate,
     selectedTimeSlot,
     user,
@@ -131,14 +132,17 @@ export default function BookingForm() {
     setSelectedCourt,
     setSelectedDate,
     setSelectedTimeSlot,
+    clearSelectedCourtIds,
   } = useAppStore()
 
-  const [court, setCourt] = useState<Court | null>(null)
+  const [courts, setCourts] = useState<Court[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [bookingRef, setBookingRef] = useState('')
-  const [bookingData, setBookingData] = useState<BookingResponse | null>(null)
+  const [bookingRefs, setBookingRefs] = useState<string[]>([])
+  const [bookingDataList, setBookingDataList] = useState<BookingResponse[]>([])
+  const [createdCount, setCreatedCount] = useState(0)
+  const [failedCount, setFailedCount] = useState(0)
 
   const [paymentMethod, setPaymentMethod] = useState('culqi')
   const [formStep, setFormStep] = useState<'form' | 'payment' | 'success'>('form')
@@ -156,41 +160,57 @@ export default function BookingForm() {
 
   const { start: startStr, end: endStr } = timeParts
 
-  // Calculate time-based pricing
-  const pricingResult = useMemo(() => {
-    if (!court || !startStr || !endStr) return { total: court?.pricePerHour || 0, breakdown: [] }
-    if (court.pricingSchedule && court.pricingSchedule.length > 0) {
-      const result = calculatePriceForTimeSlot(court.pricingSchedule, startStr, endStr)
-      if (result.total > 0) return result
-    }
-    // Fallback to flat pricePerHour
-    const [sh, sm] = startStr.split(':').map(Number)
-    const [eh, em] = endStr.split(':').map(Number)
-    const hours = Math.max((eh * 60 + em - sh * 60 - sm) / 60, 0.5)
-    return { total: court.pricePerHour * hours, breakdown: [] }
-  }, [court, startStr, endStr])
+  // Calculate pricing for all courts
+  const courtPricings = useMemo(() => {
+    return courts.map((c) => {
+      if (!startStr || !endStr) return { court: c, total: c.pricePerHour, breakdown: [] }
+      if (c.pricingSchedule && c.pricingSchedule.length > 0) {
+        const result = calculatePriceForTimeSlot(c.pricingSchedule, startStr, endStr)
+        if (result.total > 0) return { court: c, ...result }
+      }
+      const [sh, sm] = startStr.split(':').map(Number)
+      const [eh, em] = endStr.split(':').map(Number)
+      const hours = Math.max((eh * 60 + em - sh * 60 - sm) / 60, 0.5)
+      return { court: c, total: c.pricePerHour * hours, breakdown: [] }
+    })
+  }, [courts, startStr, endStr])
 
-  const totalPrice = pricingResult.total
+  const totalPrice = courtPricings.reduce((sum, cp) => sum + cp.total, 0)
   const advanceAmount = totalPrice * 0.5
   const remainingAmount = totalPrice * 0.5
 
-  /* ──── Fetch court ──── */
+  // For backward compat: first court (used in some places)
+  const court = courts[0] || null
+  const pricingResult = courtPricings[0] || { total: 0, breakdown: [] }
+
+  /* ──── Fetch courts (support multiple) ──── */
   useEffect(() => {
-    if (!selectedCourtId || !selectedTimeSlot) {
+    const courtIds = selectedCourtIds.length > 0 ? selectedCourtIds : (selectedCourtId ? [selectedCourtId] : [])
+    if (courtIds.length === 0 || !selectedTimeSlot) {
       setView('court-detail')
       return
     }
     let cancelled = false
     setLoading(true)
-    fetch(`/api/courts?id=${selectedCourtId}`)
-      .then((res) => res.json())
-      .then((data) => {
+    Promise.all(
+      courtIds.map((id) =>
+        fetch(`/api/courts?id=${id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.error) return null
+            return data
+          })
+          .catch(() => null)
+      )
+    )
+      .then((results) => {
         if (!cancelled) {
-          if (data.error) {
+          const validCourts = results.filter(Boolean) as Court[]
+          if (validCourts.length === 0) {
             setView('court-detail')
             return
           }
-          setCourt(data)
+          setCourts(validCourts)
           setLoading(false)
         }
       })
@@ -203,7 +223,7 @@ export default function BookingForm() {
     return () => {
       cancelled = true
     }
-  }, [selectedCourtId, selectedTimeSlot, setView])
+  }, [selectedCourtId, selectedCourtIds, selectedTimeSlot, setView])
 
   /* ──── Pre-fill from user ──── */
   useEffect(() => {
@@ -214,9 +234,9 @@ export default function BookingForm() {
     }
   }, [user])
 
-  /* ──── Submit: Create booking as 'pending', then go to payment step ──── */
+  /* ──── Submit: Create bookings for all courts, then go to payment step ──── */
   const handleSubmit = useCallback(async () => {
-    if (!court || !selectedDate || !timeParts.start || !timeParts.end) return
+    if (courts.length === 0 || !selectedDate || !timeParts.start || !timeParts.end) return
     if (!user?.id) {
       toast({ title: 'Inicia sesión', description: 'Debes iniciar sesión para reservar.', variant: 'destructive' })
       setView('login')
@@ -228,64 +248,84 @@ export default function BookingForm() {
     }
 
     setSubmitting(true)
-    try {
-      // Step 1: Create the booking with status 'pending' (payment not yet processed)
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          courtId: court.id,
-          userId: user.id,
-          date: selectedDate,
-          startTime: timeParts.start,
-          endTime: timeParts.end,
-          totalPrice,
-          advanceAmount,
-          remainingAmount,
-          status: 'reserved',
-          paymentMethod,
-        }),
-      })
+    let created: BookingResponse[] = []
+    let createdN = 0
+    let failedN = 0
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Error al crear reserva')
+    for (const c of courts) {
+      const cp = courtPricings.find((p) => p.court.id === c.id)
+      const courtTotal = cp?.total || c.pricePerHour
+      const courtAdv = courtTotal * 0.5
+      const courtRem = courtTotal - courtAdv
+
+      try {
+        const res = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            courtId: c.id,
+            userId: user.id,
+            date: selectedDate,
+            startTime: timeParts.start,
+            endTime: timeParts.end,
+            totalPrice: courtTotal,
+            advanceAmount: courtAdv,
+            remainingAmount: courtRem,
+            status: 'reserved',
+            paymentMethod,
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          failedN++
+          toast({
+            title: `Error en ${c.name}`,
+            description: data.error || 'Horario no disponible.',
+            variant: 'destructive',
+          })
+          continue
+        }
+
+        const booking = await res.json() as BookingResponse
+        created.push(booking)
+        createdN++
+      } catch {
+        failedN++
       }
-
-      const created: BookingResponse = await res.json()
-      const ref = getRefCode(created.id)
-      setBookingRef(ref)
-      setBookingData(created)
-
-      // Step 2: Go to Culqi payment step
-      setFormStep('payment')
-    } catch (error) {
-      toast({
-        title: 'Error al reservar',
-        description: error instanceof Error ? error.message : 'No se pudo crear la reserva. Intenta de nuevo.',
-        variant: 'destructive',
-      })
-    } finally {
-      setSubmitting(false)
     }
+
+    setCreatedCount(createdN)
+    setFailedCount(failedN)
+    setBookingDataList(created)
+    setBookingRefs(created.map((b) => getRefCode(b.id)))
+
+    if (createdN > 0) {
+      // Clear the court selection cart
+      clearSelectedCourtIds()
+      setFormStep('payment')
+    }
+
+    setSubmitting(false)
   }, [
-    court, selectedDate, timeParts, user, clientName, clientPhone,
+    courts, courtPricings, selectedDate, timeParts, user, clientName, clientPhone,
     totalPrice, advanceAmount, remainingAmount, paymentMethod, bookingDate,
-    addNotification, setView,
+    addNotification, setView, clearSelectedCourtIds,
   ])
 
   /* ──── Culqi payment success callback ──── */
   const handlePaymentSuccess = useCallback(() => {
     setFormStep('success')
     setSuccess(true)
-    if (bookingData) {
+    const courtNames = courts.map((c) => c.name).join(', ')
+    if (bookingDataList.length > 0) {
       addNotification({
-        title: 'Reserva confirmada',
-        message: `Reserva en ${court?.name} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRef}`,
+        title: `${bookingDataList.length} reserva${bookingDataList.length > 1 ? 's' : ''} confirmada${bookingDataList.length > 1 ? 's' : ''}`,
+        message: `Reserva en ${courtNames} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRefs.join(', ')}`,
         type: 'success',
       })
     }
-  }, [court, bookingData, bookingDate, timeParts.start, bookingRef, addNotification])
+  }, [courts, bookingDataList, bookingDate, timeParts.start, bookingRefs, addNotification])
 
   /* ──── Culqi payment error callback ──── */
   const handlePaymentError = useCallback((error: string) => {
@@ -359,7 +399,7 @@ export default function BookingForm() {
                 Pagar Adelanto
               </h1>
               <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
-                Ref: {bookingRef}
+                Ref: {bookingRefs.join(', ')}
               </p>
             </div>
           </div>
@@ -368,14 +408,11 @@ export default function BookingForm() {
           <div className="glass-card rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">
-                  {sportIcons[court.sport] || 'sports'}
-                </span>
+                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">sports</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] truncate">{court.name}</p>
-                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                  {formatDateShort(bookingDate)} · {timeParts.start} - {timeParts.end}
+                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                  {courts.length} cancha{courts.length > 1 ? 's' : ''} · {formatDateShort(bookingDate)} · {timeParts.start} - {timeParts.end}
                 </p>
               </div>
               <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">
@@ -388,10 +425,10 @@ export default function BookingForm() {
             </div>
           </div>
 
-          {/* Culqi Payment */}
-          {bookingData && (
+          {/* Culqi Payment - use first booking ID */}
+          {bookingDataList.length > 0 && (
             <CulqiPayButton
-              bookingId={bookingData.id}
+              bookingId={bookingDataList[0].id}
               totalAmount={totalPrice}
               remainingAmount={remainingAmount}
               paymentType="advance"
@@ -437,20 +474,34 @@ export default function BookingForm() {
 
           {/* ─── Summary Card ─── */}
           <div className="glass-card rounded-2xl p-4 mb-6">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-xl bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-[#00ff41] text-[28px]">
-                  {sportIcons[court.sport] || 'sports'}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base truncate">
-                  {court.name}
-                </p>
-                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
-                  {court.branch.name}, {court.branch.city}
-                </p>
-              </div>
+            <h3 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+              {courts.length} cancha{courts.length > 1 ? 's' : ''} seleccionada{courts.length > 1 ? 's' : ''}
+            </h3>
+            <div className="space-y-3">
+              {courts.map((c) => {
+                const cp = courtPricings.find((p) => p.court.id === c.id)
+                return (
+                  <div key={c.id} className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
+                        {sportIcons[c.sport] || 'sports'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">
+                        {c.name}
+                      </p>
+                      <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
+                        {c.branch.name}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)] flex-shrink-0">
+                      S/ {(cp?.total || 0).toFixed(2)}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -488,42 +539,22 @@ export default function BookingForm() {
             </h2>
 
             <div className="space-y-3">
-              {/* Time-based pricing breakdown */}
-              {pricingResult.breakdown.length > 0 && (
-                <>
-                  <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Desglose por horario:</p>
-                  {pricingResult.breakdown.map((b, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                        {b.label} ({b.hours}h × S/ {b.pricePerHour})
-                      </span>
-                      <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                        S/ {b.subtotal.toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
-                    <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                      Subtotal
-                    </span>
-                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                      S/ {totalPrice.toFixed(2)}
-                    </span>
-                  </div>
-                </>
-              )}
-
-              {/* Simple price (no schedule) */}
-              {pricingResult.breakdown.length === 0 && (
-                <div className="flex items-center justify-between">
+              {/* Per-court pricing */}
+              {courtPricings.map((cp) => (
+                <div key={cp.court.id} className="flex items-center justify-between">
                   <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    Precio por hora
+                    {cp.court.name}
+                    {cp.breakdown.length > 0 && (
+                      <span className="text-[10px] ml-1 text-cm-on-surface-variant/60">
+                        ({cp.breakdown.map((b) => `${b.label} ${b.hours}h`).join(' + ')})
+                      </span>
+                    )}
                   </span>
                   <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                    S/ {totalPrice.toFixed(2)}
+                    S/ {cp.total.toFixed(2)}
                   </span>
                 </div>
-              )}
+              ))}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -731,23 +762,22 @@ export default function BookingForm() {
                 Referencia de reserva
               </p>
               <p className="font-mono text-xl font-bold text-[#00ff41] text-glow tracking-wider">
-                {bookingRef}
+                {bookingRefs.join(' · ')}
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
-                    {sportIcons[court.sport] || 'sports'}
-                  </span>
+                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">sports</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] truncate">
-                    {court.name}
+                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                    {courts.map((c) => c.name).join(', ')}
                   </p>
                   <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    {court.branch.name}
+                    {createdCount} reserva{createdCount > 1 ? 's' : ''} creada{createdCount > 1 ? 's' : ''}
+                    {failedCount > 0 && ` · ${failedCount} fallida${failedCount > 1 ? 's' : ''}`}
                   </p>
                 </div>
               </div>
@@ -781,19 +811,19 @@ export default function BookingForm() {
                 </p>
               </div>
 
-              {bookingData?.paymentMethod && (
+              {bookingDataList.length > 0 && bookingDataList[0].paymentMethod && (
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant">
-                    {bookingData.paymentMethod === 'cash'
+                    {bookingDataList[0].paymentMethod === 'cash'
                       ? 'payments'
-                      : bookingData.paymentMethod === 'transfer'
+                      : bookingDataList[0].paymentMethod === 'transfer'
                       ? 'account_balance'
                       : 'phone_iphone'}
                   </span>
                   <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                     Pagado con{' '}
                     <span className="capitalize font-semibold text-cm-on-surface">
-                      {bookingData.paymentMethod}
+                      {bookingDataList[0].paymentMethod}
                     </span>
                   </span>
                 </div>
