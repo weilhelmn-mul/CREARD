@@ -219,6 +219,13 @@ export default function SearchView() {
                   <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-1 truncate">
                     {court.name}
                   </h3>
+                  {/* Court identifier badge for voley */}
+                  {court.sport === 'voley' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[10px] font-bold mb-2 font-[family-name:var(--font-sora)]">
+                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: '"FILL" 1' }}>sports_volleyball</span>
+                      {court.name.includes('A') ? 'Vóley Cancha A' : court.name.includes('B') ? 'Vóley Cancha B' : court.name}
+                    </span>
+                  )}
                   <div className="flex items-center gap-1 text-cm-on-surface-variant text-xs mb-2">
                     <span className="material-symbols-outlined text-[14px]">location_on</span>
                     <span className="font-[family-name:var(--font-inter)]">

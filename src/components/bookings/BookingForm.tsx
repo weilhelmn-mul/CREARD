@@ -492,6 +492,12 @@ export default function BookingForm() {
                       <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">
                         {c.name}
                       </p>
+                      {c.sport === 'voley' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-400 mt-0.5 font-[family-name:var(--font-inter)]">
+                          <span className="material-symbols-outlined text-[10px]">sports_volleyball</span>
+                          Vóley — {c.name.includes('A') ? 'Cancha A' : c.name.includes('B') ? 'Cancha B' : 'Individual'}
+                        </span>
+                      )}
                       <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
                         {c.branch.name}
                       </p>

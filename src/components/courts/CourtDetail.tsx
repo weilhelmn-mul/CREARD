@@ -294,6 +294,7 @@ export default function CourtDetail() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [bookings, setBookings] = useState<BookingInfo[]>([])
   const [activeImageIdx, setActiveImageIdx] = useState(0)
+  const [courtNamesMap, setCourtNamesMap] = useState<Record<string, string>>({})
 
   // Admin booking popup
   const [popupBooking, setPopupBooking] = useState<BookingInfo | null>(null)
@@ -445,13 +446,17 @@ export default function CourtDetail() {
 
   const handleReservar = useCallback(() => {
     if (!selectedTime || !selectedCourtId) return
+    // Store court name in the map for cart display
+    if (court) {
+      setCourtNamesMap((prev) => ({ ...prev, [court.id]: court.name }))
+    }
     // Add this court to the multi-court selection cart
     const endHour = parseInt(selectedTime.split(':')[0], 10) + 1
     const endTime = `${String(endHour).padStart(2, '0')}:00`
     setSelectedDate(formatDateISO(selectedDate))
     setSelectedTimeSlot(`${selectedTime} - ${endTime}`)
     addSelectedCourtId(selectedCourtId)
-  }, [selectedTime, selectedCourtId, selectedDate, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
+  }, [selectedTime, selectedCourtId, selectedDate, court, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
 
   // Navigate to booking form with all selected courts
   const handleGoToBooking = useCallback(() => {
@@ -921,7 +926,7 @@ export default function CourtDetail() {
         >
           <div className="max-w-4xl mx-auto p-4">
             <div className="glass-card rounded-2xl p-4 border border-[#00ff41]/20">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#00ff41] text-[20px]">shopping_cart</span>
                   <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
@@ -936,10 +941,25 @@ export default function CourtDetail() {
                   Quitar última
                 </button>
               </div>
+
+              {/* Court names list */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {selectedCourtIds.map((cid) => (
+                  <span key={cid} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#00ff41]/10 border border-[#00ff41]/20">
+                    <span className="material-symbols-outlined text-[12px] text-[#00ff41]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                      {courtNamesMap[cid] && courtNamesMap[cid].includes('Vóley') ? 'sports_volleyball' : 'sports_soccer'}
+                    </span>
+                    <span className="text-xs font-semibold text-[#00ff41] font-[family-name:var(--font-sora)]">
+                      {courtNamesMap[cid] || cid}
+                    </span>
+                  </span>
+                ))}
+              </div>
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    {selectedCourtIds.length}x {selectedTime} - {endTimeStr}
+                    {selectedTime} - {endTimeStr}
                   </p>
                 </div>
                 <button
