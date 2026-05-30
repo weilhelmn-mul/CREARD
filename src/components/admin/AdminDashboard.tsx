@@ -81,7 +81,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'contenido'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'canchas' | 'contenido'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -109,6 +109,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'reservas',  label: 'Reservas',  icon: 'calendar_month' },
   { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
+  { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
 ]
@@ -1103,6 +1104,179 @@ function ContentTab() {
         )}
       </AnimatePresence>
     </>
+  )
+}
+
+/* ═══════════════════════════════════════════════════
+   COURTS MANAGEMENT TAB
+   ═══════════════════════════════════════════════════ */
+
+function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>; onRefresh: () => void }) {
+  const [migrating, setMigrating] = useState(false)
+  const [editingCourt, setEditingCourt] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editPrice, setEditPrice] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleMigrate = async () => {
+    setMigrating(true)
+    try {
+      const res = await fetch('/api/migrate/courts', { method: 'PUT', headers: getAuthHeaders() })
+      if (res.ok) {
+        toast({ title: 'Migración exitosa', description: 'Canchas actualizadas correctamente en Firestore.' })
+        onRefresh()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Error' }))
+        toast({ title: 'Error en migración', description: err.error || 'No se pudo migrar', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+    } finally {
+      setMigrating(false)
+    }
+  }
+
+  const handleSaveCourt = async () => {
+    if (!editingCourt || !editName) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/courts', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingCourt, name: editName, price_per_hour: parseFloat(editPrice) || undefined }),
+      })
+      if (res.ok) {
+        toast({ title: 'Cancha actualizada', description: `"${editName}" guardada correctamente.` })
+        setEditingCourt(null)
+        onRefresh()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Error' }))
+        toast({ title: 'Error', description: err.error || 'No se pudo actualizar', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const startEdit = (court: { id: string; name: string; pricePerHour?: number }) => {
+    setEditingCourt(court.id)
+    setEditName(court.name)
+    setEditPrice(String(court.pricePerHour || 0))
+  }
+
+  const sportLabels: Record<string, string> = { futbol: 'Fútbol 7', voley: 'Vóley' }
+  const sportColors: Record<string, string> = { futbol: 'bg-green-500/15 text-green-400 border-green-500/30', voley: 'bg-amber-500/15 text-amber-400 border-amber-500/30' }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestión de Canchas</h2>
+          <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
+            {allCourts.length} canchas registradas en el sistema
+          </p>
+        </div>
+        <button
+          onClick={handleMigrate}
+          disabled={migrating}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#00ff41]/10 text-[#00ff41] text-sm font-semibold rounded-xl border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all disabled:opacity-50 font-[family-name:var(--font-sora)]"
+        >
+          <span className="material-symbols-outlined text-[18px]">{migrating ? 'progress_activity' : 'sync'}</span>
+          {migrating ? 'Migrando...' : 'Sincronizar Canchas'}
+        </button>
+      </div>
+
+      {/* Courts List */}
+      <div className="space-y-3">
+        {allCourts.map((court) => (
+          <div key={court.id} className="glass-card rounded-xl p-4">
+            {editingCourt === court.id ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Nombre</label>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Precio base (S/)</label>
+                    <input
+                      type="number"
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setEditingCourt(null)}
+                    className="px-3 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveCourt}
+                    disabled={saving}
+                    className="px-4 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {saving ? <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span> : <span className="material-symbols-outlined text-[14px]">check</span>}
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
+                      {sportIcons[court.sport || 'futbol'] || 'sports'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">{court.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sportColors[court.sport || ''] || 'bg-gray-500/15 text-gray-400 border-gray-500/30'}`}>
+                        {sportLabels[court.sport || 'futbol'] || court.sport}
+                      </span>
+                      <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                        ID: {court.id}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-sm">S/ {court.pricePerHour || 0}</span>
+                  <button
+                    onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number })}
+                    className="p-2 rounded-lg hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Info */}
+      <div className="glass-card rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <span className="material-symbols-outlined text-[#00ff41] text-[20px] mt-0.5">info</span>
+          <div className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] space-y-1">
+            <p><span className="font-semibold text-cm-on-surface">Sincronizar Canchas</span> actualiza los nombres, deportes, precios y horarios de todas las canchas en la base de datos para que coincidan con la configuración correcta del sistema.</p>
+            <p>Configuración: 4 canchas de Fútbol 7 (S/35 día, S/50 noche) + 2 canchas de Vóley A/B (S/30 día, S/45 noche).</p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
@@ -2644,6 +2818,11 @@ export default function AdminDashboard() {
             <motion.div key="usuarios" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
               <UsersTab />
             </motion.div>
+          )}
+
+          {/* ─── CANCHAS (Court Management) ─── */}
+          {activeTab === 'canchas' && (
+            <CourtsTab allCourts={allCourts} onRefresh={fetchData} />
           )}
 
           {/* ─── CONTENIDO (Edit Home Page) ─── */}
