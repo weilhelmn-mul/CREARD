@@ -36,25 +36,72 @@ interface SportItem {
   pricingDetails?: PricingDetail[]
 }
 
-interface SellingPoint {
+export interface SellingPoint {
   icon: string
   title: string
   description: string
   highlight: boolean
 }
 
-interface PaymentMethod {
+export interface PaymentMethod {
   name: string
   icon: string
   color: string
 }
 
-interface StepItem {
+export interface StepItem {
   number: string
   title: string
   description: string
   icon: string
   detail: string
+}
+
+// ── CMS: Custom section types ──
+export interface CustomSection {
+  id: string
+  type: 'banner' | 'notice' | 'highlight' | 'cta' | 'gallery'
+  visible: boolean
+  title: string
+  subtitle?: string
+  image?: string
+  link?: string
+  ctaText?: string
+  items?: Array<{ image: string; title?: string; description?: string }>
+  order: number
+  createdAt?: unknown
+}
+
+// ── CMS: Active promotion ──
+export interface ActivePromotion {
+  id: string
+  title: string
+  description: string
+  discount?: string
+  validFrom?: string
+  validUntil?: string
+  active: boolean
+  image?: string
+}
+
+// ── CMS: Hero banner ──
+export interface HeroBanner {
+  id: string
+  image: string
+  title?: string
+  subtitle?: string
+  link?: string
+  active: boolean
+}
+
+// ── Section visibility map ──
+export interface SectionVisibility {
+  hero: boolean
+  sportsSection: boolean
+  featuredCourts: boolean
+  todaysSchedule: boolean
+  promoBanner: boolean
+  howItWorks: boolean
 }
 
 export interface SiteSettings {
@@ -92,13 +139,24 @@ export interface SiteSettings {
     supportText: string
     steps: StepItem[]
   }
+  // CMS fields
+  sectionOrder: string[]
+  sectionVisibility: SectionVisibility
+  customSections: CustomSection[]
+  activePromotions: ActivePromotion[]
+  heroBanners: HeroBanner[]
 }
 
 interface SiteSettingsContextValue {
   settings: SiteSettings | null
   loading: boolean
   refresh: () => Promise<void>
-  saveSection: (section: keyof SiteSettings, data: SiteSettings[keyof SiteSettings]) => Promise<boolean>
+  saveSection: (section: string, data: unknown) => Promise<boolean>
+  saveFullSettings: (data: SiteSettings) => Promise<boolean>
+  toggleSectionVisibility: (sectionKey: string) => Promise<boolean>
+  reorderSections: (newOrder: string[]) => Promise<boolean>
+  saveCustomSection: (section: CustomSection) => Promise<boolean>
+  removeCustomSection: (sectionId: string) => Promise<boolean>
 }
 
 const SiteSettingsContext = createContext<SiteSettingsContextValue>({
@@ -106,6 +164,11 @@ const SiteSettingsContext = createContext<SiteSettingsContextValue>({
   loading: true,
   refresh: async () => {},
   saveSection: async () => false,
+  saveFullSettings: async () => false,
+  toggleSectionVisibility: async () => false,
+  reorderSections: async () => false,
+  saveCustomSection: async () => false,
+  removeCustomSection: async () => false,
 })
 
 export function useSiteSettings() {
@@ -138,11 +201,9 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     fetchSettings()
   }, [fetchSettings])
 
-  const saveSection = useCallback(
-    async (section: keyof SiteSettings, data: SiteSettings[keyof SiteSettings]): Promise<boolean> => {
+  const persistSettings = useCallback(
+    async (updated: SiteSettings): Promise<boolean> => {
       try {
-        if (!settings) return false
-        const updated = { ...settings, [section]: data }
         const res = await fetch('/api/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -157,11 +218,93 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       }
       return false
     },
-    [settings]
+    []
+  )
+
+  const saveSection = useCallback(
+    async (section: string, data: unknown): Promise<boolean> => {
+      if (!settings) return false
+      const updated = { ...settings, [section]: data }
+      return persistSettings(updated)
+    },
+    [settings, persistSettings]
+  )
+
+  const saveFullSettings = useCallback(
+    async (data: SiteSettings): Promise<boolean> => {
+      return persistSettings(data)
+    },
+    [persistSettings]
+  )
+
+  const toggleSectionVisibility = useCallback(
+    async (sectionKey: string): Promise<boolean> => {
+      if (!settings) return false
+      const visibility = { ...settings.sectionVisibility }
+      if (sectionKey in visibility) {
+        ;(visibility as Record<string, boolean>)[sectionKey] = !(visibility as Record<string, boolean>)[sectionKey]
+      }
+      return persistSettings({ ...settings, sectionVisibility: visibility })
+    },
+    [settings, persistSettings]
+  )
+
+  const reorderSections = useCallback(
+    async (newOrder: string[]): Promise<boolean> => {
+      if (!settings) return false
+      return persistSettings({ ...settings, sectionOrder: newOrder })
+    },
+    [settings, persistSettings]
+  )
+
+  const saveCustomSection = useCallback(
+    async (section: CustomSection): Promise<boolean> => {
+      if (!settings) return false
+      const existing = settings.customSections.findIndex((s) => s.id === section.id)
+      let updatedSections: CustomSection[]
+      if (existing >= 0) {
+        updatedSections = [...settings.customSections]
+        updatedSections[existing] = section
+      } else {
+        updatedSections = [...settings.customSections, section]
+      }
+      // Also add to sectionOrder if new
+      const sectionKey = `custom_${section.id}`
+      const sectionOrder = settings.sectionOrder.includes(sectionKey)
+        ? settings.sectionOrder
+        : [...settings.sectionOrder, sectionKey]
+      return persistSettings({ ...settings, customSections: updatedSections, sectionOrder })
+    },
+    [settings, persistSettings]
+  )
+
+  const removeCustomSection = useCallback(
+    async (sectionId: string): Promise<boolean> => {
+      if (!settings) return false
+      const sectionKey = `custom_${sectionId}`
+      return persistSettings({
+        ...settings,
+        customSections: settings.customSections.filter((s) => s.id !== sectionId),
+        sectionOrder: settings.sectionOrder.filter((k) => k !== sectionKey),
+      })
+    },
+    [settings, persistSettings]
   )
 
   return (
-    <SiteSettingsContext.Provider value={{ settings, loading, refresh: fetchSettings, saveSection }}>
+    <SiteSettingsContext.Provider
+      value={{
+        settings,
+        loading,
+        refresh: fetchSettings,
+        saveSection,
+        saveFullSettings,
+        toggleSectionVisibility,
+        reorderSections,
+        saveCustomSection,
+        removeCustomSection,
+      }}
+    >
       {children}
     </SiteSettingsContext.Provider>
   )

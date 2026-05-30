@@ -140,6 +140,22 @@ function getDefaults() {
         },
       ],
     },
+    // ── CMS: Section order & visibility ──
+    sectionOrder: ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks'],
+    sectionVisibility: {
+      hero: true,
+      sportsSection: true,
+      featuredCourts: true,
+      todaysSchedule: true,
+      promoBanner: true,
+      howItWorks: true,
+    },
+    // ── CMS: Custom sections ──
+    customSections: [],
+    // ── CMS: Active promotions ──
+    activePromotions: [],
+    // ── CMS: Hero banners ──
+    heroBanners: [],
   }
 }
 
@@ -154,8 +170,8 @@ export async function GET() {
 
     if (docSnap.exists) {
       const data = docSnap.data()
-      // Always patch sportsSection with latest pricing to keep prices in sync
       const defaults = getDefaults()
+      // Always patch sportsSection with latest pricing to keep prices in sync
       if (data.sportsSection?.sports?.length) {
         data.sportsSection = {
           ...data.sportsSection,
@@ -167,6 +183,12 @@ export async function GET() {
           }),
         }
       }
+      // Backward compat: patch new CMS fields if missing
+      if (!data.sectionOrder) data.sectionOrder = defaults.sectionOrder
+      if (!data.sectionVisibility) data.sectionVisibility = defaults.sectionVisibility
+      if (!data.customSections) data.customSections = defaults.customSections
+      if (!data.activePromotions) data.activePromotions = defaults.activePromotions
+      if (!data.heroBanners) data.heroBanners = defaults.heroBanners
       return NextResponse.json(data)
     }
 

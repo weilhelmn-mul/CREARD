@@ -1,13 +1,30 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
-import { useSiteSettings } from '@/context/SiteSettingsContext'
+import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner } from '@/context/SiteSettingsContext'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -119,32 +136,133 @@ function compareTimestamps(a: unknown, b: unknown): number {
 }
 
 /* ═══════════════════════════════════════════════════
-   CONTENT EDITOR TAB
+   CMS CONTENT EDITOR TAB
    ═══════════════════════════════════════════════════ */
+
+/* ─── Sortable Section Card ─── */
+function SortableSectionCard({
+  id,
+  label,
+  icon,
+  color,
+  isCustom,
+  visible,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  id: string
+  label: string
+  icon: string
+  color: string
+  isCustom: boolean
+  visible: boolean
+  onToggle: () => void
+  onEdit: () => void
+  onDelete?: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`glass-card rounded-xl p-3 flex items-center gap-3 transition-all ${isDragging ? 'opacity-60 shadow-xl z-50' : ''} ${!visible ? 'opacity-40' : ''}`}
+    >
+      {/* Drag handle */}
+      <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-cm-on-surface-variant/40 hover:text-cm-on-surface-variant p-1">
+        <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
+      </button>
+
+      {/* Icon */}
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+        <span className="material-symbols-outlined text-[18px] text-white" style={{ fontVariationSettings: '"FILL" 1' }}>
+          {icon}
+        </span>
+      </div>
+
+      {/* Label */}
+      <span className="flex-1 text-sm font-semibold text-cm-on-surface truncate font-[family-name:var(--font-sora)]">
+        {label}
+      </span>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button type="button" onClick={onToggle} className={`p-1.5 rounded-lg transition-colors ${visible ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40 hover:bg-white/5'}`} title={visible ? 'Ocultar' : 'Mostrar'}>
+          <span className="material-symbols-outlined text-[16px]">{visible ? 'visibility' : 'visibility_off'}</span>
+        </button>
+        <button type="button" onClick={onEdit} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Editar">
+          <span className="material-symbols-outlined text-[16px]">edit</span>
+        </button>
+        {isCustom && onDelete && (
+          <button type="button" onClick={onDelete} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
+            <span className="material-symbols-outlined text-[16px]">delete</span>
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Main ContentTab ─── */
 function ContentTab() {
-  const { settings, saveSection } = useSiteSettings()
-  const [editSection, setEditSection] = useState<'hero' | 'sportsSection' | 'promoBanner' | 'howItWorks' | null>(null)
+  const { settings, saveSection, saveFullSettings, toggleSectionVisibility, reorderSections, saveCustomSection, removeCustomSection } = useSiteSettings()
+  const [activeSubTab, setActiveSubTab] = useState<'secciones' | 'promociones' | 'banners'>('secciones')
+  const [editSection, setEditSection] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Record<string, unknown> | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
 
-  const sections = [
-    { key: 'hero' as const, label: 'Hero Principal', icon: 'hero', desc: 'Título, subtítulo, badge, estadísticas, imágenes', color: 'text-cm-primary' },
-    { key: 'sportsSection' as const, label: 'Instalaciones', icon: 'emoji_events', desc: 'Deportes, precios, amenidades, imágenes', color: 'text-green-400' },
-    { key: 'promoBanner' as const, label: 'Promociones', icon: 'workspace_premium', desc: 'Puntos de venta, métodos de pago, CTA', color: 'text-purple-400' },
-    { key: 'howItWorks' as const, label: 'Cómo Funciona', icon: 'auto_awesome', desc: 'Pasos del proceso de reserva', color: 'text-blue-400' },
-  ]
+  // Custom section editing
+  const [editingCustom, setEditingCustom] = useState<CustomSection | null>(null)
+  const [customForm, setCustomForm] = useState<CustomSection | null>(null)
+  const [savingCustom, setSavingCustom] = useState(false)
 
-  const openEditor = (sectionKey: 'hero' | 'sportsSection' | 'promoBanner' | 'howItWorks') => {
+  // Promotions editing
+  const [editingPromo, setEditingPromo] = useState<ActivePromotion | null>(null)
+  const [promoForm, setPromoForm] = useState<ActivePromotion | null>(null)
+  const [savingPromo, setSavingPromo] = useState(false)
+
+  // Hero banners editing
+  const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null)
+  const [bannerForm, setBannerForm] = useState<HeroBanner | null>(null)
+  const [savingBanner, setSavingBanner] = useState(false)
+
+  // Preview modal
+  const [showPreview, setShowPreview] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  // Section metadata map
+  const sectionMeta: Record<string, { label: string; icon: string; color: string; isCustom: boolean }> = {
+    hero: { label: 'Hero Principal', icon: 'hero', color: 'bg-cm-primary', isCustom: false },
+    sportsSection: { label: 'Instalaciones', icon: 'emoji_events', color: 'bg-green-500', isCustom: false },
+    featuredCourts: { label: 'Canchas Destacadas', icon: 'sports_soccer', color: 'bg-teal-500', isCustom: false },
+    todaysSchedule: { label: 'Agenda de Hoy', icon: 'calendar_month', color: 'bg-amber-500', isCustom: false },
+    promoBanner: { label: 'Promociones', icon: 'workspace_premium', color: 'bg-purple-500', isCustom: false },
+    howItWorks: { label: 'Cómo Funciona', icon: 'auto_awesome', color: 'bg-sky-500', isCustom: false },
+  }
+
+  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks']
+  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, todaysSchedule: true, promoBanner: true, howItWorks: true }
+  const customSections = settings?.customSections || []
+
+  const openEditor = (sectionKey: string) => {
     if (!settings) return
     setEditSection(sectionKey)
-    setEditForm({ ...(settings[sectionKey] as Record<string, unknown>) })
+    if (sectionKey in settings) {
+      setEditForm({ ...(settings[sectionKey as keyof typeof settings] as Record<string, unknown>) })
+    }
   }
 
   const handleSave = async () => {
-    if (!editSection || !editForm) return
+    if (!editSection || !editForm || !settings) return
     setSaving(true)
-    const ok = await saveSection(editSection, editForm as never)
+    const ok = await saveSection(editSection, editForm)
     setSaving(false)
     if (ok) {
       setEditSection(null)
@@ -155,7 +273,119 @@ function ContentTab() {
     }
   }
 
-  /* ─── Image upload handler ─── */
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id || !settings) return
+    const oldIndex = sectionOrder.indexOf(active.id as string)
+    const newIndex = sectionOrder.indexOf(over.id as string)
+    if (oldIndex < 0 || newIndex < 0) return
+    const newOrder = arrayMove(sectionOrder, oldIndex, newIndex)
+    await reorderSections(newOrder)
+    toast({ title: 'Orden actualizado', description: 'Las secciones se reordenaron correctamente' })
+  }
+
+  const addCustomSection = () => {
+    const id = `cs_${Date.now()}`
+    const newSection: CustomSection = {
+      id, type: 'banner', visible: true, title: 'Nueva sección',
+      subtitle: '', image: '', link: '', ctaText: '', items: [], order: customSections.length,
+    }
+    setEditingCustom(newSection)
+    setCustomForm({ ...newSection })
+  }
+
+  const handleSaveCustom = async () => {
+    if (!customForm || !settings) return
+    setSavingCustom(true)
+    const ok = await saveCustomSection(customForm)
+    setSavingCustom(false)
+    if (ok) {
+      setEditingCustom(null)
+      setCustomForm(null)
+      toast({ title: 'Sección guardada', description: 'La sección personalizada fue guardada' })
+    } else {
+      toast({ title: 'Error', description: 'No se pudo guardar la sección', variant: 'destructive' })
+    }
+  }
+
+  const handleDeleteCustom = async (sectionId: string) => {
+    if (!confirm('¿Eliminar esta sección personalizada?')) return
+    const ok = await removeCustomSection(sectionId)
+    if (ok) toast({ title: 'Sección eliminada' })
+    else toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' })
+  }
+
+  // Promotions CRUD
+  const addPromotion = () => {
+    const newPromo: ActivePromotion = {
+      id: `promo_${Date.now()}`, title: '', description: '', discount: '', validFrom: '', validUntil: '', active: true, image: '',
+    }
+    setEditingPromo(newPromo)
+    setPromoForm({ ...newPromo })
+  }
+
+  const handleSavePromo = async () => {
+    if (!promoForm || !settings) return
+    setSavingPromo(true)
+    const existing = settings.activePromotions.findIndex((p) => p.id === promoForm.id)
+    let updated: ActivePromotion[]
+    if (existing >= 0) { updated = [...settings.activePromotions]; updated[existing] = promoForm }
+    else { updated = [...settings.activePromotions, promoForm] }
+    const ok = await saveFullSettings({ ...settings, activePromotions: updated })
+    setSavingPromo(false)
+    if (ok) { setEditingPromo(null); setPromoForm(null); toast({ title: 'Promoción guardada' }) }
+    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+  }
+
+  const togglePromoActive = async (promoId: string) => {
+    if (!settings) return
+    const updated = settings.activePromotions.map((p) => p.id === promoId ? { ...p, active: !p.active } : p)
+    await saveFullSettings({ ...settings, activePromotions: updated })
+  }
+
+  const deletePromo = async (promoId: string) => {
+    if (!confirm('¿Eliminar esta promoción?')) return
+    if (!settings) return
+    const ok = await saveFullSettings({ ...settings, activePromotions: settings.activePromotions.filter((p) => p.id !== promoId) })
+    if (ok) toast({ title: 'Promoción eliminada' })
+  }
+
+  // Hero Banners CRUD
+  const addHeroBanner = () => {
+    const newBanner: HeroBanner = {
+      id: `hb_${Date.now()}`, image: '', title: '', subtitle: '', link: '', active: true,
+    }
+    setEditingBanner(newBanner)
+    setBannerForm({ ...newBanner })
+  }
+
+  const handleSaveBanner = async () => {
+    if (!bannerForm || !settings) return
+    setSavingBanner(true)
+    const existing = settings.heroBanners.findIndex((b) => b.id === bannerForm.id)
+    let updated: HeroBanner[]
+    if (existing >= 0) { updated = [...settings.heroBanners]; updated[existing] = bannerForm }
+    else { updated = [...settings.heroBanners, bannerForm] }
+    const ok = await saveFullSettings({ ...settings, heroBanners: updated })
+    setSavingBanner(false)
+    if (ok) { setEditingBanner(null); setBannerForm(null); toast({ title: 'Banner guardado' }) }
+    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+  }
+
+  const toggleBannerActive = async (bannerId: string) => {
+    if (!settings) return
+    const updated = settings.heroBanners.map((b) => b.id === bannerId ? { ...b, active: !b.active } : b)
+    await saveFullSettings({ ...settings, heroBanners: updated })
+  }
+
+  const deleteBanner = async (bannerId: string) => {
+    if (!confirm('¿Eliminar este banner?')) return
+    if (!settings) return
+    const ok = await saveFullSettings({ ...settings, heroBanners: settings.heroBanners.filter((b) => b.id !== bannerId) })
+    if (ok) toast({ title: 'Banner eliminado' })
+  }
+
+  /* ─── Image upload ─── */
   const handleUploadImage = async (file: File, targetPath: string) => {
     setUploading(targetPath)
     try {
@@ -167,10 +397,9 @@ function ContentTab() {
       if (res.ok) {
         const data = await res.json()
         updateField(targetPath, data.url)
-        toast({ title: 'Imagen subida', description: 'La imagen se ha cargado correctamente' })
+        toast({ title: 'Imagen subida' })
       } else {
-        const err = await res.json()
-        toast({ title: 'Error al subir', description: err.error || 'No se pudo subir la imagen', variant: 'destructive' })
+        toast({ title: 'Error al subir', description: 'No se pudo subir la imagen', variant: 'destructive' })
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
@@ -185,9 +414,7 @@ function ContentTab() {
     const copy = { ...editForm }
     let target: Record<string, unknown> = copy
     for (let i = 0; i < keys.length - 1; i++) {
-      if (!target[keys[i]] || typeof target[keys[i]] !== 'object') {
-        target[keys[i]] = {}
-      }
+      if (!target[keys[i]] || typeof target[keys[i]] !== 'object') target[keys[i]] = {}
       target = target[keys[i]] as Record<string, unknown>
     }
     target[keys[keys.length - 1]] = value
@@ -199,11 +426,8 @@ function ContentTab() {
     const keys = path.split('.')
     let target: unknown = editForm
     for (const key of keys) {
-      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) {
-        target = (target as Record<string, unknown>)[key]
-      } else {
-        return ''
-      }
+      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) target = (target as Record<string, unknown>)[key]
+      else return ''
     }
     return String(target ?? '')
   }
@@ -213,16 +437,13 @@ function ContentTab() {
     const keys = path.split('.')
     let target: unknown = editForm
     for (const key of keys) {
-      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) {
-        target = (target as Record<string, unknown>)[key]
-      } else {
-        return []
-      }
+      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) target = (target as Record<string, unknown>)[key]
+      else return []
     }
     return Array.isArray(target) ? target : []
   }
 
-  const updateArrayItem = (path: string, idx: number, field: string, value: string | number) => {
+  const updateArrayItem = (path: string, idx: number, field: string, value: string | number | boolean) => {
     const arr = getArray(path)
     const copy = [...arr]
     copy[idx] = { ...(copy[idx] as Record<string, unknown>), [field]: value }
@@ -239,26 +460,8 @@ function ContentTab() {
     updateField(path, arr.filter((_, i) => i !== idx))
   }
 
-  const updateArrayString = (path: string, idx: number, value: string) => {
-    const arr = getArray(path) as string[]
-    const copy = [...arr]
-    copy[idx] = value
-    updateField(path, copy)
-  }
-
-  const addArrayString = (path: string) => {
-    const arr = getArray(path) as string[]
-    const val = prompt('Nuevo elemento:')
-    if (val?.trim()) updateField(path, [...arr, val.trim()])
-  }
-
-  const removeArrayString = (path: string, idx: number) => {
-    const arr = getArray(path) as string[]
-    updateField(path, arr.filter((_, i) => i !== idx))
-  }
-
   /* ─── Reusable Image Uploader ─── */
-  const ImageUploader = ({ label, path, currentUrl }: { label: string; path: string; currentUrl?: string }) => (
+  const ImageUploader = ({ label, path, currentUrl, onUpload }: { label: string; path: string; currentUrl?: string; onUpload?: (url: string) => void }) => (
     <div>
       <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">{label}</label>
       <div className="space-y-2">
@@ -266,42 +469,22 @@ function ContentTab() {
           <div className="relative group rounded-xl overflow-hidden border border-white/10">
             <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => updateField(path, '')}
-                className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors"
-              >
+              <button type="button" onClick={() => { updateField(path, ''); onUpload?.('') }} className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors">
                 <span className="material-symbols-outlined text-[16px]">delete</span>
               </button>
             </div>
           </div>
         )}
         <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
-          uploading === path
-            ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary'
-            : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
+          uploading === path ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary' : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
         }`}>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) handleUploadImage(file, path)
-              e.target.value = ''
-            }}
-          />
-          {uploading === path ? (
-            <>
-              <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
-              <span className="text-xs font-medium">Subiendo...</span>
-            </>
-          ) : (
-            <>
-              <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
-              <span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span>
-            </>
-          )}
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleUploadImage(file, path)
+            e.target.value = ''
+          }} />
+          {uploading === path ? (<><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span className="text-xs font-medium">Subiendo...</span></>)
+            : (<><span className="material-symbols-outlined text-[18px]">cloud_upload</span><span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span></>)}
         </label>
       </div>
     </div>
@@ -319,83 +502,230 @@ function ContentTab() {
   return (
     <>
       <motion.div key="contenido" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-        <div className="mb-6">
-          <h2 className="font-[family-name:var(--font-sora)] font-bold text-xl text-cm-on-surface">Editor de Contenido</h2>
-          <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
-            Modifica el contenido visible en la página de inicio
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h2 className="font-[family-name:var(--font-sora)] font-bold text-xl text-cm-on-surface">CMS de Inicio</h2>
+            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+              Administra todo el contenido de la página de inicio
+            </p>
+          </div>
+          <button
+            onClick={() => setShowPreview(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cm-primary/10 text-cm-primary border border-cm-primary/20 text-xs font-bold hover:bg-cm-primary/20 transition-all"
+          >
+            <span className="material-symbols-outlined text-[16px]">visibility</span>
+            Vista Previa
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {sections.map((sec, i) => (
-            <motion.button
-              key={sec.key}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => openEditor(sec.key)}
-              className="glass-card rounded-xl p-5 text-left hover:border-cm-primary/30 hover:shadow-[0_0_20px_rgba(0,255,65,0.08)] transition-all duration-300 group"
+        {/* Sub-tabs */}
+        <div className="flex items-center gap-2 mb-6">
+          {([
+            { key: 'secciones' as const, label: 'Secciones', icon: 'dashboard' },
+            { key: 'promociones' as const, label: 'Promociones', icon: 'local_offer' },
+            { key: 'banners' as const, label: 'Banners Hero', icon: 'view_carousel' },
+          ]).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveSubTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeSubTab === tab.key
+                  ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                  : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
+              }`}
             >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-cm-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-cm-primary/20 transition-colors">
-                  <span className={`material-symbols-outlined text-[24px] ${sec.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>
-                    {sec.icon}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface group-hover:text-cm-primary transition-colors">
-                    {sec.label}
-                  </h3>
-                  <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
-                    {sec.desc}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2 text-cm-primary text-[10px] font-semibold">
-                    <span className="material-symbols-outlined text-[14px]">edit</span>
-                    Editar
-                  </div>
-                </div>
-                <span className="material-symbols-outlined text-cm-on-surface-variant/30 group-hover:text-cm-primary group-hover:translate-x-0.5 transition-all">
-                  arrow_forward
-                </span>
-              </div>
-            </motion.button>
+              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+              {tab.label}
+              {tab.key === 'promociones' && settings.activePromotions?.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.activePromotions.length}</span>
+              )}
+              {tab.key === 'banners' && settings.heroBanners?.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.heroBanners.length}</span>
+              )}
+            </button>
           ))}
         </div>
 
-        {/* Quick Preview */}
-        <div className="mt-6 glass-card rounded-xl p-5">
-          <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface mb-3">Vista previa rápida</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
-              <span className="text-cm-on-surface-variant font-semibold">Hero: </span>
-              <span className="text-cm-on-surface">{settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span></span>
+        {/* ═══════ SECCIONES TAB ═══════ */}
+        {activeSubTab === 'secciones' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Orden de secciones</h3>
+              <button
+                onClick={addCustomSection}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Agregar sección
+              </button>
             </div>
-            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
-              <span className="text-cm-on-surface-variant font-semibold">Badge: </span>
-              <span className="text-cm-on-surface">{settings.hero.badge}</span>
-            </div>
-            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
-              <span className="text-cm-on-surface-variant font-semibold">Deportes: </span>
-              <span className="text-cm-on-surface">{settings.sportsSection.sports.map((s) => s.label).join(', ')}</span>
-            </div>
-            <div className="p-3 rounded-lg bg-cm-surface-container-highest/40">
-              <span className="text-cm-on-surface-variant font-semibold">Pasos: </span>
-              <span className="text-cm-on-surface">{settings.howItWorks.steps.map((s) => s.title).join(' → ')}</span>
-            </div>
+
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                  {sectionOrder.map((key) => {
+                    const isCustomKey = key.startsWith('custom_')
+                    const meta = sectionMeta[key]
+                    let label = meta?.label || key
+                    let icon = meta?.icon || 'widgets'
+                    let color = meta?.color || 'bg-gray-500'
+
+                    if (isCustomKey) {
+                      const csId = key.replace('custom_', '')
+                      const cs = customSections.find((s) => s.id === csId)
+                      label = cs?.title || 'Sección personalizada'
+                      const typeColors: Record<string, string> = { banner: 'bg-cm-primary', notice: 'bg-amber-500', highlight: 'bg-purple-500', cta: 'bg-sky-500', gallery: 'bg-teal-500' }
+                      const typeIcons: Record<string, string> = { banner: 'image', notice: 'campaign', highlight: 'star', cta: 'touch_app', gallery: 'photo_library' }
+                      color = typeColors[cs?.type || 'banner'] || 'bg-gray-500'
+                      icon = typeIcons[cs?.type || 'banner'] || 'widgets'
+                    }
+
+                    return (
+                      <SortableSectionCard
+                        key={key}
+                        id={key}
+                        label={label}
+                        icon={icon}
+                        color={color}
+                        isCustom={isCustomKey}
+                        visible={isCustomKey ? (customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true) : (visibility[key as keyof typeof visibility] ?? true)}
+                        onToggle={() => {
+                          if (isCustomKey) {
+                            const csId = key.replace('custom_', '')
+                            const cs = customSections.find((s) => s.id === csId)
+                            if (cs) saveCustomSection({ ...cs, visible: !cs.visible })
+                          } else {
+                            toggleSectionVisibility(key)
+                          }
+                        }}
+                        onEdit={() => {
+                          if (isCustomKey) {
+                            const csId = key.replace('custom_', '')
+                            const cs = customSections.find((s) => s.id === csId)
+                            if (cs) { setEditingCustom(cs); setCustomForm({ ...cs }) }
+                          } else {
+                            openEditor(key)
+                          }
+                        }}
+                        onDelete={isCustomKey ? () => handleDeleteCustom(key.replace('custom_', '')) : undefined}
+                      />
+                    )
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
           </div>
-        </div>
+        )}
+
+        {/* ═══════ PROMOCIONES TAB ═══════ */}
+        {activeSubTab === 'promociones' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Promociones activas</h3>
+              <button onClick={addPromotion} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Nueva promoción
+              </button>
+            </div>
+            {settings.activePromotions.length === 0 ? (
+              <div className="glass-card rounded-xl p-8 text-center">
+                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">local_offer</span>
+                <p className="text-cm-on-surface-variant text-sm">No hay promociones. Crea una para mostrarla en la página de inicio.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {settings.activePromotions.map((promo) => (
+                  <div key={promo.id} className={`glass-card rounded-xl p-4 flex items-start gap-3 ${!promo.active ? 'opacity-40' : ''}`}>
+                    {promo.image && <img src={promo.image} alt={promo.title} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface truncate">{promo.title || 'Sin título'}</span>
+                        {promo.discount && <span className="px-2 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold">{promo.discount}</span>}
+                      </div>
+                      <p className="text-cm-on-surface-variant text-xs mt-0.5 truncate">{promo.description}</p>
+                      {(promo.validFrom || promo.validUntil) && (
+                        <p className="text-cm-on-surface-variant/60 text-[10px] mt-1">
+                          {promo.validFrom} — {promo.validUntil || 'Sin límite'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => togglePromoActive(promo.id)} className={`p-1.5 rounded-lg transition-colors ${promo.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                        <span className="material-symbols-outlined text-[16px]">{promo.active ? 'toggle_on' : 'toggle_off'}</span>
+                      </button>
+                      <button onClick={() => { setEditingPromo(promo); setPromoForm({ ...promo }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      <button onClick={() => deletePromo(promo.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════ BANNERS TAB ═══════ */}
+        {activeSubTab === 'banners' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Banners del carrusel Hero</h3>
+              <button onClick={addHeroBanner} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Nuevo banner
+              </button>
+            </div>
+            {settings.heroBanners.length === 0 ? (
+              <div className="glass-card rounded-xl p-8 text-center">
+                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">view_carousel</span>
+                <p className="text-cm-on-surface-variant text-sm">No hay banners. Agrega banners para mostrar un carrusel en el Hero.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {settings.heroBanners.map((banner, idx) => (
+                  <div key={banner.id} className={`glass-card rounded-xl p-3 flex items-center gap-3 ${!banner.active ? 'opacity-40' : ''}`}>
+                    <span className="text-cm-on-surface-variant text-xs font-bold w-6 text-center font-[family-name:var(--font-sora)]">#{idx + 1}</span>
+                    {banner.image ? (
+                      <img src={banner.image} alt={banner.title || ''} className="w-24 h-16 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-24 h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">image</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface truncate block">{banner.title || 'Sin título'}</span>
+                      {banner.subtitle && <span className="text-cm-on-surface-variant text-[10px] truncate block">{banner.subtitle}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => toggleBannerActive(banner.id)} className={`p-1.5 rounded-lg transition-colors ${banner.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                        <span className="material-symbols-outlined text-[16px]">{banner.active ? 'toggle_on' : 'toggle_off'}</span>
+                      </button>
+                      <button onClick={() => { setEditingBanner(banner); setBannerForm({ ...banner }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      <button onClick={() => deleteBanner(banner.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
 
-      {/* ═══════════════ EDIT MODAL ═══════════════ */}
+      {/* ═══════ SECTION EDIT MODAL ═══════ */}
       {editSection && editForm && (
         <EditModal
           open={true}
           onClose={() => { setEditSection(null); setEditForm(null) }}
-          title={`Editar: ${sections.find((s) => s.key === editSection)?.label}`}
+          title={`Editar: ${sectionMeta[editSection]?.label || editSection}`}
           onSave={handleSave}
           saving={saving}
         >
-          {/* ─── Hero Editor ─── */}
           {editSection === 'hero' && (
             <>
               <FormField label="Ubicación" value={getField('location')} onChange={(v) => updateField('location', v)} />
@@ -409,20 +739,10 @@ function ContentTab() {
                 <FormField label="Promo Highlight" value={getField('promoHighlight')} onChange={(v) => updateField('promoHighlight', v)} />
                 <FormField label="Promo Text" value={getField('promoText')} onChange={(v) => updateField('promoText', v)} />
               </div>
-
-              {/* Hero Images */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Imágenes del Hero</label>
-                  <span className="text-[10px] text-cm-on-surface-variant">Se muestran en la parte superior</span>
-                </div>
-                <div className="space-y-3">
-                  <ImageUploader label="Imagen de fondo principal" path="backgroundImage" currentUrl={getField('backgroundImage')} />
-                  <ImageUploader label="Imagen secundaria (lado derecho)" path="secondaryImage" currentUrl={getField('secondaryImage')} />
-                </div>
+              <div className="space-y-3">
+                <ImageUploader label="Imagen de fondo principal" path="backgroundImage" currentUrl={getField('backgroundImage')} />
+                <ImageUploader label="Imagen secundaria" path="secondaryImage" currentUrl={getField('secondaryImage')} />
               </div>
-
-              {/* Stats array */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estadísticas</label>
@@ -440,47 +760,37 @@ function ContentTab() {
               </div>
             </>
           )}
-
-          {/* ─── Sports Editor ─── */}
           {editSection === 'sportsSection' && (
             <>
               <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
               <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
               <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
-
-              {(getArray('sports') as Array<{ id: string; label: string; count: number; priceRange: string; badge: string; amenities: string[] }>).map((sport, idx) => (
+              {(getArray('sports') as Array<Record<string, unknown>>).map((sport, idx) => (
                 <div key={idx} className="p-3 rounded-xl border border-white/10 space-y-2">
                   <div className="flex items-center gap-2 text-cm-primary text-xs font-bold font-[family-name:var(--font-sora)]">
                     <span className="material-symbols-outlined text-[16px]">sports</span>
                     {sport.label || `Deporte #${idx + 1}`}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <FormField label="Nombre" value={sport.label} onChange={(v) => updateArrayItem('sports', idx, 'label', v)} />
-                    <FormField label="Precio" value={sport.priceRange} onChange={(v) => updateArrayItem('sports', idx, 'priceRange', v)} />
+                    <FormField label="Nombre" value={String(sport.label || '')} onChange={(v) => updateArrayItem('sports', idx, 'label', v)} />
+                    <FormField label="Precio" value={String(sport.priceRange || '')} onChange={(v) => updateArrayItem('sports', idx, 'priceRange', v)} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <FormField label="Cantidad" value={String(sport.count)} onChange={(v) => updateArrayItem('sports', idx, 'count', v)} type="number" />
-                    <FormField label="Badge" value={sport.badge} onChange={(v) => updateArrayItem('sports', idx, 'badge', v)} />
+                    <FormField label="Cantidad" value={String(sport.count || '')} onChange={(v) => updateArrayItem('sports', idx, 'count', v)} type="number" />
+                    <FormField label="Badge" value={String(sport.badge || '')} onChange={(v) => updateArrayItem('sports', idx, 'badge', v)} />
                   </div>
-                  <ArrayField label="Amenidades" items={sport.amenities} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
-                  <ImageUploader
-                    label={`Imagen de ${sport.label || 'deporte'}`}
-                    path={`sports.${idx}.image`}
-                    currentUrl={(sport as Record<string, unknown>).image as string || ''}
-                  />
+                  <ArrayField label="Amenidades" items={(sport.amenities as string[]) || []} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
+                  <ImageUploader label={`Imagen de ${sport.label || 'deporte'}`} path={`sports.${idx}.image`} currentUrl={String(sport.image || '')} />
                 </div>
               ))}
             </>
           )}
-
-          {/* ─── Promo Editor ─── */}
           {editSection === 'promoBanner' && (
             <>
               <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
               <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
               <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
               <FormField label="Texto CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} />
-
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Puntos de venta</label>
@@ -488,27 +798,26 @@ function ContentTab() {
                     <span className="material-symbols-outlined text-[14px]">add</span> Agregar
                   </button>
                 </div>
-                {(getArray('sellingPoints') as Array<{ title: string; description: string; icon: string; highlight: boolean }>).map((pt, idx) => (
+                {(getArray('sellingPoints') as Array<Record<string, unknown>>).map((pt, idx) => (
                   <div key={idx} className="p-2 rounded-lg border border-white/10 mb-2 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-cm-on-surface-variant font-semibold">#{idx + 1}</span>
                       <div className="flex items-center gap-2">
                         <label className="flex items-center gap-1 text-[10px] text-cm-primary cursor-pointer">
-                          <input type="checkbox" checked={pt.highlight} onChange={(e) => updateArrayItem('sellingPoints', idx, 'highlight', e.target.checked)} className="accent-green-500" />
+                          <input type="checkbox" checked={!!pt.highlight} onChange={(e) => updateArrayItem('sellingPoints', idx, 'highlight', e.target.checked)} className="accent-green-500" />
                           Destacado
                         </label>
                         <button type="button" onClick={() => removeArrayItem('sellingPoints', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <FormField label="Icono" value={pt.icon} onChange={(v) => updateArrayItem('sellingPoints', idx, 'icon', v)} />
-                      <FormField label="Título" value={pt.title} onChange={(v) => updateArrayItem('sellingPoints', idx, 'title', v)} />
-                      <FormField label="Descripción" value={pt.description} onChange={(v) => updateArrayItem('sellingPoints', idx, 'description', v)} />
+                      <FormField label="Icono" value={String(pt.icon || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'icon', v)} />
+                      <FormField label="Título" value={String(pt.title || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'title', v)} />
+                      <FormField label="Descripción" value={String(pt.description || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'description', v)} />
                     </div>
                   </div>
                 ))}
               </div>
-
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Métodos de pago</label>
@@ -516,18 +825,16 @@ function ContentTab() {
                     <span className="material-symbols-outlined text-[14px]">add</span> Agregar
                   </button>
                 </div>
-                {(getArray('paymentMethods') as Array<{ name: string; icon: string; color: string }>).map((pm, idx) => (
+                {(getArray('paymentMethods') as Array<Record<string, unknown>>).map((pm, idx) => (
                   <div key={idx} className="flex items-center gap-2 mb-2">
-                    <input value={pm.name} onChange={(e) => updateArrayItem('paymentMethods', idx, 'name', e.target.value)} placeholder="Nombre" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
-                    <input value={pm.icon} onChange={(e) => updateArrayItem('paymentMethods', idx, 'icon', e.target.value)} placeholder="Icono" className="w-28 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <input value={String(pm.name || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'name', e.target.value)} placeholder="Nombre" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <input value={String(pm.icon || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'icon', e.target.value)} placeholder="Icono" className="w-28 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
                     <button type="button" onClick={() => removeArrayItem('paymentMethods', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
                   </div>
                 ))}
               </div>
             </>
           )}
-
-          {/* ─── HowItWorks Editor ─── */}
           {editSection === 'howItWorks' && (
             <>
               <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
@@ -537,7 +844,6 @@ function ContentTab() {
                 <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
                 <FormField label="Texto Soporte" value={getField('supportText')} onChange={(v) => updateField('supportText', v)} />
               </div>
-
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Pasos</label>
@@ -545,18 +851,18 @@ function ContentTab() {
                     <span className="material-symbols-outlined text-[14px]">add</span> Agregar
                   </button>
                 </div>
-                {(getArray('steps') as Array<{ number: string; title: string; description: string; icon: string; detail: string }>).map((step, idx) => (
+                {(getArray('steps') as Array<Record<string, unknown>>).map((step, idx) => (
                   <div key={idx} className="p-3 rounded-xl border border-white/10 mb-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-cm-primary font-bold font-[family-name:var(--font-sora)]">Paso {step.number || idx + 1}</span>
                       <button type="button" onClick={() => removeArrayItem('steps', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <FormField label="Título" value={step.title} onChange={(v) => updateArrayItem('steps', idx, 'title', v)} />
-                      <FormField label="Icono" value={step.icon} onChange={(v) => updateArrayItem('steps', idx, 'icon', v)} />
+                      <FormField label="Título" value={String(step.title || '')} onChange={(v) => updateArrayItem('steps', idx, 'title', v)} />
+                      <FormField label="Icono" value={String(step.icon || '')} onChange={(v) => updateArrayItem('steps', idx, 'icon', v)} />
                     </div>
-                    <FormField label="Descripción" value={step.description} onChange={(v) => updateArrayItem('steps', idx, 'description', v)} type="textarea" rows={2} />
-                    <FormField label="Detalle" value={step.detail} onChange={(v) => updateArrayItem('steps', idx, 'detail', v)} />
+                    <FormField label="Descripción" value={String(step.description || '')} onChange={(v) => updateArrayItem('steps', idx, 'description', v)} type="textarea" rows={2} />
+                    <FormField label="Detalle" value={String(step.detail || '')} onChange={(v) => updateArrayItem('steps', idx, 'detail', v)} />
                   </div>
                 ))}
               </div>
@@ -564,6 +870,240 @@ function ContentTab() {
           )}
         </EditModal>
       )}
+
+      {/* ═══════ CUSTOM SECTION MODAL ═══════ */}
+      <EditModal
+        open={!!editingCustom}
+        onClose={() => { setEditingCustom(null); setCustomForm(null) }}
+        title={customForm?.id && settings?.customSections.some((s) => s.id === customForm.id) ? 'Editar sección personalizada' : 'Nueva sección personalizada'}
+        onSave={handleSaveCustom}
+        saving={savingCustom}
+      >
+        {customForm && (
+          <>
+            <div>
+              <label className="text-xs text-cm-on-surface-variant font-semibold mb-1.5 block font-[family-name:var(--font-inter)]">Tipo de sección</label>
+              <select
+                value={customForm.type}
+                onChange={(e) => setCustomForm({ ...customForm, type: e.target.value as CustomSection['type'] })}
+                className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+              >
+                <option value="banner">Banner (imagen completa)</option>
+                <option value="notice">Aviso / Noticia</option>
+                <option value="highlight">Destacado</option>
+                <option value="cta">Llamada a la acción (CTA)</option>
+                <option value="gallery">Galería de imágenes</option>
+              </select>
+            </div>
+            <FormField label="Título" value={customForm.title} onChange={(v) => setCustomForm({ ...customForm, title: v })} />
+            <FormField label="Subtítulo" value={customForm.subtitle || ''} onChange={(v) => setCustomForm({ ...customForm, subtitle: v })} type="textarea" />
+            {customForm.type !== 'notice' && (
+              <ImageUploader label="Imagen" path="" currentUrl={customForm.image || ''} onUpload={(url) => setCustomForm({ ...customForm, image: url })} />
+            )}
+            <FormField label="Enlace (URL opcional)" value={customForm.link || ''} onChange={(v) => setCustomForm({ ...customForm, link: v })} />
+            {(customForm.type === 'banner' || customForm.type === 'cta') && (
+              <FormField label="Texto del botón CTA" value={customForm.ctaText || ''} onChange={(v) => setCustomForm({ ...customForm, ctaText: v })} />
+            )}
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+                <input type="checkbox" checked={customForm.visible} onChange={(e) => setCustomForm({ ...customForm, visible: e.target.checked })} className="accent-green-500" />
+                Sección visible
+              </label>
+            </div>
+          </>
+        )}
+      </EditModal>
+
+      {/* ═══════ PROMOTION MODAL ═══════ */}
+      <EditModal
+        open={!!editingPromo}
+        onClose={() => { setEditingPromo(null); setPromoForm(null) }}
+        title="Promoción"
+        onSave={handleSavePromo}
+        saving={savingPromo}
+      >
+        {promoForm && (
+          <>
+            <FormField label="Título" value={promoForm.title} onChange={(v) => setPromoForm({ ...promoForm, title: v })} />
+            <FormField label="Descripción" value={promoForm.description} onChange={(v) => setPromoForm({ ...promoForm, description: v })} type="textarea" />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Descuento (ej. 20%)" value={promoForm.discount || ''} onChange={(v) => setPromoForm({ ...promoForm, discount: v })} />
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+                  <input type="checkbox" checked={promoForm.active} onChange={(e) => setPromoForm({ ...promoForm, active: e.target.checked })} className="accent-green-500" />
+                  Activar
+                </label>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Válido desde" value={promoForm.validFrom || ''} onChange={(v) => setPromoForm({ ...promoForm, validFrom: v })} />
+              <FormField label="Válido hasta" value={promoForm.validUntil || ''} onChange={(v) => setPromoForm({ ...promoForm, validUntil: v })} />
+            </div>
+            <ImageUploader label="Imagen de promoción" path="" currentUrl={promoForm.image || ''} onUpload={(url) => setPromoForm({ ...promoForm, image: url })} />
+          </>
+        )}
+      </EditModal>
+
+      {/* ═══════ HERO BANNER MODAL ═══════ */}
+      <EditModal
+        open={!!editingBanner}
+        onClose={() => { setEditingBanner(null); setBannerForm(null) }}
+        title="Banner del Hero"
+        onSave={handleSaveBanner}
+        saving={savingBanner}
+      >
+        {bannerForm && (
+          <>
+            <FormField label="Título" value={bannerForm.title || ''} onChange={(v) => setBannerForm({ ...bannerForm, title: v })} />
+            <FormField label="Subtítulo" value={bannerForm.subtitle || ''} onChange={(v) => setBannerForm({ ...bannerForm, subtitle: v })} />
+            <FormField label="Enlace (URL)" value={bannerForm.link || ''} onChange={(v) => setBannerForm({ ...bannerForm, link: v })} />
+            <ImageUploader label="Imagen del banner" path="" currentUrl={bannerForm.image || ''} onUpload={(url) => setBannerForm({ ...bannerForm, image: url })} />
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+                <input type="checkbox" checked={bannerForm.active} onChange={(e) => setBannerForm({ ...bannerForm, active: e.target.checked })} className="accent-green-500" />
+                Banner activo
+              </label>
+            </div>
+          </>
+        )}
+      </EditModal>
+
+      {/* ═══════ PREVIEW MODAL ═══════ */}
+      <AnimatePresence>
+        {showPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowPreview(false)}
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0, scale: 0.95 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-4xl max-h-[90vh] glass-card rounded-2xl overflow-hidden flex flex-col border-cm-primary/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-cm-surface-container/50">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cm-primary text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>preview</span>
+                  <h2 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Vista Previa — Inicio</h2>
+                </div>
+                <button onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                  <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 bg-cm-background/50">
+                <div className="max-w-2xl mx-auto space-y-4">
+                  {sectionOrder.map((key) => {
+                    const isVisible = key.startsWith('custom_')
+                      ? customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true
+                      : (visibility[key as keyof typeof visibility] ?? true)
+                    if (!isVisible) return null
+
+                    const sectionLabel = sectionMeta[key]?.label || key
+
+                    return (
+                      <div key={key} className="glass-card rounded-xl p-4 border-l-4 border-cm-primary">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="material-symbols-outlined text-cm-primary text-[16px]">{sectionMeta[key]?.icon || 'widgets'}</span>
+                          <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">{sectionLabel}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[9px] font-bold">VISIBLE</span>
+                        </div>
+                        {key === 'hero' && (
+                          <div className="text-xs text-cm-on-surface-variant space-y-1">
+                            <p><span className="font-semibold">Badge:</span> {settings.hero.badge}</p>
+                            <p><span className="font-semibold">Título:</span> {settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span></p>
+                            <p><span className="font-semibold">Promo:</span> {settings.hero.promoHighlight}{settings.hero.promoText}</p>
+                          </div>
+                        )}
+                        {key === 'sportsSection' && (
+                          <div className="text-xs text-cm-on-surface-variant">
+                            <p className="font-semibold mb-1">{settings.sportsSection.title}</p>
+                            <div className="flex flex-wrap gap-1">
+                              {settings.sportsSection.sports.map((s) => (
+                                <span key={s.id} className="px-2 py-0.5 rounded-full bg-white/5">{s.label} ({s.count})</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {key === 'promoBanner' && (
+                          <div className="text-xs text-cm-on-surface-variant">
+                            <p className="font-semibold mb-1">{settings.promoBanner.title}</p>
+                            <div className="flex flex-wrap gap-1">
+                              {settings.promoBanner.sellingPoints.map((sp, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded-full bg-white/5">{sp.title}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {key === 'howItWorks' && (
+                          <div className="text-xs text-cm-on-surface-variant">
+                            <p className="font-semibold mb-1">{settings.howItWorks.title}</p>
+                            <div className="space-y-0.5">
+                              {settings.howItWorks.steps.map((s, i) => (
+                                <p key={i}>{s.number}. {s.title}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {key === 'featuredCourts' && (
+                          <p className="text-xs text-cm-on-surface-variant">Canchas destacadas (datos de la API)</p>
+                        )}
+                        {key === 'todaysSchedule' && (
+                          <p className="text-xs text-cm-on-surface-variant">Agenda de hoy (datos de la API)</p>
+                        )}
+                        {key.startsWith('custom_') && (() => {
+                          const cs = customSections.find((s) => s.id === key.replace('custom_', ''))
+                          if (!cs) return null
+                          return (
+                            <div className="text-xs text-cm-on-surface-variant">
+                              <p><span className="font-semibold">Tipo:</span> {cs.type}</p>
+                              <p><span className="font-semibold">Título:</span> {cs.title}</p>
+                              {cs.subtitle && <p><span className="font-semibold">Subtítulo:</span> {cs.subtitle}</p>}
+                              {cs.image && <img src={cs.image} alt={cs.title} className="w-full h-24 object-cover rounded-lg mt-2" />}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )
+                  })}
+                  {settings.activePromotions.filter((p) => p.active).length > 0 && (
+                    <div className="glass-card rounded-xl p-4 border-l-4 border-amber-400">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-amber-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>local_offer</span>
+                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">Promociones activas</span>
+                      </div>
+                      <div className="space-y-1">
+                        {settings.activePromotions.filter((p) => p.active).map((p) => (
+                          <p key={p.id} className="text-xs text-cm-on-surface-variant">
+                            <span className="text-amber-400 font-bold">{p.title}</span> — {p.description}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {settings.heroBanners.filter((b) => b.active).length > 0 && (
+                    <div className="glass-card rounded-xl p-4 border-l-4 border-sky-400">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-sky-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_carousel</span>
+                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">Carrusel Hero</span>
+                      </div>
+                      <div className="flex gap-2 overflow-x-auto">
+                        {settings.heroBanners.filter((b) => b.active).map((b) => (
+                          <img key={b.id} src={b.image} alt={b.title || ''} className="h-16 rounded-lg flex-shrink-0" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }

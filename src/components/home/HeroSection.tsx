@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
 import { toast } from '@/hooks/use-toast'
+import Image from 'next/image'
 
 // --- Animated Counter Component ---
 function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
@@ -97,7 +98,7 @@ function GradientMesh() {
 export default function HeroSection() {
   const { setView, setSportFilter, setSelectedDate } = useAppStore()
   const { settings, saveSection } = useSiteSettings()
-  const { hero: defaults } = settings || {
+  const { hero: defaults, heroBanners } = settings || {
     hero: {
       location: 'San Sebastián, Cusco',
       badge: 'La #1 en reservas deportivas del Cusco',
@@ -114,7 +115,23 @@ export default function HeroSection() {
         { label: 'Vóley', value: 2 },
       ],
     },
+    heroBanners: [],
   }
+
+  const activeBanners = (heroBanners || []).filter((b) => b.active && b.image)
+  const [currentBanner, setCurrentBanner] = useState(0)
+  const bannerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Auto-rotate banners
+  useEffect(() => {
+    if (activeBanners.length <= 1) return
+    bannerTimerRef.current = setInterval(() => {
+      setCurrentBanner((prev) => (prev + 1) % activeBanners.length)
+    }, 5000)
+    return () => {
+      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current)
+    }
+  }, [activeBanners.length])
 
   const [selectedSport, setSelectedSport] = useState('todos')
   const [selectedDateIdx, setSelectedDateIdx] = useState(0)
@@ -194,8 +211,58 @@ export default function HeroSection() {
       <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
         <GradientMesh />
 
-        {/* Background image (uploaded by admin) */}
-        {defaults.backgroundImage && (
+        {/* Banner Carousel (shows when heroBanners exist) */}
+        {activeBanners.length > 1 && (
+          <div className="relative h-48 md:h-72 mb-6 rounded-2xl overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentBanner}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8 }}
+                className="absolute inset-0"
+              >
+                <Image
+                  src={activeBanners[currentBanner].image}
+                  alt={activeBanners[currentBanner].title || 'Banner'}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                {(activeBanners[currentBanner].title || activeBanners[currentBanner].subtitle) && (
+                  <div className="absolute bottom-4 left-4 right-4">
+                    {activeBanners[currentBanner].subtitle && (
+                      <span className="text-cm-primary text-[10px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
+                    )}
+                    {activeBanners[currentBanner].title && (
+                      <h3 className="font-[family-name:var(--font-sora)] text-lg md:text-2xl font-bold text-white mt-0.5">
+                        {activeBanners[currentBanner].title}
+                      </h3>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Dots */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {activeBanners.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => { setCurrentBanner(idx) }}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    idx === currentBanner ? 'bg-cm-primary w-4' : 'bg-white/50 hover:bg-white/70'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Background image (uploaded by admin, only if no carousel) */}
+        {!activeBanners.length && defaults.backgroundImage && (
           <div className="absolute inset-0 z-0">
             <img
               src={defaults.backgroundImage}

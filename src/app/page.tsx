@@ -10,6 +10,8 @@ import SportsSection from '@/components/home/SportsSection'
 import TodaysSchedule from '@/components/home/TodaysSchedule'
 import PromoBanner from '@/components/home/PromoBanner'
 import HowItWorks from '@/components/home/HowItWorks'
+import CustomSections from '@/components/home/CustomSections'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
 import SearchView from '@/components/search/SearchView'
 import CourtDetail from '@/components/courts/CourtDetail'
 import BookingForm from '@/components/bookings/BookingForm'
@@ -20,6 +22,33 @@ import AuthView from '@/components/auth/AuthView'
 import AuthInitializer from '@/components/auth/AuthInitializer'
 
 function HomeView() {
+  const { settings } = useSiteSettings()
+  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks']
+  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, todaysSchedule: true, promoBanner: true, howItWorks: true }
+  const customSections = settings?.customSections || []
+
+  const renderSection = (key: string) => {
+    // Check visibility
+    if (key.startsWith('custom_')) {
+      const csId = key.replace('custom_', '')
+      const cs = customSections.find((s) => s.id === csId)
+      if (!cs || !cs.visible) return null
+      return <CustomSections key={key} sectionKey={key} />
+    }
+    const isVisible = visibility[key as keyof typeof visibility] ?? true
+    if (!isVisible) return null
+
+    switch (key) {
+      case 'hero': return <HeroSection key={key} />
+      case 'sportsSection': return <SportsSection key={key} />
+      case 'featuredCourts': return <FeaturedCourts key={key} />
+      case 'todaysSchedule': return <TodaysSchedule key={key} />
+      case 'promoBanner': return <PromoBanner key={key} />
+      case 'howItWorks': return <HowItWorks key={key} />
+      default: return null
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -27,12 +56,7 @@ function HomeView() {
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.3 }}
     >
-      <HeroSection />
-      <FeaturedCourts />
-      <SportsSection />
-      <TodaysSchedule />
-      <PromoBanner />
-      <HowItWorks />
+      {sectionOrder.map((key) => renderSection(key))}
     </motion.div>
   )
 }
