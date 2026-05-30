@@ -64,6 +64,8 @@ function toCamelBooking(b: Record<string, unknown>) {
     notes: b.notes,
     createdAt: b.created_at,
     updatedAt: b.updated_at,
+    recurringGroupId: b.recurring_group_id,
+    recurringIndex: b.recurring_index,
     court,
     user,
   };

@@ -72,6 +72,8 @@ export interface Booking {
   slot_status: string;
   payment_method: string | null;
   notes: string | null;
+  recurring_group_id?: string;
+  recurring_index?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -294,6 +296,8 @@ export async function createBooking(data: Record<string, unknown>): Promise<stri
     slot_status: data.slot_status || 'available',
     payment_method: data.payment_method || null,
     notes: data.notes || null,
+    recurring_group_id: data.recurring_group_id || null,
+    recurring_index: data.recurring_index ?? null,
   });
 }
 

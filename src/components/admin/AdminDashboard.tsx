@@ -49,6 +49,8 @@ interface Booking {
   status: string
   paymentMethod: string | null
   createdAt?: unknown
+  recurringGroupId?: string
+  recurringIndex?: number
   court: { id: string; name: string; sport: string; branch?: { name: string } } | null
   user: { id: string; name: string; email: string; phone?: string } | null
 }
@@ -1158,6 +1160,29 @@ export default function AdminDashboard() {
   const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
+  /* recurring booking */
+  const [showRecurring, setShowRecurring] = useState(false)
+  const [recurringConfig, setRecurringConfig] = useState({
+    frequency: 'weekly' as 'daily' | 'weekly' | 'biweekly' | 'custom',
+    daysOfWeek: [] as number[],
+    endDate: '',
+    count: 12,
+    endCondition: 'count' as 'date' | 'count',
+  })
+  const [recurringPreview, setRecurringPreview] = useState<Array<{
+    date: string; dayName: string; available: boolean; conflict?: { bookingId: string; startTime: string; endTime: string; userName: string }; price: number
+  }> | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [creatingRecurring, setCreatingRecurring] = useState(false)
+  const [recurringStep, setRecurringStep] = useState<'config' | 'preview'>('config')
+  const [recurringPreviewSummary, setRecurringPreviewSummary] = useState<{ totalCount: number; availableCount: number; conflictCount: number; totalRevenue: number } | null>(null)
+
+  /* recurring series management */
+  const [showSeriesModal, setShowSeriesModal] = useState(false)
+  const [seriesBookings, setSeriesBookings] = useState<Booking[]>([])
+  const [seriesGroupId, setSeriesGroupId] = useState('')
+  const [cancellingSeries, setCancellingSeries] = useState(false)
+
   /* advance payment modal */
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
@@ -1365,6 +1390,190 @@ export default function AdminDashboard() {
   const openBookingForm = () => {
     loadBookingFormData()
     setShowBookingForm(true)
+    // Reset recurring state
+    setShowRecurring(false)
+    setRecurringStep('config')
+    setRecurringPreview(null)
+    setRecurringPreviewSummary(null)
+  }
+
+  /* ─── recurring booking handlers ─── */
+  const handlePreviewRecurring = async () => {
+    if (!bookingForm.courtId || !bookingForm.userId || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.date) {
+      toast({ title: 'Error', description: 'Completa la cancha, cliente, fecha y horario primero.', variant: 'destructive' })
+      return
+    }
+    if (recurringConfig.frequency === 'custom' && recurringConfig.daysOfWeek.length === 0) {
+      toast({ title: 'Error', description: 'Selecciona al menos un día de la semana.', variant: 'destructive' })
+      return
+    }
+    if (recurringConfig.endCondition === 'date' && !recurringConfig.endDate) {
+      toast({ title: 'Error', description: 'Ingresa una fecha final.', variant: 'destructive' })
+      return
+    }
+
+    setPreviewLoading(true)
+    try {
+      const body: Record<string, unknown> = {
+        courtId: bookingForm.courtId,
+        userId: bookingForm.userId,
+        startTime: bookingForm.startTime,
+        endTime: bookingForm.endTime,
+        startDate: bookingForm.date,
+        frequency: recurringConfig.frequency,
+        totalPrice: parseFloat(bookingForm.totalPrice) || 0,
+        advanceAmount: parseFloat(bookingForm.advanceAmount) || 0,
+        status: bookingForm.status,
+        paymentMethod: bookingForm.paymentMethod,
+        notes: bookingForm.notes || null,
+        dryRun: true,
+      }
+      if (recurringConfig.frequency === 'custom') {
+        body.daysOfWeek = recurringConfig.daysOfWeek
+      }
+      if (recurringConfig.endCondition === 'date') {
+        body.endDate = recurringConfig.endDate
+      } else {
+        body.count = recurringConfig.count
+      }
+
+      const res = await fetch('/api/bookings/recurring', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRecurringPreview(data.dates)
+        setRecurringPreviewSummary({
+          totalCount: data.totalCount,
+          availableCount: data.availableCount,
+          conflictCount: data.conflictCount,
+          totalRevenue: data.totalRevenue,
+        })
+        setRecurringStep('preview')
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo generar la vista previa.', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo generar la vista previa.', variant: 'destructive' })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleCreateRecurring = async () => {
+    setCreatingRecurring(true)
+    try {
+      const body: Record<string, unknown> = {
+        courtId: bookingForm.courtId,
+        userId: bookingForm.userId,
+        startTime: bookingForm.startTime,
+        endTime: bookingForm.endTime,
+        startDate: bookingForm.date,
+        frequency: recurringConfig.frequency,
+        totalPrice: parseFloat(bookingForm.totalPrice) || 0,
+        advanceAmount: parseFloat(bookingForm.advanceAmount) || 0,
+        status: bookingForm.status,
+        paymentMethod: bookingForm.paymentMethod,
+        notes: bookingForm.notes || null,
+        dryRun: false,
+      }
+      if (recurringConfig.frequency === 'custom') {
+        body.daysOfWeek = recurringConfig.daysOfWeek
+      }
+      if (recurringConfig.endCondition === 'date') {
+        body.endDate = recurringConfig.endDate
+      } else {
+        body.count = recurringConfig.count
+      }
+
+      const res = await fetch('/api/bookings/recurring', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const created = data.bookings?.length || 0
+        toast({
+          title: 'Reservas recurrentes creadas',
+          description: `${created} reservas recurrentes creadas exitosamente${data.conflictCount > 0 ? ` (${data.conflictCount} conflictos omitidos)` : ''}`,
+        })
+        setShowBookingForm(false)
+        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
+        setFormErrors({})
+        setShowRecurring(false)
+        setRecurringStep('config')
+        setRecurringPreview(null)
+        setRecurringPreviewSummary(null)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudieron crear las reservas recurrentes.', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudieron crear las reservas recurrentes.', variant: 'destructive' })
+    } finally {
+      setCreatingRecurring(false)
+    }
+  }
+
+  /* ─── series management ─── */
+  const openSeriesModal = async (groupId: string) => {
+    setSeriesGroupId(groupId)
+    setShowSeriesModal(true)
+    // Load all bookings in this series from the bookings list
+    const series = bookings.filter((b) => b.recurringGroupId === groupId)
+    setSeriesBookings(series)
+  }
+
+  const handleCancelSeries = async (groupId: string) => {
+    if (!confirm('¿Cancelar toda la serie recurrente? Esta acción no se puede deshacer.')) return
+    setCancellingSeries(true)
+    try {
+      const res = await fetch('/api/bookings/recurring', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_series', recurringGroupId: groupId }),
+      })
+      if (res.ok) {
+        toast({ title: 'Serie cancelada', description: 'Todas las reservas de la serie fueron canceladas.' })
+        setShowSeriesModal(false)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo cancelar la serie.', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo cancelar la serie.', variant: 'destructive' })
+    } finally {
+      setCancellingSeries(false)
+    }
+  }
+
+  const handleCancelSingleFromSeries = async (bookingId: string) => {
+    if (!confirm('¿Cancelar esta reserva de la serie?')) return
+    try {
+      const res = await fetch('/api/bookings/recurring', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_single', recurringGroupId: seriesGroupId, bookingId }),
+      })
+      if (res.ok) {
+        toast({ title: 'Reserva cancelada', description: 'La reserva fue cancelada exitosamente.' })
+        // Refresh series and main bookings
+        fetchData()
+        const updatedSeries = bookings.filter((b) => b.recurringGroupId === seriesGroupId)
+        setSeriesBookings(updatedSeries)
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo cancelar.', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo cancelar la reserva.', variant: 'destructive' })
+    }
   }
 
   /* advance payment handlers */
@@ -1876,7 +2085,16 @@ export default function AdminDashboard() {
                           const st = statusConfig[b.status] || statusConfig.reserved
                           return (
                             <tr key={b.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</td>
+                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
+                                <div className="flex items-center gap-1.5">
+                                  {fmtDate(b.date)}
+                                  {b.recurringGroupId && (
+                                    <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                      <span className="material-symbols-outlined text-[14px]">repeat</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                               <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
@@ -1901,6 +2119,15 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(b.totalPrice)}</td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
+                                  {b.recurringGroupId && (
+                                    <button
+                                      onClick={() => openSeriesModal(b.recurringGroupId!)}
+                                      className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+                                      title="Ver serie recurrente"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">repeat</span>
+                                    </button>
+                                  )}
                                   {b.remainingAmount > 0 && (
                                     <button
                                       onClick={() => openAdvanceModal(b)}
@@ -1950,6 +2177,11 @@ export default function AdminDashboard() {
                             <div className="flex items-center gap-1.5 text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
                               <span className="material-symbols-outlined text-[14px]">calendar_today</span>
                               {fmtDateFull(b.date)}
+                              {b.recurringGroupId && (
+                                <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                  <span className="material-symbols-outlined text-[13px]">repeat</span>
+                                </button>
+                              )}
                             </div>
                             <p className="font-[family-name:var(--font-sora)] font-bold text-cm-on-surface text-lg mt-0.5">
                               {b.startTime} - {b.endTime}
@@ -1997,6 +2229,15 @@ export default function AdminDashboard() {
                           </div>
                           {/* Status dropdown + Advance */}
                           <div className="flex items-center gap-2">
+                            {b.recurringGroupId && (
+                              <button
+                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+                                className="p-1.5 rounded-lg bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-colors flex-shrink-0"
+                                title="Ver serie recurrente"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">repeat</span>
+                              </button>
+                            )}
                             <select
                               value={b.status}
                               onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
@@ -2039,7 +2280,14 @@ export default function AdminDashboard() {
                           <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
                             <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
                             <div>
-                              <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+                                {b.recurringGroupId && (
+                                  <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
+                                  </button>
+                                )}
+                              </div>
                               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</p>
                             </div>
                           </div>
@@ -2055,6 +2303,15 @@ export default function AdminDashboard() {
                           </div>
                           {/* Status + Price + Action */}
                           <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
+                            {b.recurringGroupId && (
+                              <button
+                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+                                className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+                                title="Ver serie recurrente"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">repeat</span>
+                              </button>
+                            )}
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                               {st.label}
@@ -2631,17 +2888,255 @@ export default function AdminDashboard() {
                     placeholder="Notas opcionales..."
                   />
                 </div>
+
+                {/* ═══ Recurring Booking Toggle ═══ */}
+                <div className="border-t border-white/5 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => { setShowRecurring(!showRecurring); setRecurringStep('config'); setRecurringPreview(null) }}
+                    className="flex items-center gap-2.5 w-full text-left"
+                  >
+                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center ${showRecurring ? 'bg-cm-primary justify-end' : 'bg-cm-surface-container-highest justify-start'} px-0.5`}>
+                      <div className={`w-4 h-4 rounded-full transition-all ${showRecurring ? 'bg-white shadow-lg' : 'bg-cm-on-surface-variant/60'}`} />
+                    </div>
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                      <span className="material-symbols-outlined text-cm-primary text-[16px]">repeat</span>
+                      Crear como reserva recurrente
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {showRecurring && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        {recurringStep === 'config' ? (
+                          <div className="mt-3 space-y-3">
+                            {/* Frequency selector */}
+                            <div>
+                              <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Frecuencia</label>
+                              <div className="grid grid-cols-4 gap-2">
+                                {([
+                                  { key: 'daily' as const, label: 'Diaria' },
+                                  { key: 'weekly' as const, label: 'Semanal' },
+                                  { key: 'biweekly' as const, label: 'Quincenal' },
+                                  { key: 'custom' as const, label: 'Personalizada' },
+                                ]).map((f) => (
+                                  <button
+                                    key={f.key}
+                                    type="button"
+                                    onClick={() => setRecurringConfig((p) => ({ ...p, frequency: f.key }))}
+                                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                                      recurringConfig.frequency === f.key
+                                        ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                                        : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/60 border border-white/10'
+                                    }`}
+                                  >
+                                    {f.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Custom days of week */}
+                            {recurringConfig.frequency === 'custom' && (
+                              <div>
+                                <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Días de la semana</label>
+                                <div className="flex gap-1.5">
+                                  {(['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const).map((day, idx) => {
+                                    const dayNum = idx === 6 ? 0 : idx + 1 // Mon=1, Tue=2, ... Sun=0
+                                    const isSelected = recurringConfig.daysOfWeek.includes(dayNum)
+                                    return (
+                                      <button
+                                        key={day}
+                                        type="button"
+                                        onClick={() => {
+                                          setRecurringConfig((p) => ({
+                                            ...p,
+                                            daysOfWeek: isSelected ? p.daysOfWeek.filter((d) => d !== dayNum) : [...p.daysOfWeek, dayNum],
+                                          }))
+                                        }}
+                                        className={`w-10 h-10 rounded-xl text-[11px] font-bold transition-all ${
+                                          isSelected
+                                            ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                                            : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/60 border border-white/10'
+                                        }`}
+                                      >
+                                        {day}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* End condition */}
+                            <div>
+                              <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Condición de fin</label>
+                              <div className="grid grid-cols-2 gap-2 mb-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'date' }))}
+                                  className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                                    recurringConfig.endCondition === 'date'
+                                      ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/60 border border-white/10'
+                                  }`}
+                                >
+                                  Por fecha final
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'count' }))}
+                                  className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                                    recurringConfig.endCondition === 'count'
+                                      ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+                                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/60 border border-white/10'
+                                  }`}
+                                >
+                                  Por cantidad
+                                </button>
+                              </div>
+                              {recurringConfig.endCondition === 'date' ? (
+                                <input
+                                  type="date"
+                                  value={recurringConfig.endDate}
+                                  onChange={(e) => setRecurringConfig((p) => ({ ...p, endDate: e.target.value }))}
+                                  min={bookingForm.date}
+                                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                                />
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={100}
+                                    value={recurringConfig.count}
+                                    onChange={(e) => setRecurringConfig((p) => ({ ...p, count: parseInt(e.target.value) || 12 }))}
+                                    className="w-24 px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                                  />
+                                  <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">repeticiones</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Preview button */}
+                            <button
+                              type="button"
+                              onClick={handlePreviewRecurring}
+                              disabled={previewLoading}
+                              className="w-full py-2.5 bg-cm-primary/10 text-cm-primary rounded-xl text-sm font-semibold hover:bg-cm-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              {previewLoading ? (
+                                <><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Generando vista previa...</>
+                              ) : (
+                                <><span className="material-symbols-outlined text-[18px]">preview</span> Vista previa</>
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          /* ═══ PREVIEW STEP ═══ */
+                          <div className="mt-3 space-y-3">
+                            {recurringPreview && recurringPreviewSummary && (
+                              <>
+                                {/* Summary */}
+                                <div className="p-3 rounded-xl bg-cm-primary/5 border border-cm-primary/20 space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Fechas disponibles</span>
+                                    <span className="text-cm-primary font-bold font-[family-name:var(--font-sora)]">{recurringPreviewSummary.availableCount} de {recurringPreviewSummary.totalCount}</span>
+                                  </div>
+                                  {recurringPreviewSummary.conflictCount > 0 && (
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-red-400 font-[family-name:var(--font-inter)]">Conflictos</span>
+                                      <span className="text-red-400 font-bold font-[family-name:var(--font-sora)]">{recurringPreviewSummary.conflictCount}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-between text-sm pt-1 border-t border-white/5">
+                                    <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Ingresos estimados</span>
+                                    <span className="text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(recurringPreviewSummary.totalRevenue)}</span>
+                                  </div>
+                                </div>
+
+                                {/* Dates table */}
+                                <div className="max-h-60 overflow-y-auto rounded-xl border border-white/10">
+                                  <table className="w-full text-xs">
+                                    <thead className="sticky top-0 bg-cm-surface-container-highest/80 backdrop-blur-sm">
+                                      <tr className="border-b border-white/5">
+                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
+                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Día</th>
+                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estado</th>
+                                        <th className="text-right px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Precio</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {recurringPreview.map((item, i) => (
+                                        <tr key={i} className={`border-b border-white/[0.03] ${!item.available ? 'opacity-50' : ''}`}>
+                                          <td className="px-3 py-2 text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(item.date)}</td>
+                                          <td className="px-3 py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{item.dayName}</td>
+                                          <td className="px-3 py-2">
+                                            {item.available ? (
+                                              <span className="inline-flex items-center gap-1 text-green-400">
+                                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                                <span className="font-[family-name:var(--font-inter)]">Disponible</span>
+                                              </span>
+                                            ) : (
+                                              <span className="text-red-400 font-[family-name:var(--font-inter)]">
+                                                Ocupado {item.conflict ? `(${item.conflict.startTime}-${item.conflict.endTime}, ${item.conflict.userName})` : ''}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-right text-cm-on-surface font-[family-name:var(--font-sora)]">{fmtCurrency(item.price)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* Action buttons */}
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setRecurringStep('config'); setRecurringPreview(null) }}
+                                    className="flex-1 py-2.5 bg-cm-surface-container-highest/40 text-cm-on-surface-variant rounded-xl text-xs font-semibold hover:bg-cm-surface-container-highest/60 transition-all"
+                                  >
+                                    Volver
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCreateRecurring}
+                                    disabled={creatingRecurring || recurringPreviewSummary.availableCount === 0}
+                                    className="flex-[2] py-2.5 bg-cm-primary text-cm-on-primary rounded-xl text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                  >
+                                    {creatingRecurring ? (
+                                      <><span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span> Creando...</>
+                                    ) : (
+                                      <><span className="material-symbols-outlined text-[16px]">check_circle</span> Crear {recurringPreviewSummary.availableCount} reservas disponibles</>
+                                    )}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <button
-                onClick={handleCreateBooking}
-                disabled={submittingBooking}
+                onClick={showRecurring && recurringStep === 'preview' ? handleCreateRecurring : handleCreateBooking}
+                disabled={submittingBooking || creatingRecurring}
                 className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2 flex-shrink-0"
               >
-                {submittingBooking ? (
+                {(submittingBooking || creatingRecurring) ? (
                   <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando reserva...</>
                 ) : (
-                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Crear Reserva</>
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> {showRecurring ? 'Crear Reserva Individual' : 'Crear Reserva'}</>
                 )}
               </button>
             </motion.div>
@@ -2768,6 +3263,123 @@ export default function AdminDashboard() {
                   <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
                 )}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Series Management Modal ─── */}
+      <AnimatePresence>
+        {showSeriesModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => !cancellingSeries && setShowSeriesModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-2xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-cm-primary/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>repeat</span>
+                  </div>
+                  <div>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Serie Recurrente</h3>
+                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">{seriesBookings.length} reservas en la serie</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {seriesBookings.some((b) => b.status !== 'cancelled') && (
+                    <button
+                      onClick={() => handleCancelSeries(seriesGroupId)}
+                      disabled={cancellingSeries}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">cancel</span>
+                      {cancellingSeries ? 'Cancelando...' : 'Cancelar toda la serie'}
+                    </button>
+                  )}
+                  {!cancellingSeries && (
+                    <button onClick={() => setShowSeriesModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                      <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-auto flex-1">
+                <div className="glass-card rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
+                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
+                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
+                          <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {seriesBookings.sort((a, b) => a.date.localeCompare(b.date)).map((sb) => {
+                          const st = statusConfig[sb.status] || statusConfig.reserved
+                          return (
+                            <tr key={sb.id} className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors ${sb.status === 'cancelled' ? 'opacity-40' : ''}`}>
+                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDate(sb.date)}</td>
+                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{sb.startTime}-{sb.endTime}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[sb.court?.sport || ''] || 'sports'}</span>
+                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{sb.court?.name || 'N/A'}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                                  {st.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(sb.totalPrice)}</td>
+                              <td className="px-4 py-3 text-center">
+                                {sb.status !== 'cancelled' && (
+                                  <button
+                                    onClick={() => handleCancelSingleFromSeries(sb.id)}
+                                    className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                    title="Cancelar esta fecha"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">event_busy</span>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="mt-4 pt-3 border-t border-white/5 flex-shrink-0">
+                <div className="flex items-center justify-between text-xs font-[family-name:var(--font-inter)]">
+                  <span className="text-cm-on-surface-variant">
+                    {seriesBookings.filter((b) => b.status !== 'cancelled').length} activas · {seriesBookings.filter((b) => b.status === 'cancelled').length} canceladas
+                  </span>
+                  <span className="text-cm-primary font-bold font-[family-name:var(--font-sora)]">
+                    Total: {fmtCurrency(seriesBookings.filter((b) => b.status !== 'cancelled').reduce((s, b) => s + b.totalPrice, 0))}
+                  </span>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}
