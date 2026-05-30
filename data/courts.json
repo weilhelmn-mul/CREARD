@@ -6,7 +6,7 @@
     "description": "Cancha premium con césped sintético de última generación.",
     "branch_id": "branch-1",
     "images": ["/cancha-futbol-1.png"],
-    "price_per_hour": 60,
+    "price_per_hour": 35,
     "is_active": true,
     "amenities": ["Cesped sintetico", "Iluminacion LED", "Vestuarios"]
   },
@@ -17,7 +17,7 @@
     "description": "Cancha estándar con césped sintético.",
     "branch_id": "branch-1",
     "images": ["/cancha-futbol-2.png"],
-    "price_per_hour": 50,
+    "price_per_hour": 35,
     "is_active": true,
     "amenities": ["Cesped sintetico", "Iluminacion"]
   },
@@ -28,7 +28,7 @@
     "description": "Cancha con techado parcial.",
     "branch_id": "branch-1",
     "images": ["/cancha-futbol-3.png"],
-    "price_per_hour": 55,
+    "price_per_hour": 35,
     "is_active": true,
     "amenities": ["Cesped sintetico", "Techado parcial", "Vestuarios"]
   },
@@ -39,30 +39,30 @@
     "description": "Nuestra cancha más nueva.",
     "branch_id": "branch-1",
     "images": ["/cancha-futbol-4.png"],
-    "price_per_hour": 65,
+    "price_per_hour": 35,
     "is_active": true,
     "amenities": ["Cesped premium", "Iluminacion LED", "Duchas", "Estacionamiento"]
   },
   "cancha-5": {
     "id": "cancha-5",
-    "name": "Cancha Vóley 1",
+    "name": "Cancha Vóley A",
     "sport": "voley",
     "description": "Piso PVC profesional con red reglamentaria.",
     "branch_id": "branch-1",
     "images": ["/cancha-voley.png"],
-    "price_per_hour": 40,
+    "price_per_hour": 30,
     "is_active": true,
     "amenities": ["Piso PVC", "Red reglamentaria", "Iluminacion LED"]
   },
   "cancha-6": {
     "id": "cancha-6",
-    "name": "Salón Eventos",
-    "sport": "eventos",
-    "description": "Espacio multiusos techado con sonido e iluminación.",
+    "name": "Cancha Vóley B",
+    "sport": "voley",
+    "description": "Segunda cancha de vóley techada.",
     "branch_id": "branch-1",
-    "images": ["/salon-eventos.png"],
-    "price_per_hour": 80,
+    "images": ["/cancha-voley.png"],
+    "price_per_hour": 30,
     "is_active": true,
-    "amenities": ["Techado", "Sonido", "Iluminacion"]
+    "amenities": ["Piso PVC", "Techado", "Iluminacion LED"]
   }
 }
