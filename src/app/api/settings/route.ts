@@ -141,12 +141,11 @@ function getDefaults() {
       ],
     },
     // ── CMS: Section order & visibility ──
-    sectionOrder: ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks'],
+    sectionOrder: ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks'],
     sectionVisibility: {
       hero: true,
       sportsSection: true,
       featuredCourts: true,
-      todaysSchedule: true,
       promoBanner: true,
       howItWorks: true,
     },
@@ -189,6 +188,9 @@ export async function GET() {
       if (!data.customSections) data.customSections = defaults.customSections
       if (!data.activePromotions) data.activePromotions = defaults.activePromotions
       if (!data.heroBanners) data.heroBanners = defaults.heroBanners
+      // Remove todaysSchedule from persisted order/visibility if present
+      if (data.sectionOrder) data.sectionOrder = data.sectionOrder.filter((k: string) => k !== 'todaysSchedule')
+      if (data.sectionVisibility) delete (data.sectionVisibility as Record<string, unknown>).todaysSchedule
       return NextResponse.json(data)
     }
 
