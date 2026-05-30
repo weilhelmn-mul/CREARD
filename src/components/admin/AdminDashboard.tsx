@@ -244,13 +244,12 @@ function ContentTab() {
     hero: { label: 'Hero Principal', icon: 'hero', color: 'bg-cm-primary', isCustom: false },
     sportsSection: { label: 'Instalaciones', icon: 'emoji_events', color: 'bg-green-500', isCustom: false },
     featuredCourts: { label: 'Canchas Destacadas', icon: 'sports_soccer', color: 'bg-teal-500', isCustom: false },
-    todaysSchedule: { label: 'Agenda de Hoy', icon: 'calendar_month', color: 'bg-amber-500', isCustom: false },
     promoBanner: { label: 'Promociones', icon: 'workspace_premium', color: 'bg-purple-500', isCustom: false },
     howItWorks: { label: 'Cómo Funciona', icon: 'auto_awesome', color: 'bg-sky-500', isCustom: false },
   }
 
-  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks']
-  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, todaysSchedule: true, promoBanner: true, howItWorks: true }
+  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks']
+  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, promoBanner: true, howItWorks: true }
   const customSections = settings?.customSections || []
 
   const openEditor = (sectionKey: string) => {
@@ -1053,9 +1052,6 @@ function ContentTab() {
                         )}
                         {key === 'featuredCourts' && (
                           <p className="text-xs text-cm-on-surface-variant">Canchas destacadas (datos de la API)</p>
-                        )}
-                        {key === 'todaysSchedule' && (
-                          <p className="text-xs text-cm-on-surface-variant">Agenda de hoy (datos de la API)</p>
                         )}
                         {key.startsWith('custom_') && (() => {
                           const cs = customSections.find((s) => s.id === key.replace('custom_', ''))

@@ -135,19 +135,23 @@ export default function BookingsView() {
   /* ─── filter ─── */
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
 
   const filtered = bookings.filter((b) => {
     const bd = parseLocalDate(b.date)
+    // Users cannot see today's reservations
+    if (bd >= today && bd < tomorrow) return false
     switch (activeTab) {
       case 'upcoming':
         return (
-          bd >= today &&
+          bd >= tomorrow &&
           !['cancelled', 'completed'].includes(b.status)
         )
       case 'completed':
-        return b.status === 'completed'
+        return b.status === 'completed' && !(bd >= today && bd < tomorrow)
       case 'cancelled':
-        return b.status === 'cancelled'
+        return b.status === 'cancelled' && !(bd >= today && bd < tomorrow)
       default:
         return true
     }
@@ -204,7 +208,7 @@ export default function BookingsView() {
   const tabCounts = {
     upcoming: bookings.filter((b) => {
       const bd = parseLocalDate(b.date)
-      return bd >= today && b.status === 'reserved'
+      return bd >= tomorrow && b.status === 'reserved'
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,
     cancelled: bookings.filter((b) => b.status === 'cancelled').length,

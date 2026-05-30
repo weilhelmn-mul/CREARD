@@ -99,9 +99,9 @@ export interface SectionVisibility {
   hero: boolean
   sportsSection: boolean
   featuredCourts: boolean
-  todaysSchedule: boolean
   promoBanner: boolean
   howItWorks: boolean
+  [key: string]: boolean
 }
 
 export interface SiteSettings {

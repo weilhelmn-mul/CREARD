@@ -338,6 +338,12 @@ export default function CourtDetail() {
   /* ──── Fetch bookings for selected date ──── */
   useEffect(() => {
     if (!selectedCourtId) return
+    // Non-admin users cannot see today's reservations
+    const todayFlag = isToday(selectedDate)
+    if (todayFlag && !isAdmin) {
+      setBookings([])
+      return
+    }
     const dateStr = formatDateISO(selectedDate)
     let cancelled = false
     fetch(`/api/bookings?courtId=${selectedCourtId}&date=${dateStr}`, {
@@ -355,7 +361,7 @@ export default function CourtDetail() {
     return () => {
       cancelled = true
     }
-  }, [selectedCourtId, selectedDate])
+  }, [selectedCourtId, selectedDate, isAdmin])
 
   /* ──── Build slot map for admin ──── */
   const adminSlotMap = useMemo(() => {
@@ -386,13 +392,20 @@ export default function CourtDetail() {
   const pastHours = useMemo(() => {
     const todayFlag = isToday(selectedDate)
     if (!todayFlag) return new Set<number>()
+    // Non-admin: all today's slots are unavailable (users cannot see/book today)
+    if (!isAdmin) {
+      const hours = new Set<number>()
+      for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
+      return hours
+    }
+    // Admin: only past/restricted hours
     const restrictedH = getRestrictedHour()
     const hours = new Set<number>()
     for (let h = SLOT_START; h <= SLOT_END; h++) {
       if (h <= restrictedH) hours.add(h)
     }
     return hours
-  }, [selectedDate])
+  }, [selectedDate, isAdmin])
 
   /* ──── Handlers ──── */
   const handleSelectDate = useCallback((date: Date) => {

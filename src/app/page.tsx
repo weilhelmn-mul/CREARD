@@ -7,7 +7,6 @@ import BottomNavBar from '@/components/layout/BottomNavBar'
 import HeroSection from '@/components/home/HeroSection'
 import FeaturedCourts from '@/components/home/FeaturedCourts'
 import SportsSection from '@/components/home/SportsSection'
-import TodaysSchedule from '@/components/home/TodaysSchedule'
 import PromoBanner from '@/components/home/PromoBanner'
 import HowItWorks from '@/components/home/HowItWorks'
 import CustomSections from '@/components/home/CustomSections'
@@ -23,8 +22,8 @@ import AuthInitializer from '@/components/auth/AuthInitializer'
 
 function HomeView() {
   const { settings } = useSiteSettings()
-  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'todaysSchedule', 'promoBanner', 'howItWorks']
-  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, todaysSchedule: true, promoBanner: true, howItWorks: true }
+  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks']
+  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, promoBanner: true, howItWorks: true }
   const customSections = settings?.customSections || []
 
   const renderSection = (key: string) => {
@@ -42,7 +41,6 @@ function HomeView() {
       case 'hero': return <HeroSection key={key} />
       case 'sportsSection': return <SportsSection key={key} />
       case 'featuredCourts': return <FeaturedCourts key={key} />
-      case 'todaysSchedule': return <TodaysSchedule key={key} />
       case 'promoBanner': return <PromoBanner key={key} />
       case 'howItWorks': return <HowItWorks key={key} />
       default: return null
