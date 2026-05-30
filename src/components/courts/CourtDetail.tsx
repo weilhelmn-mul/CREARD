@@ -145,6 +145,25 @@ function getCurrentHour(): number {
   return new Date().getHours()
 }
 
+/** Minimum minutes of advance required to book a slot */
+const MIN_ADVANCE_MINUTES = 30
+
+/** Returns the latest hour that is still within the 30-min restriction.
+ *  For example, if it's 14:35, hours 14 and earlier are too soon.
+ *  Returns -1 if no hours are restricted (i.e. more than 30 min until SLOT_START). */
+function getRestrictedHour(): number {
+  const now = new Date()
+  const curH = now.getHours()
+  const curM = now.getMinutes()
+  // If current minute >= 30, then the current hour + 1 is still within 30 min
+  // e.g. 14:45 → 15:00 is in 15 min → 15 is restricted too
+  // e.g. 14:20 → 15:00 is in 40 min → 15 is NOT restricted, but 14 IS restricted
+  if (curM >= 30) {
+    return curH + 1
+  }
+  return curH
+}
+
 function getAdminSlotInfo(
   hour: number,
   bookings: BookingInfo[],
@@ -367,10 +386,10 @@ export default function CourtDetail() {
   const pastHours = useMemo(() => {
     const todayFlag = isToday(selectedDate)
     if (!todayFlag) return new Set<number>()
-    const curHour = getCurrentHour()
+    const restrictedH = getRestrictedHour()
     const hours = new Set<number>()
     for (let h = SLOT_START; h <= SLOT_END; h++) {
-      if (h <= curHour) hours.add(h)
+      if (h <= restrictedH) hours.add(h)
     }
     return hours
   }, [selectedDate])
@@ -462,6 +481,11 @@ export default function CourtDetail() {
     const isBooked = bookedSlotHours.has(hour)
     const isPast = pastHours.has(hour)
     const isSelected = selectedTime === slot
+
+    // For today's past/soon slots, show "30 min" label
+    const todayFlag = isToday(selectedDate)
+    const restrictedH = getRestrictedHour()
+    const isTooSoon = todayFlag && hour > getCurrentHour() && hour <= restrictedH
 
     if (isSelected) {
       return 'bg-[#00ff41] text-[#003907] font-bold glow-accent border border-[#00ff41]'
@@ -818,6 +842,9 @@ export default function CourtDetail() {
             {timeSlots.map((slot) => {
               const hour = parseInt(slot.split(':')[0], 10)
               const label = getSlotLabel(slot)
+              const todayFlag = isToday(selectedDate)
+              const restrictedH = getRestrictedHour()
+              const soonLabel = !isAdmin && todayFlag && hour > getCurrentHour() && hour <= restrictedH ? '30 min' : null
               const disabled = (() => {
                 if (isAdmin) {
                   const info = adminSlotMap.get(hour)
@@ -832,10 +859,10 @@ export default function CourtDetail() {
                   disabled={disabled}
                   onClick={() => handleSelectSlot(slot)}
                   className={`py-2.5 px-1 rounded-lg text-center transition-all duration-200 font-[family-name:var(--font-inter)] ${getSlotClasses(slot)}`}
-                  title={label || undefined}
+                  title={label || soonLabel || undefined}
                 >
                   <span className="text-xs font-medium block">{slot}</span>
-                  {label && <span className="text-[8px] leading-tight block mt-0.5 opacity-80">{label}</span>}
+                  {(label || soonLabel) && <span className="text-[8px] leading-tight block mt-0.5 opacity-80">{label || soonLabel}</span>}
                 </button>
               )
             })}

@@ -1768,10 +1768,21 @@ export default function AdminDashboard() {
     bookings: scheduleBookings.filter((b) => b.courtId === c.id),
   }))
 
-  /* time slots */
-  const timeSlots = []
+  /* time slots — for today's date, exclude hours within 30 min of now */
+  const timeSlots: Array<{ value: string; disabled: boolean; label?: string }> = []
+  const adminNow = new Date()
+  const adminCurH = adminNow.getHours()
+  const adminCurM = adminNow.getMinutes()
+  // Restricted hour: if current minute >= 30, next hour is also too soon
+  const adminRestrictedH = adminCurM >= 30 ? adminCurH + 1 : adminCurH
+  const adminToday = todayStr()
   for (let h = 6; h <= 23; h++) {
-    timeSlots.push(`${String(h).padStart(2, '0')}:00`)
+    const isRestricted = bookingForm.date === adminToday && h <= adminRestrictedH
+    timeSlots.push({
+      value: `${String(h).padStart(2, '0')}:00`,
+      disabled: isRestricted,
+      label: isRestricted && h > adminCurH ? '30 min' : undefined,
+    })
   }
 
   /* ─── KPIs ─── */
@@ -2743,14 +2754,21 @@ export default function AdminDashboard() {
                 {/* Time */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora inicio *</label>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
+                      Hora inicio *
+                      {bookingForm.date === adminToday && (
+                        <span className="text-cm-primary ml-1">mín. 30 min</span>
+                      )}
+                    </label>
                     <select
                       value={bookingForm.startTime}
                       onChange={(e) => handleBookingFormChange('startTime', e.target.value)}
                       className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
                     >
-                      {Array.from({ length: 18 }, (_, i) => i + 6).map((h) => (
-                        <option key={h} value={`${String(h).padStart(2, '0')}:00`}>{`${String(h).padStart(2, '0')}:00`}</option>
+                      {timeSlots.map((ts) => (
+                        <option key={ts.value} value={ts.value} disabled={ts.disabled}>
+                          {ts.value}{ts.label ? ` (${ts.label})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -2761,9 +2779,15 @@ export default function AdminDashboard() {
                       onChange={(e) => handleBookingFormChange('endTime', e.target.value)}
                       className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
                     >
-                      {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => (
-                        <option key={h} value={`${String(h).padStart(2, '0')}:00`}>{`${String(h).padStart(2, '0')}:00`}</option>
-                      ))}
+                      {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
+                        const val = `${String(h).padStart(2, '0')}:00`
+                        const isRest = bookingForm.date === adminToday && h <= adminRestrictedH
+                        return (
+                          <option key={h} value={val} disabled={isRest}>
+                            {val}{isRest && h > adminCurH ? ' (30 min)' : ''}
+                          </option>
+                        )
+                      })}
                     </select>
                     {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
                   </div>
@@ -3434,22 +3458,24 @@ export default function AdminDashboard() {
                           <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{court.name}</span>
                         </div>
                         <div className="flex gap-1">
-                          {timeSlots.map((slot) => {
-                            const booking = court.bookings.find((b) => b.startTime === slot)
+                          {timeSlots.map((ts) => {
+                            const booking = court.bookings.find((b) => b.startTime === ts.value)
                             return (
                               <div
-                                key={slot}
+                                key={ts.value}
                                 className={`flex-1 h-10 rounded-md flex items-center justify-center text-[10px] font-medium transition-all ${
                                   booking
                                     ? 'bg-cm-primary/20 text-cm-primary border border-cm-primary/30'
+                                    : ts.disabled
+                                    ? 'bg-cm-surface-container-highest/15 text-cm-on-surface-variant/15 border border-transparent'
                                     : 'bg-cm-surface-container-highest/30 text-cm-on-surface-variant/30 border border-transparent'
                                 }`}
-                                title={booking ? `${booking.user?.name || 'Cliente'} (${booking.startTime}-${booking.endTime})` : 'Disponible'}
+                                title={booking ? `${booking.user?.name || 'Cliente'} (${booking.startTime}-${booking.endTime})` : ts.label || 'Disponible'}
                               >
                                 {booking ? (
                                   <span className="truncate px-1">{(booking.user?.name || 'Cliente').split(' ')[0]}</span>
                                 ) : (
-                                  <span className="opacity-0 sm:opacity-100">{slot.slice(0, 2)}</span>
+                                  <span className="opacity-0 sm:opacity-100">{ts.value.slice(0, 2)}</span>
                                 )}
                               </div>
                             )

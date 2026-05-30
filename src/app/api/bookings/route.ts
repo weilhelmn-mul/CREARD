@@ -297,6 +297,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Minimum 30-minute advance validation ──
+    const now = new Date();
+    const slotDateTime = new Date(`${date}T${startTime}:00`);
+    const diffMs = slotDateTime.getTime() - now.getTime();
+    const thirtyMinMs = 30 * 60 * 1000;
+    if (diffMs < thirtyMinMs) {
+      const minsLeft = Math.floor(diffMs / 60000);
+      if (minsLeft < 0) {
+        return NextResponse.json(
+          { error: 'No se puede reservar un horario que ya ha pasado.' },
+          { status: 422 }
+        );
+      }
+      return NextResponse.json(
+        { error: `La reserva requiere al menos 30 minutos de anticipación. El horario seleccionado comienza en ${minsLeft} minuto${minsLeft === 1 ? '' : 's'}. Selecciona un horario a partir de las ${new Date(now.getTime() + thirtyMinMs).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })} o posterior.` },
+        { status: 422 }
+      );
+    }
+
     // Non-admin users can only create bookings for themselves
     if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       if (userId !== authUser.id) {

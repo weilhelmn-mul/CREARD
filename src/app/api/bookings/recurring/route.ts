@@ -147,41 +147,59 @@ export async function POST(request: NextRequest) {
     const price = parseFloat(totalPrice) || 0;
     const adv = parseFloat(advanceAmount) || price * 0.5;
 
-    // Check each date for conflicts
+    // Check each date for conflicts AND 30-min advance restriction
     const previewItems = [];
     let availableCount = 0;
     let conflictCount = 0;
+    const now = new Date();
+    const thirtyMinMs = 30 * 60 * 1000;
 
     for (const date of dates) {
-      const existing = await getBookings({ courtId, date });
-      const overlapping = existing.filter(
-        (b) =>
-          !['cancelled'].includes(migrateStatus(b.status || '')) &&
-          (b.start_time || '') < endTime &&
-          (b.end_time || '') > startTime
-      );
+      const slotDateTime = new Date(`${date}T${startTime}:00`);
+      const diffMs = slotDateTime.getTime() - now.getTime();
 
-      const available = overlapping.length === 0;
-
+      // Check 30-min advance rule
+      let tooSoon = false;
       let conflict: { bookingId: string; startTime: string; endTime: string; userName: string } | undefined;
-      if (!available && overlapping.length > 0) {
-        const ob = overlapping[0];
-        // Try to get user name
-        let userName = 'Cliente';
-        try {
-          if (ob.user_id) {
-            const user = await getUserById(ob.user_id as string);
-            if (user?.name) userName = user.name as string;
-          }
-        } catch { /* fallback */ }
 
+      if (diffMs < thirtyMinMs) {
+        tooSoon = true;
         conflict = {
-          bookingId: ob.id,
-          startTime: ob.start_time as string,
-          endTime: ob.end_time as string,
-          userName,
+          bookingId: '',
+          startTime,
+          endTime,
+          userName: diffMs < 0 ? 'Horario pasado' : `Menos de 30 min de anticipación`,
         };
+      } else {
+        // Check overlap with existing bookings
+        const existing = await getBookings({ courtId, date });
+        const overlapping = existing.filter(
+          (b) =>
+            !['cancelled'].includes(migrateStatus(b.status || '')) &&
+            (b.start_time || '') < endTime &&
+            (b.end_time || '') > startTime
+        );
+
+        if (overlapping.length > 0) {
+          const ob = overlapping[0];
+          let userName = 'Cliente';
+          try {
+            if (ob.user_id) {
+              const user = await getUserById(ob.user_id as string);
+              if (user?.name) userName = user.name as string;
+            }
+          } catch { /* fallback */ }
+
+          conflict = {
+            bookingId: ob.id,
+            startTime: ob.start_time as string,
+            endTime: ob.end_time as string,
+            userName,
+          };
+        }
       }
+
+      const available = !tooSoon && !conflict?.bookingId;
 
       if (available) availableCount++;
       else conflictCount++;
@@ -192,6 +210,7 @@ export async function POST(request: NextRequest) {
         dayName: dayNames[d.getDay()],
         available,
         conflict,
+        tooSoon,
         price,
       });
     }
