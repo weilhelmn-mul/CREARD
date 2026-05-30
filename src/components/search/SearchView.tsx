@@ -5,14 +5,37 @@ import Image from 'next/image'
 import { useAppStore } from '@/store/useAppStore'
 import { motion } from 'framer-motion'
 
+interface PricingScheduleItem {
+  label: string
+  startHour: number
+  endHour: number
+  pricePerHour: number
+}
+
 interface Court {
   id: string
   name: string
   sport: string
   pricePerHour: number
+  pricingSchedule: PricingScheduleItem[]
   images: string[]
   description?: string
+  amenities?: string[]
   branch: { name: string; city: string }
+}
+
+const amenityIcons: Record<string, string> = {
+  'cesped sintetico': 'grass',
+  'cesped premium': 'eco',
+  'iluminacion': 'lightbulb',
+  'iluminacion led': 'lightbulb',
+  'vestuarios': 'checkroom',
+  'duchas': 'shower',
+  'estacionamiento': 'local_parking',
+  'techado': 'roofing',
+  'techado parcial': 'deployed_code',
+  'piso pvc': 'layers',
+  'red reglamentaria': 'sports_volleyball',
 }
 
 const sportLabels: Record<string, string> = {
@@ -40,13 +63,22 @@ export default function SearchView() {
   const [sortBy, setSortBy] = useState<SortType>('price-asc')
   const [loading, setLoading] = useState(true)
 
+  const futbolSchedule: PricingScheduleItem[] = [
+    { label: 'Mañana', startHour: 7, endHour: 18, pricePerHour: 35 },
+    { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 50 },
+  ]
+  const voleySchedule: PricingScheduleItem[] = [
+    { label: 'Mañana', startHour: 7, endHour: 18, pricePerHour: 30 },
+    { label: 'Noche', startHour: 18, endHour: 22, pricePerHour: 45 },
+  ]
+
   const fallbackCourts: Court[] = [
-    { id: 'cancha-1', name: 'Cancha Fútbol 1', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-1.png'], description: 'Cancha premium con césped sintético', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: 'cancha-2', name: 'Cancha Fútbol 2', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-2.png'], description: 'Cancha estándar', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: 'cancha-3', name: 'Cancha Fútbol 3', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-3.png'], description: 'Techada parcial', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: 'cancha-4', name: 'Cancha Fútbol 4', sport: 'futbol', pricePerHour: 35, images: ['/cancha-futbol-4.png'], description: 'Nueva con mejores instalaciones', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: 'cancha-5', name: 'Vóley Cancha A', sport: 'voley', pricePerHour: 30, images: ['/cancha-voley.png'], description: 'Piso PVC profesional con red reglamentaria', branch: { name: 'CREARD', city: 'San Sebastián' } },
-    { id: 'cancha-6', name: 'Vóley Cancha B', sport: 'voley', pricePerHour: 30, images: ['/cancha-voley.png'], description: 'Segunda cancha de vóley techada', branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-1', name: 'Cancha Fútbol 1', sport: 'futbol', pricePerHour: 35, pricingSchedule: futbolSchedule, images: ['/cancha-futbol-1.png'], description: 'Cancha premium con césped sintético', amenities: ['Cesped sintetico', 'Iluminacion LED', 'Vestuarios'], branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-2', name: 'Cancha Fútbol 2', sport: 'futbol', pricePerHour: 35, pricingSchedule: futbolSchedule, images: ['/cancha-futbol-2.png'], description: 'Cancha estándar', amenities: ['Cesped sintetico', 'Iluminacion'], branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-3', name: 'Cancha Fútbol 3', sport: 'futbol', pricePerHour: 35, pricingSchedule: futbolSchedule, images: ['/cancha-futbol-3.png'], description: 'Techada parcial', amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'], branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-4', name: 'Cancha Fútbol 4', sport: 'futbol', pricePerHour: 35, pricingSchedule: futbolSchedule, images: ['/cancha-futbol-4.png'], description: 'Nueva con mejores instalaciones', amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'], branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-5', name: 'Vóley Cancha A', sport: 'voley', pricePerHour: 30, pricingSchedule: voleySchedule, images: ['/cancha-voley.png'], description: 'Piso PVC profesional con red reglamentaria', amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'], branch: { name: 'CREARD', city: 'San Sebastián' } },
+    { id: 'cancha-6', name: 'Vóley Cancha B', sport: 'voley', pricePerHour: 30, pricingSchedule: voleySchedule, images: ['/cancha-voley.png'], description: 'Segunda cancha de vóley techada', amenities: ['Piso PVC', 'Iluminacion LED', 'Techado'], branch: { name: 'CREARD', city: 'San Sebastián' } },
   ]
 
   useEffect(() => {
@@ -181,7 +213,7 @@ export default function SearchView() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.03 }}
-                className="glass-card rounded-2xl overflow-hidden cursor-pointer hover:border-cm-primary/30 transition-all duration-300 group"
+                className="glass-card rounded-2xl overflow-hidden cursor-pointer hover:border-cm-primary/30 hover:shadow-[0_0_20px_rgba(0,255,65,0.1)] transition-all duration-300 group flex flex-col"
                 onClick={() => handleCourtClick(court.id)}
               >
                 {/* Image */}
@@ -193,55 +225,84 @@ export default function SearchView() {
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                     unoptimized
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
                   {/* Sport Badge */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cm-surface/80 backdrop-blur-sm">
-                    <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                    <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                       {sportIcons[court.sport]}
                     </span>
-                    <span className="text-xs font-semibold text-cm-primary">
+                    <span className="text-[10px] font-bold text-cm-primary uppercase tracking-wide">
                       {sportLabels[court.sport]}
                     </span>
                   </div>
 
-                  {/* Price Badge */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-cm-surface/80 backdrop-blur-sm">
-                    <span className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
-                      S/. {court.pricePerHour || 0}
+                  {/* Pricing Badge (from top-right) */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-cm-primary/90 backdrop-blur-sm">
+                    <span className="material-symbols-outlined text-cm-on-primary text-[12px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                      schedule
                     </span>
-                    <span className="text-[10px] text-cm-on-surface-variant">/hr</span>
+                    <span className="text-[10px] font-bold text-cm-on-primary">
+                      S/.{(court.pricingSchedule && court.pricingSchedule.length > 0 ? court.pricingSchedule[0].pricePerHour : court.pricePerHour || 0)}-{court.pricingSchedule && court.pricingSchedule.length > 1 ? court.pricingSchedule[court.pricingSchedule.length - 1].pricePerHour : court.pricePerHour || 0}/hr
+                    </span>
                   </div>
                 </div>
 
                 {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-1 truncate">
+                <div className="p-4 flex flex-col flex-1">
+                  <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-2 truncate">
                     {court.name}
                   </h3>
-                  <div className="flex items-center gap-1 text-cm-on-surface-variant text-xs mb-2">
-                    <span className="material-symbols-outlined text-[14px]">location_on</span>
-                    <span className="font-[family-name:var(--font-inter)]">
-                      {court.branch?.name || 'CREARD'}, {court.branch?.city || 'San Sebastián'}
-                    </span>
-                  </div>
-                  {court.description && (
-                    <p className="text-cm-on-surface-variant text-xs line-clamp-2 mb-3 font-[family-name:var(--font-inter)]">
-                      {court.description}
-                    </p>
+
+                  {/* Amenities */}
+                  {court.amenities && court.amenities.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3 min-h-[24px]">
+                      {court.amenities.filter(Boolean).slice(0, 3).map((amenity: string, i: number) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/80 text-cm-on-surface-variant text-[10px] font-medium"
+                        >
+                          <span className="material-symbols-outlined text-[11px]">
+                            {amenityIcons[amenity.toLowerCase()] || 'check_circle'}
+                          </span>
+                          {amenity}
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <div className="flex items-center justify-between">
-                    <span className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-primary">
-                      S/. {court.pricePerHour}
-                      <span className="text-xs text-cm-on-surface-variant font-normal">/hr</span>
-                    </span>
+
+                  {/* Price + Reserve */}
+                  <div className="mt-auto flex items-end justify-between gap-2 pt-2 border-t border-white/5">
+                    <div>
+                      {court.pricingSchedule && court.pricingSchedule.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {court.pricingSchedule.map((ps, psi) => (
+                            <div key={psi} className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-cm-on-surface-variant font-medium">{ps.label}</span>
+                              <span className="font-[family-name:var(--font-sora)] text-sm md:text-base font-bold text-cm-primary">
+                                S/. {ps.pricePerHour}
+                                <span className="text-[9px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-[10px] text-cm-on-surface-variant font-medium">Desde</p>
+                          <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-primary">
+                            S/. {court.pricePerHour}
+                            <span className="text-[10px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedCourt(court.id)
                         setView('court-detail')
                       }}
-                      className="px-4 py-1.5 bg-cm-primary/10 text-cm-primary text-xs font-semibold rounded-lg hover:bg-cm-primary/20 transition-colors"
+                      className="px-3 py-2 md:px-4 md:py-2.5 bg-cm-primary text-cm-on-primary text-xs font-bold rounded-lg hover:bg-cm-primary-dim transition-all duration-200 active:scale-[0.96] glow-accent font-[family-name:var(--font-sora)]"
                     >
                       Reservar
                     </button>
