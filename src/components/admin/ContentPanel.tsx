@@ -87,7 +87,6 @@ function CourtsPanel({ courts }: { courts: Court[] }) {
                   <select value={editForm.sport || 'futbol'} onChange={(e) => setEditForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
                     <option value="futbol">Fútbol 5</option>
                     <option value="voley">Vóley</option>
-                    <option value="eventos">Eventos</option>
                   </select>
                 </div>
                 <div>

@@ -143,8 +143,8 @@ const DEFAULT_COURTS: Court[] = [
   { id: 'c2', name: 'Cancha Fútbol 2', sport: 'futbol', description: 'Cancha estándar de fútbol 5', images: ['/cancha-futbol-2.png'], price_per_hour: 35, is_active: true, amenities: ['Cesped sintetico', 'Iluminacion'] },
   { id: 'c3', name: 'Cancha Fútbol 3', sport: 'futbol', description: 'Cancha techada parcial', images: ['/cancha-futbol-3.png'], price_per_hour: 35, is_active: true, amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'] },
   { id: 'c4', name: 'Cancha Fútbol 4', sport: 'futbol', description: 'Nueva con mejores instalaciones', images: ['/cancha-futbol-4.png'], price_per_hour: 35, is_active: true, amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'] },
-  { id: 'c5', name: 'Cancha Vóley 1', sport: 'voley', description: 'Piso PVC profesional', images: ['/cancha-voley.png'], price_per_hour: 30, is_active: true, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'] },
-  { id: 'c6', name: 'Cancha Vóley 2', sport: 'voley', description: 'Segunda cancha de vóley', images: ['/cancha-voley.png'], price_per_hour: 30, is_active: true, amenities: ['Piso PVC', 'Iluminacion LED', 'Techado'] },
+  { id: 'c5', name: 'Vóley Cancha A', sport: 'voley', description: 'Piso PVC profesional con red reglamentaria', images: ['/cancha-voley.png'], price_per_hour: 30, is_active: true, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'] },
+  { id: 'c6', name: 'Vóley Cancha B', sport: 'voley', description: 'Segunda cancha de vóley techada con iluminación profesional', images: ['/cancha-voley.png'], price_per_hour: 30, is_active: true, amenities: ['Piso PVC', 'Iluminacion LED', 'Techado'] },
 ]
 
 const DEFAULT_NEWS: NewsItem[] = []

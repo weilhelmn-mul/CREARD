@@ -40,20 +40,18 @@ const fallbackCourts: Court[] = [
   { id: 'cancha-2', name: 'Cancha Fútbol 2', sport: 'futbol', description: 'Cancha estándar', branch_id: 'branch-1', images: ['/cancha-futbol-2.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped sintetico', 'Iluminacion'], is_active: true, availableToday: 7 },
   { id: 'cancha-3', name: 'Cancha Fútbol 3', sport: 'futbol', description: 'Techada parcial', branch_id: 'branch-1', images: ['/cancha-futbol-3.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped sintetico', 'Techado parcial', 'Vestuarios'], is_active: true, availableToday: 6 },
   { id: 'cancha-4', name: 'Cancha Fútbol 4', sport: 'futbol', description: 'Nueva con mejores instalaciones', branch_id: 'branch-1', images: ['/cancha-futbol-4.png'], price_per_hour: 35, pricingSchedule: futbolSchedule, amenities: ['Cesped premium', 'Iluminacion LED', 'Duchas', 'Estacionamiento'], is_active: true, availableToday: 8 },
-  { id: 'cancha-5', name: 'Cancha Vóley 1', sport: 'voley', description: 'Piso PVC profesional', branch_id: 'branch-1', images: ['/cancha-voley.png'], price_per_hour: 30, pricingSchedule: voleySchedule, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'], is_active: true, availableToday: 10 },
-  { id: 'cancha-6', name: 'Salón Eventos', sport: 'eventos', description: 'Espacio multiusos techado', branch_id: 'branch-1', images: ['/salon-eventos.png'], price_per_hour: 80, pricingSchedule: [], amenities: ['Techado', 'Sonido', 'Iluminacion'], is_active: true, availableToday: 5 },
+  { id: 'cancha-5', name: 'Vóley Cancha A', sport: 'voley', description: 'Piso PVC profesional con red reglamentaria', branch_id: 'branch-1', images: ['/cancha-voley.png'], price_per_hour: 30, pricingSchedule: voleySchedule, amenities: ['Piso PVC', 'Red reglamentaria', 'Iluminacion LED'], is_active: true, availableToday: 10 },
+  { id: 'cancha-6', name: 'Vóley Cancha B', sport: 'voley', description: 'Segunda cancha de vóley techada', branch_id: 'branch-1', images: ['/cancha-voley.png'], price_per_hour: 30, pricingSchedule: voleySchedule, amenities: ['Piso PVC', 'Iluminacion LED', 'Techado'], is_active: true, availableToday: 8 },
 ]
 
 const sportLabels: Record<string, string> = {
   futbol: 'Fútbol',
   voley: 'Vóley',
-  eventos: 'Eventos',
 }
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer',
   voley: 'sports_volleyball',
-  eventos: 'celebration',
 }
 
 const amenityIcons: Record<string, string> = {
