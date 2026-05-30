@@ -297,12 +297,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Minimum 30-minute advance validation ──
+    // ── Minimum advance validation (role-based) ──
+    const isAdmin = authUser.role === 'admin' || authUser.role === 'super_admin';
+    const minAdvanceMs = isAdmin ? 5 * 60 * 1000 : 30 * 60 * 1000;
+    const minAdvanceLabel = isAdmin ? '5' : '30';
+
     const now = new Date();
     const slotDateTime = new Date(`${date}T${startTime}:00`);
     const diffMs = slotDateTime.getTime() - now.getTime();
-    const thirtyMinMs = 30 * 60 * 1000;
-    if (diffMs < thirtyMinMs) {
+    if (diffMs < minAdvanceMs) {
       const minsLeft = Math.floor(diffMs / 60000);
       if (minsLeft < 0) {
         return NextResponse.json(
@@ -311,7 +314,7 @@ export async function POST(request: NextRequest) {
         );
       }
       return NextResponse.json(
-        { error: `La reserva requiere al menos 30 minutos de anticipación. El horario seleccionado comienza en ${minsLeft} minuto${minsLeft === 1 ? '' : 's'}. Selecciona un horario a partir de las ${new Date(now.getTime() + thirtyMinMs).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })} o posterior.` },
+        { error: `La reserva requiere al menos ${minAdvanceLabel} minutos de anticipación. El horario seleccionado comienza en ${minsLeft} minuto${minsLeft === 1 ? '' : 's'}. Selecciona un horario a partir de las ${new Date(now.getTime() + minAdvanceMs).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })} o posterior.` },
         { status: 422 }
       );
     }

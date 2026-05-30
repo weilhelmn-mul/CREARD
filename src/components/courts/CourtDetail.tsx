@@ -145,20 +145,23 @@ function getCurrentHour(): number {
   return new Date().getHours()
 }
 
-/** Minimum minutes of advance required to book a slot */
-const MIN_ADVANCE_MINUTES = 30
+/** Minimum minutes of advance required to book a slot (users) */
+const MIN_ADVANCE_MINUTES_USER = 30
+const MIN_ADVANCE_MINUTES_ADMIN = 5
 
-/** Returns the latest hour that is still within the 30-min restriction.
- *  For example, if it's 14:35, hours 14 and earlier are too soon.
- *  Returns -1 if no hours are restricted (i.e. more than 30 min until SLOT_START). */
-function getRestrictedHour(): number {
+/** Returns the latest hour that is still within the advance restriction.
+ *  For users: 30 min. For admins: 5 min.
+ *  Returns -1 if no hours are restricted. */
+function getRestrictedHour(isAdmin: boolean): number {
   const now = new Date()
   const curH = now.getHours()
   const curM = now.getMinutes()
-  // If current minute >= 30, then the current hour + 1 is still within 30 min
-  // e.g. 14:45 → 15:00 is in 15 min → 15 is restricted too
-  // e.g. 14:20 → 15:00 is in 40 min → 15 is NOT restricted, but 14 IS restricted
-  if (curM >= 30) {
+  const minAdvance = isAdmin ? MIN_ADVANCE_MINUTES_ADMIN : MIN_ADVANCE_MINUTES_USER
+  const threshold = 60 - minAdvance
+  // If current minute > threshold, the current hour + 1 is still within restriction
+  // User (30 min): threshold=30, e.g. 14:35 → 15 restricted; 14:20 → 15 NOT restricted
+  // Admin (5 min): threshold=55, e.g. 14:58 → 15 restricted; 14:50 → 15 NOT restricted
+  if (curM > threshold) {
     return curH + 1
   }
   return curH
@@ -386,13 +389,15 @@ export default function CourtDetail() {
   const pastHours = useMemo(() => {
     const todayFlag = isToday(selectedDate)
     if (!todayFlag) return new Set<number>()
-    const restrictedH = getRestrictedHour()
+    // Admins: only truly past hours are blocked (5 min restriction handled by isTooSoon)
+    if (isAdmin) return new Set<number>()
+    const restrictedH = getRestrictedHour(false)
     const hours = new Set<number>()
     for (let h = SLOT_START; h <= SLOT_END; h++) {
       if (h <= restrictedH) hours.add(h)
     }
     return hours
-  }, [selectedDate])
+  }, [selectedDate, isAdmin])
 
   /* ──── Handlers ──── */
   const handleSelectDate = useCallback((date: Date) => {
@@ -482,10 +487,10 @@ export default function CourtDetail() {
     const isPast = pastHours.has(hour)
     const isSelected = selectedTime === slot
 
-    // For today's past/soon slots, show "30 min" label
+    // For today's past/soon slots, show advance restriction label
     const todayFlag = isToday(selectedDate)
-    const restrictedH = getRestrictedHour()
-    const isTooSoon = todayFlag && hour > getCurrentHour() && hour <= restrictedH
+    const restrictedH = getRestrictedHour(isAdmin)
+    const isTooSoon = !isAdmin && todayFlag && hour > getCurrentHour() && hour <= restrictedH
 
     if (isSelected) {
       return 'bg-[#00ff41] text-[#003907] font-bold glow-accent border border-[#00ff41]'
@@ -843,7 +848,7 @@ export default function CourtDetail() {
               const hour = parseInt(slot.split(':')[0], 10)
               const label = getSlotLabel(slot)
               const todayFlag = isToday(selectedDate)
-              const restrictedH = getRestrictedHour()
+              const restrictedH = getRestrictedHour(false)
               const soonLabel = !isAdmin && todayFlag && hour > getCurrentHour() && hour <= restrictedH ? '30 min' : null
               const disabled = (() => {
                 if (isAdmin) {
