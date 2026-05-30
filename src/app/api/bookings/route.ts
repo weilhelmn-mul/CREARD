@@ -10,21 +10,22 @@ import {
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
-// Migrate old status values to the new 3-status system
+// Migrate old status values to the current status system
+// Statuses: reserved | partial_payment | confirmed | completed | cancelled
 function migrateStatus(s: string): string {
   switch (s) {
-    case 'confirmed':
+    // Legacy values mapped to new ones
     case 'pending':
-    case 'partially_paid':
       return 'reserved';
+    case 'partially_paid':
+      return 'partial_payment';
     case 'fully_paid':
-    case 'completed':
-      return 'completed';
+      return 'confirmed';
     case 'no_show':
     case 'expired':
       return 'cancelled';
     default:
-      return s; // 'reserved', 'completed', 'cancelled' pass through
+      return s; // 'reserved', 'partial_payment', 'confirmed', 'completed', 'cancelled' pass through
   }
 }
 
@@ -362,7 +363,8 @@ export async function POST(request: NextRequest) {
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
     const rem = parseFloat(remainingAmount) || price - adv;
-    const bookingStatus = migrateStatus(status || 'reserved');
+    // New bookings start as 'reserved' (no payment yet)
+    const bookingStatus = 'reserved';
 
     // Save to Firestore
     const id = await createBooking({

@@ -30,13 +30,24 @@ interface Booking {
   user: { id: string; name: string; email: string }
 }
 
+interface PaymentRecord {
+  id: string
+  amount: number
+  type: string
+  method: string
+  status: string
+  createdAt: unknown
+}
+
 type TabType = 'upcoming' | 'completed' | 'cancelled'
 
 /* ─── config ─── */
 const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
-  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',   icon: 'check_circle' },
-  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'verified' },
-  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
+  reserved:         { label: 'Pendiente de Pago',  color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',     icon: 'schedule' },
+  partial_payment:  { label: 'Pago Parcial',       color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'clock_loader' },
+  confirmed:        { label: 'Pagado',             color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: 'verified' },
+  completed:        { label: 'Completo',           color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'check_circle' },
+  cancelled:        { label: 'Cancelado',          color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -68,7 +79,7 @@ const onlineMethods = ['culqi', 'yape', 'plin', 'card', 'tarjeta']
 const manualMethods = ['efectivo', 'transferencia', 'cash', 'transfer']
 
 const tabs: { key: TabType; label: string }[] = [
-  { key: 'upcoming',   label: 'Próximas' },
+  { key: 'upcoming',   label: 'Activas' },
   { key: 'completed',  label: 'Completadas' },
   { key: 'cancelled',  label: 'Canceladas' },
 ]
@@ -103,6 +114,11 @@ export default function BookingsView() {
   const [payMethod, setPayMethod] = useState('yape')
   const [paying, setPaying] = useState(false)
   const [payModalTab, setPayModalTab] = useState<'online' | 'manual'>('online')
+
+  /* payment history modal */
+  const [historyModal, setHistoryModal] = useState<Booking | null>(null)
+  const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   /* ─── fetch ─── */
   const fetchBookings = useCallback(async () => {
@@ -200,11 +216,32 @@ export default function BookingsView() {
     }
   }
 
+  /* ─── fetch payment history ─── */
+  const fetchPaymentHistory = useCallback(async (bookingId: string) => {
+    try {
+      setLoadingHistory(true)
+      const res = await fetch(`/api/payments?bookingId=${bookingId}`, { headers: getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setPaymentHistory(data)
+      }
+    } catch (err) {
+      console.error('[PAYMENTS] Error fetching history:', err)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }, [])
+
+  const openHistory = (booking: Booking) => {
+    setHistoryModal(booking)
+    fetchPaymentHistory(booking.id)
+  }
+
   /* ─── tab counts ─── */
   const tabCounts = {
     upcoming: bookings.filter((b) => {
       const bd = parseLocalDate(b.date)
-      return bd >= today && b.status === 'reserved'
+      return bd >= today && !['completed', 'cancelled'].includes(b.status)
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,
     cancelled: bookings.filter((b) => b.status === 'cancelled').length,
@@ -357,8 +394,8 @@ export default function BookingsView() {
                         </div>
                       </div>
 
-                      {/* Progress bar (always visible for payment statuses) */}
-                      {['reserved', 'completed'].includes(booking.status) && (
+                      {/* Progress bar (visible for active payment statuses) */}
+                      {['reserved', 'partial_payment', 'confirmed'].includes(booking.status) && (
                         <div className="mt-3 ml-[60px]">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
@@ -431,7 +468,7 @@ export default function BookingsView() {
                             </div>
 
                             {/* Remaining payment warning */}
-                            {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+                            {booking.remainingAmount > 0 && ['reserved', 'partial_payment'].includes(booking.status) && (
                               <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
                                 <span className="material-symbols-outlined text-orange-400 text-[20px]">warning</span>
                                 <p className="text-sm text-orange-300 font-[family-name:var(--font-inter)]">
@@ -440,9 +477,19 @@ export default function BookingsView() {
                               </div>
                             )}
 
+                            {/* Fully paid confirmation */}
+                            {booking.status === 'confirmed' && (
+                              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="material-symbols-outlined text-emerald-400 text-[20px]">verified</span>
+                                <p className="text-sm text-emerald-300 font-[family-name:var(--font-inter)]">
+                                  Pago completado — tu reserva esta confirmada
+                                </p>
+                              </div>
+                            )}
+
                             {/* Actions */}
                             <div className="flex gap-2 pt-1">
-                              {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+                              {['reserved', 'partial_payment'].includes(booking.status) && booking.remainingAmount > 0 && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -454,7 +501,7 @@ export default function BookingsView() {
                                   Pagar Restante
                                 </button>
                               )}
-                              {booking.status === 'reserved' && (
+                              {['reserved', 'partial_payment'].includes(booking.status) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -464,6 +511,18 @@ export default function BookingsView() {
                                 >
                                   <span className="material-symbols-outlined text-[18px]">cancel</span>
                                   Cancelar
+                                </button>
+                              )}
+                              {booking.advanceAmount > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openHistory(booking)
+                                  }}
+                                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 border border-cm-primary/30 text-cm-primary rounded-xl text-sm font-semibold hover:bg-cm-primary/10 transition-colors font-[family-name:var(--font-sora)]"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                                  Historial
                                 </button>
                               )}
                             </div>
@@ -622,6 +681,110 @@ export default function BookingsView() {
                     </>
                   )}
                 </button>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Payment History Modal ─── */}
+      <AnimatePresence>
+        {historyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setHistoryModal(null)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">
+                  Historial de Pagos
+                </h3>
+                <button
+                  onClick={() => setHistoryModal(null)}
+                  className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                </button>
+              </div>
+
+              {/* Booking info */}
+              <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1 mb-4">
+                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{historyModal.court.name}</p>
+                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                  {fmt(historyModal.date)} · {historyModal.startTime} - {historyModal.endTime}
+                </p>
+                <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                  <span className="text-xs text-cm-on-surface-variant">Total</span>
+                  <span className="text-sm font-bold text-cm-primary font-[family-name:var(--font-sora)]">{fmtCurrency(historyModal.totalPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-cm-on-surface-variant">Pagado</span>
+                  <span className="text-sm font-semibold text-emerald-400 font-[family-name:var(--font-sora)]">{fmtCurrency(historyModal.advanceAmount)}</span>
+                </div>
+              </div>
+
+              {/* Payment list */}
+              {loadingHistory ? (
+                <div className="space-y-2">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-16 rounded-xl bg-cm-surface-container-highest/40 animate-pulse" />
+                  ))}
+                </div>
+              ) : paymentHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30">receipt_long</span>
+                  <p className="text-sm text-cm-on-surface-variant mt-2">No hay pagos registrados</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {paymentHistory.map((payment) => (
+                    <div key={payment.id} className="flex items-center gap-3 p-3 rounded-xl bg-cm-surface-container-highest/40 border border-white/5">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        payment.type === 'advance'
+                          ? 'bg-blue-500/10'
+                          : 'bg-emerald-500/10'
+                      }`}>
+                        <span className={`material-symbols-outlined text-[20px] ${
+                          payment.type === 'advance' ? 'text-blue-400' : 'text-emerald-400'
+                        }`} style={{ fontVariationSettings: '"FILL" 1' }}>
+                          {payment.type === 'advance' ? 'download' : 'verified'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                            {payment.type === 'advance' ? 'Adelanto' : 'Pago Restante'}
+                          </p>
+                          <p className="text-sm font-bold text-cm-primary font-[family-name:var(--font-sora)]">
+                            {fmtCurrency(payment.amount)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                            {paymentMethodLabels[payment.method] || payment.method}
+                          </span>
+                          <span className="text-cm-on-surface-variant/30">·</span>
+                          <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                            {payment.createdAt
+                              ? new Date(String(payment.createdAt)).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                              : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </motion.div>
           </motion.div>

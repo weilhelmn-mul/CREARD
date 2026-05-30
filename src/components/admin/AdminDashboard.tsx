@@ -87,14 +87,21 @@ type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'contenido'
    CONFIG
    ═══════════════════════════════════════════════════ */
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
-  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
-  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
-  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
+  reserved:         { label: 'Pendiente de Pago', color: 'bg-gray-500/20 text-gray-400',    dot: 'bg-gray-400' },
+  partial_payment:  { label: 'Pago Parcial',       color: 'bg-orange-500/20 text-orange-400',  dot: 'bg-orange-400' },
+  confirmed:        { label: 'Pagado',             color: 'bg-emerald-500/20 text-emerald-400',dot: 'bg-emerald-400' },
+  completed:         { label: 'Completo',           color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
+  cancelled:         { label: 'Cancelado',          color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
 }
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer', voley: 'sports_volleyball', basket: 'sports_basketball',
   tenis: 'sports_tennis', eventos: 'celebration',
+}
+
+const paymentMethodLabels: Record<string, string> = {
+  yape: 'Yape', plin: 'Plin', culqi: 'Culqi', card: 'Tarjeta',
+  cash: 'Efectivo', transfer: 'Transferencia', efectivo: 'Efectivo', transferencia: 'Transferencia',
 }
 
 const expenseCategories: Record<string, { label: string; icon: string; color: string }> = {
@@ -1257,9 +1264,9 @@ export default function AdminDashboard() {
   /* ─── computed ─── */
   const today = todayStr()
   const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled')
-  const todayPaid = bookings.filter((b) => b.date === today && b.status === 'completed')
+  const todayPaid = bookings.filter((b) => b.date === today && ['confirmed', 'completed'].includes(b.status))
   const todayRevenue = todayPaid.reduce((s, b) => s + b.totalPrice, 0)
-  const pendingPayments = bookings.filter((b) => b.status === 'reserved' && b.remainingAmount > 0)
+  const pendingPayments = bookings.filter((b) => b.date === today && ['reserved', 'partial_payment'].includes(b.status) && b.remainingAmount > 0)
   const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
 
   const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
@@ -1688,10 +1695,10 @@ export default function AdminDashboard() {
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const totalIncome = bookings
-    .filter((b) => b.status === 'completed')
+    .filter((b) => ['confirmed', 'completed'].includes(b.status))
     .reduce((s, b) => s + b.totalPrice, 0)
   const totalAdvances = bookings
-    .filter((b) => ['reserved', 'completed'].includes(b.status))
+    .filter((b) => ['reserved', 'partial_payment', 'confirmed', 'completed'].includes(b.status))
     .reduce((s, b) => s + b.advanceAmount, 0)
   const balance = totalIncome - totalExpenses
 
@@ -1707,7 +1714,7 @@ export default function AdminDashboard() {
       acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
     }
     acc[b.user.id].bookingCount++
-    if (b.status === 'completed') {
+    if (['confirmed', 'completed'].includes(b.status)) {
       acc[b.user.id].totalSpent += b.totalPrice
     }
     return acc
@@ -2153,7 +2160,9 @@ export default function AdminDashboard() {
                                     onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
                                     className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                                   >
-                                    <option value="reserved">Reservado</option>
+                                    <option value="reserved">Pendiente de Pago</option>
+                                    <option value="partial_payment">Pago Parcial</option>
+                                    <option value="confirmed">Pagado</option>
                                     <option value="completed">Completo</option>
                                     <option value="cancelled">Cancelado</option>
                                   </select>
@@ -2223,7 +2232,7 @@ export default function AdminDashboard() {
                             <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                             {st.label}
                           </span>
-                          {/* Price breakdown */}
+                          {/* Price breakdown + Payment method */}
                           <div className="pt-2 border-t border-white/5 space-y-1">
                             <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
                               <span className="text-cm-on-surface-variant">Adelanto</span>
@@ -2237,7 +2246,14 @@ export default function AdminDashboard() {
                               <span className="text-cm-on-surface font-medium">Total</span>
                               <span className="text-cm-primary font-bold">{fmtCurrency(b.totalPrice)}</span>
                             </div>
-                          </div>
+                            {b.paymentMethod && (
+                              <div className="flex items-center gap-1 pt-1">
+                                <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">payments</span>
+                                <span className="text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+                                  {paymentMethodLabels[b.paymentMethod] || b.paymentMethod}
+                                </span>
+                              </div>
+                            )}
                           {/* Status dropdown + Advance */}
                           <div className="flex items-center gap-2">
                             {b.recurringGroupId && (
