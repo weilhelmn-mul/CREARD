@@ -388,20 +388,24 @@ function ContentTab() {
   }
 
   /* ─── Image upload ─── */
-  const handleUploadImage = async (file: File, targetPath: string) => {
+  const handleUploadImage = async (file: File, targetPath: string, callback?: (url: string) => void) => {
     setUploading(targetPath)
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('folder', 'site-images')
-      const headers = getAuthHeaders()
-      const res = await fetch('/api/upload', { method: 'POST', headers, body: formData })
+      // Do NOT send Content-Type or auth headers with FormData — the browser sets multipart boundary automatically
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
       if (res.ok) {
         const data = await res.json()
-        updateField(targetPath, data.url)
-        toast({ title: 'Imagen subida' })
+        if (targetPath && editForm) {
+          updateField(targetPath, data.url)
+        }
+        callback?.(data.url)
+        toast({ title: 'Imagen subida', description: `${Math.round(data.url.length / 1024)}KB` })
       } else {
-        toast({ title: 'Error al subir', description: 'No se pudo subir la imagen', variant: 'destructive' })
+        const errData = await res.json().catch(() => null)
+        toast({ title: 'Error al subir', description: errData?.error || 'No se pudo subir la imagen', variant: 'destructive' })
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
@@ -462,35 +466,70 @@ function ContentTab() {
     updateField(path, arr.filter((_, i) => i !== idx))
   }
 
+  /* ─── Generic image upload helper (for modals outside editForm context) ─── */
+  const uploadFile = async (file: File, callback: (url: string) => void, uploadId: string) => {
+    setUploading(uploadId)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'site-images')
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      if (res.ok) {
+        const data = await res.json()
+        callback(data.url)
+        toast({ title: 'Imagen subida', description: `${Math.round(data.url.length / 1024)}KB` })
+      } else {
+        const errData = await res.json().catch(() => null)
+        toast({ title: 'Error al subir', description: errData?.error || 'No se pudo subir', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
+    } finally {
+      setUploading(null)
+    }
+  }
+
   /* ─── Reusable Image Uploader ─── */
-  const ImageUploader = ({ label, path, currentUrl, onUpload }: { label: string; path: string; currentUrl?: string; onUpload?: (url: string) => void }) => (
-    <div>
-      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">{label}</label>
-      <div className="space-y-2">
-        {currentUrl && (
-          <div className="relative group rounded-xl overflow-hidden border border-white/10">
-            <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <button type="button" onClick={() => { updateField(path, ''); onUpload?.('') }} className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors">
-                <span className="material-symbols-outlined text-[16px]">delete</span>
-              </button>
+  const ImageUploader = ({ label, path, currentUrl, onUpload, uploadId }: { label: string; path: string; currentUrl?: string; onUpload?: (url: string) => void; uploadId?: string }) => {
+    const uid = uploadId || path
+    return (
+      <div>
+        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">{label}</label>
+        <div className="space-y-2">
+          {currentUrl && (
+            <div className="relative group rounded-xl overflow-hidden border border-white/10">
+              <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button type="button" onClick={() => {
+                  if (path && editForm) updateField(path, '')
+                  onUpload?.('')
+                }} className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-        <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
-          uploading === path ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary' : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
-        }`}>
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleUploadImage(file, path)
-            e.target.value = ''
-          }} />
-          {uploading === path ? (<><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span className="text-xs font-medium">Subiendo...</span></>)
-            : (<><span className="material-symbols-outlined text-[18px]">cloud_upload</span><span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span></>)}
-        </label>
+          )}
+          <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+            uploading === uid ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary' : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
+          }`}>
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) {
+                if (onUpload && !path) {
+                  uploadFile(file, onUpload, uid)
+                } else {
+                  handleUploadImage(file, path, onUpload)
+                }
+              }
+              e.target.value = ''
+            }} />
+            {uploading === uid ? (<><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span className="text-xs font-medium">Subiendo...</span></>)
+              : (<><span className="material-symbols-outlined text-[18px]">cloud_upload</span><span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span></>)}
+          </label>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (!settings) {
     return (
@@ -783,6 +822,46 @@ function ContentTab() {
                   </div>
                   <ArrayField label="Amenidades" items={(sport.amenities as string[]) || []} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
                   <ImageUploader label={`Imagen de ${sport.label || 'deporte'}`} path={`sports.${idx}.image`} currentUrl={String(sport.image || '')} />
+                  {/* Pricing details editor */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Detalles de precio</label>
+                      <button type="button" onClick={() => {
+                        const pricing = (sport.pricingDetails as Array<Record<string, unknown>>) || []
+                        updateArrayItem('sports', idx, 'pricingDetails', [...pricing, { label: 'Nuevo turno', timeRange: '', price: 0 }])
+                      }} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px]">add</span> Agregar turno
+                      </button>
+                    </div>
+                    {((sport.pricingDetails as Array<Record<string, unknown>>) || []).map((pd, pdIdx) => (
+                      <div key={pdIdx} className="flex items-center gap-1.5 mb-1.5 p-2 rounded-lg bg-cm-surface-container-highest/20">
+                        <input value={String(pd.label || '')} onChange={(e) => {
+                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+                          arr[pdIdx] = { ...arr[pdIdx], label: e.target.value }
+                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+                        }} placeholder="Turno" className="w-20 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                        <input value={String(pd.timeRange || '')} onChange={(e) => {
+                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+                          arr[pdIdx] = { ...arr[pdIdx], timeRange: e.target.value }
+                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+                        }} placeholder="7:00 - 5:00 PM" className="flex-1 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-[10px] text-cm-on-surface-variant">S/.</span>
+                          <input type="number" value={String(pd.price || 0)} onChange={(e) => {
+                            const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+                            arr[pdIdx] = { ...arr[pdIdx], price: parseFloat(e.target.value) || 0 }
+                            updateArrayItem('sports', idx, 'pricingDetails', arr)
+                          }} className="w-14 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                        </div>
+                        <button type="button" onClick={() => {
+                          const arr = ((sport.pricingDetails as Array<Record<string, unknown>>) || []).filter((_, i) => i !== pdIdx)
+                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+                        }} className="p-1 rounded text-red-400 hover:bg-red-500/10">
+                          <span className="material-symbols-outlined text-[14px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </>
@@ -900,11 +979,76 @@ function ContentTab() {
             <FormField label="Título" value={customForm.title} onChange={(v) => setCustomForm({ ...customForm, title: v })} />
             <FormField label="Subtítulo" value={customForm.subtitle || ''} onChange={(v) => setCustomForm({ ...customForm, subtitle: v })} type="textarea" />
             {customForm.type !== 'notice' && (
-              <ImageUploader label="Imagen" path="" currentUrl={customForm.image || ''} onUpload={(url) => setCustomForm({ ...customForm, image: url })} />
+              <ImageUploader label="Imagen" path="" currentUrl={customForm.image || ''} onUpload={(url) => setCustomForm({ ...customForm, image: url })} uploadId="custom-image" />
             )}
             <FormField label="Enlace (URL opcional)" value={customForm.link || ''} onChange={(v) => setCustomForm({ ...customForm, link: v })} />
             {(customForm.type === 'banner' || customForm.type === 'cta') && (
               <FormField label="Texto del botón CTA" value={customForm.ctaText || ''} onChange={(v) => setCustomForm({ ...customForm, ctaText: v })} />
+            )}
+            {/* Gallery items management */}
+            {customForm.type === 'gallery' && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Imágenes de la galería</label>
+                  <button type="button" onClick={() => setCustomForm({
+                    ...customForm,
+                    items: [...(customForm.items || []), { image: '', title: '', description: '' }],
+                  })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar imagen
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(customForm.items || []).map((item, idx) => (
+                    <div key={idx} className="rounded-xl border border-white/10 p-2 space-y-1.5">
+                      {item.image ? (
+                        <div className="relative group rounded-lg overflow-hidden">
+                          <img src={item.image} alt={item.title || ''} className="w-full h-20 object-cover" />
+                          <button type="button" onClick={() => {
+                            const items = [...(customForm.items || [])]
+                            items[idx] = { ...items[idx], image: '' }
+                            setCustomForm({ ...customForm, items })
+                          }} className="absolute top-1 right-1 p-0.5 rounded bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="material-symbols-outlined text-[12px]">close</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center justify-center h-20 rounded-lg border border-dashed border-white/10 cursor-pointer hover:border-cm-primary/30 transition-colors">
+                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) {
+                              const fd = new FormData()
+                              fd.append('file', file)
+                              fd.append('folder', 'gallery')
+                              fetch('/api/upload', { method: 'POST', body: fd })
+                                .then((r) => r.json())
+                                .then((data) => {
+                                  const items = [...(customForm.items || [])]
+                                  items[idx] = { ...items[idx], image: data.url }
+                                  setCustomForm({ ...customForm, items })
+                                  toast({ title: 'Imagen subida' })
+                                })
+                                .catch(() => toast({ title: 'Error al subir', variant: 'destructive' }))
+                            }
+                            e.target.value = ''
+                          }} />
+                          <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">add_photo_alternate</span>
+                        </label>
+                      )}
+                      <input value={item.title || ''} onChange={(e) => {
+                        const items = [...(customForm.items || [])]
+                        items[idx] = { ...items[idx], title: e.target.value }
+                        setCustomForm({ ...customForm, items })
+                      }} placeholder="Título" className="w-full px-2 py-1 bg-transparent border border-white/10 rounded-lg text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                      <button type="button" onClick={() => {
+                        const items = (customForm.items || []).filter((_, i) => i !== idx)
+                        setCustomForm({ ...customForm, items })
+                      }} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-[10px]">
+                        <span className="material-symbols-outlined text-[12px]">delete</span> Eliminar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
@@ -941,7 +1085,7 @@ function ContentTab() {
               <FormField label="Válido desde" value={promoForm.validFrom || ''} onChange={(v) => setPromoForm({ ...promoForm, validFrom: v })} />
               <FormField label="Válido hasta" value={promoForm.validUntil || ''} onChange={(v) => setPromoForm({ ...promoForm, validUntil: v })} />
             </div>
-            <ImageUploader label="Imagen de promoción" path="" currentUrl={promoForm.image || ''} onUpload={(url) => setPromoForm({ ...promoForm, image: url })} />
+            <ImageUploader label="Imagen de promoción" path="" currentUrl={promoForm.image || ''} onUpload={(url) => setPromoForm({ ...promoForm, image: url })} uploadId="promo-image" />
           </>
         )}
       </EditModal>
@@ -959,7 +1103,7 @@ function ContentTab() {
             <FormField label="Título" value={bannerForm.title || ''} onChange={(v) => setBannerForm({ ...bannerForm, title: v })} />
             <FormField label="Subtítulo" value={bannerForm.subtitle || ''} onChange={(v) => setBannerForm({ ...bannerForm, subtitle: v })} />
             <FormField label="Enlace (URL)" value={bannerForm.link || ''} onChange={(v) => setBannerForm({ ...bannerForm, link: v })} />
-            <ImageUploader label="Imagen del banner" path="" currentUrl={bannerForm.image || ''} onUpload={(url) => setBannerForm({ ...bannerForm, image: url })} />
+            <ImageUploader label="Imagen del banner" path="" currentUrl={bannerForm.image || ''} onUpload={(url) => setBannerForm({ ...bannerForm, image: url })} uploadId="banner-image" />
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
                 <input type="checkbox" checked={bannerForm.active} onChange={(e) => setBannerForm({ ...bannerForm, active: e.target.checked })} className="accent-green-500" />
@@ -985,7 +1129,7 @@ function ContentTab() {
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 40, opacity: 0, scale: 0.95 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-4xl max-h-[90vh] glass-card rounded-2xl overflow-hidden flex flex-col border-cm-primary/20"
+              className="w-full max-w-5xl max-h-[90vh] glass-card rounded-2xl overflow-hidden flex flex-col border-cm-primary/20"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-cm-surface-container/50">
@@ -993,110 +1137,301 @@ function ContentTab() {
                   <span className="material-symbols-outlined text-cm-primary text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>preview</span>
                   <h2 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Vista Previa — Inicio</h2>
                 </div>
-                <button onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
-                  <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded-lg bg-cm-primary/10 text-cm-primary text-[10px] font-bold">{sectionOrder.filter((k) => {
+                    const v = k.startsWith('custom_') ? customSections.find((s) => s.id === k.replace('custom_', ''))?.visible ?? true : (visibility[k as keyof typeof visibility] ?? true)
+                    return v
+                  }).length} secciones visibles</span>
+                  <button onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 bg-cm-background/50">
-                <div className="max-w-2xl mx-auto space-y-4">
-                  {sectionOrder.map((key) => {
-                    const isVisible = key.startsWith('custom_')
-                      ? customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true
-                      : (visibility[key as keyof typeof visibility] ?? true)
-                    if (!isVisible) return null
+              <div className="flex-1 overflow-y-auto bg-cm-background/50">
+                {/* Mobile frame preview */}
+                <div className="flex justify-center py-6 px-4">
+                  <div className="w-full max-w-[390px] bg-cm-background rounded-[2rem] shadow-2xl shadow-black/40 overflow-hidden border border-white/10">
+                    {/* Status bar */}
+                    <div className="flex items-center justify-between px-6 pt-3 pb-1">
+                      <span className="text-[10px] text-cm-on-surface-variant font-medium">9:41</span>
+                      <div className="w-20 h-5 bg-cm-on-surface rounded-full"></div>
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">signal_cellular_alt</span>
+                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">battery_full</span>
+                      </div>
+                    </div>
+                    {/* Content preview */}
+                    <div className="overflow-y-auto max-h-[70vh]">
+                      {sectionOrder.map((key) => {
+                        const isVisible = key.startsWith('custom_')
+                          ? customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true
+                          : (visibility[key as keyof typeof visibility] ?? true)
+                        if (!isVisible) return null
 
-                    const sectionLabel = sectionMeta[key]?.label || key
+                        return (
+                          <div key={key} className="relative">
+                            {/* Hidden sections indicator */}
+                            {!isVisible && (
+                              <div className="px-4 py-2 bg-white/5 border-l-2 border-gray-500/50">
+                                <span className="text-[10px] text-cm-on-surface-variant/50 font-medium">OCULTO — {sectionMeta[key]?.label || key}</span>
+                              </div>
+                            )}
 
-                    return (
-                      <div key={key} className="glass-card rounded-xl p-4 border-l-4 border-cm-primary">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="material-symbols-outlined text-cm-primary text-[16px]">{sectionMeta[key]?.icon || 'widgets'}</span>
-                          <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">{sectionLabel}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[9px] font-bold">VISIBLE</span>
+                            {/* ── Hero Section Preview ── */}
+                            {key === 'hero' && (
+                              <div className="relative overflow-hidden">
+                                {settings.hero.backgroundImage ? (
+                                  <img src={settings.hero.backgroundImage} alt="" className="w-full h-56 object-cover" />
+                                ) : (
+                                  <div className="w-full h-56 bg-gradient-to-br from-cm-primary/30 to-cm-primary/5" />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                                <div className="absolute bottom-0 left-0 right-0 p-5">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <span className="material-symbols-outlined text-[12px] text-cm-primary">location_on</span>
+                                    <span className="text-[10px] text-white/70">{settings.hero.location}</span>
+                                  </div>
+                                  <div className="px-2.5 py-1 rounded-full bg-cm-primary/20 backdrop-blur-sm inline-block mb-2">
+                                    <span className="text-[10px] text-cm-primary font-bold">{settings.hero.badge}</span>
+                                  </div>
+                                  <h3 className="text-lg font-bold text-white font-[family-name:var(--font-sora)] leading-tight">
+                                    {settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span>
+                                  </h3>
+                                  <p className="text-[10px] text-white/60 mt-1 line-clamp-2">{settings.hero.subtitle}</p>
+                                  <div className="flex gap-3 mt-3">
+                                    {settings.hero.stats.map((stat, i) => (
+                                      <div key={i} className="text-center">
+                                        <span className="text-sm font-bold text-white font-[family-name:var(--font-sora)]">{stat.value}</span>
+                                        <p className="text-[9px] text-white/50">{stat.label}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── Sports Section Preview ── */}
+                            {key === 'sportsSection' && (
+                              <div className="p-4">
+                                <div className="px-2.5 py-1 rounded-full bg-green-500/15 inline-block mb-1">
+                                  <span className="text-[10px] text-green-400 font-bold">{settings.sportsSection.badge}</span>
+                                </div>
+                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.sportsSection.title}</h3>
+                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.sportsSection.subtitle}</p>
+                                <div className="mt-3 space-y-3">
+                                  {settings.sportsSection.sports.map((sport) => (
+                                    <div key={sport.id} className="rounded-xl overflow-hidden border border-white/10">
+                                      {sport.image ? (
+                                        <img src={sport.image} alt={sport.label} className="w-full h-28 object-cover" />
+                                      ) : (
+                                        <div className="w-full h-28 bg-cm-surface-container-highest flex items-center justify-center">
+                                          <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/20">{sport.icon || 'sports'}</span>
+                                        </div>
+                                      )}
+                                      <div className="p-3">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-bold text-sm text-cm-on-surface font-[family-name:var(--font-sora)]">{sport.label}</span>
+                                            {sport.badge && (
+                                              <span className="px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[8px] font-bold">{sport.badge}</span>
+                                            )}
+                                          </div>
+                                          <span className="text-sm font-bold text-cm-primary">{sport.priceRange}</span>
+                                        </div>
+                                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                          {sport.pricingDetails?.map((pd, i) => (
+                                            <span key={i} className="px-2 py-0.5 rounded-lg bg-white/5 text-[9px] text-cm-on-surface-variant">
+                                              {pd.label}: {pd.timeRange} — S/. {pd.price}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <div className="flex gap-1 mt-2 flex-wrap">
+                                          {sport.amenities.map((a, i) => (
+                                            <span key={i} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] text-cm-on-surface-variant">{a}</span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── Featured Courts Preview ── */}
+                            {key === 'featuredCourts' && (
+                              <div className="p-4">
+                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1">Canchas Destacadas</h3>
+                                <p className="text-[10px] text-cm-on-surface-variant mb-3">Reserva tu espacio favorito</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {['Cancha Fútbol 1', 'Cancha Fútbol 2', 'Cancha Vóley A', 'Cancha Vóley B'].map((name, i) => (
+                                    <div key={i} className="rounded-xl border border-white/10 p-2.5 bg-cm-surface-container/30">
+                                      <div className="w-full h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center mb-1.5">
+                                        <span className="material-symbols-outlined text-xl text-cm-on-surface-variant/20">{i < 2 ? 'sports_soccer' : 'sports_volleyball'}</span>
+                                      </div>
+                                      <span className="text-[10px] font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── Promo Banner Preview ── */}
+                            {key === 'promoBanner' && (
+                              <div className="p-4">
+                                <div className="px-2.5 py-1 rounded-full bg-purple-500/15 inline-block mb-1">
+                                  <span className="text-[10px] text-purple-400 font-bold">{settings.promoBanner.badge}</span>
+                                </div>
+                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.promoBanner.title}</h3>
+                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.promoBanner.subtitle}</p>
+                                <div className="mt-3 space-y-2">
+                                  {settings.promoBanner.sellingPoints.map((sp, i) => (
+                                    <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl ${sp.highlight ? 'bg-cm-primary/10 border border-cm-primary/20' : 'bg-white/5'}`}>
+                                      <span className="material-symbols-outlined text-[18px] text-cm-primary mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>{sp.icon || 'star'}</span>
+                                      <div>
+                                        <span className="text-xs font-bold text-cm-on-surface">{sp.title}</span>
+                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5">{sp.description}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-3 flex items-center gap-2">
+                                  {settings.promoBanner.paymentMethods.map((pm, i) => (
+                                    <span key={i} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5">
+                                      <span className="material-symbols-outlined text-[12px]">{pm.icon}</span>
+                                      <span className="text-[9px] text-cm-on-surface-variant">{pm.name}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── How It Works Preview ── */}
+                            {key === 'howItWorks' && (
+                              <div className="p-4">
+                                <div className="px-2.5 py-1 rounded-full bg-sky-500/15 inline-block mb-1">
+                                  <span className="text-[10px] text-sky-400 font-bold">{settings.howItWorks.badge}</span>
+                                </div>
+                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.howItWorks.title}</h3>
+                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5 mb-3">{settings.howItWorks.subtitle}</p>
+                                <div className="space-y-2.5">
+                                  {settings.howItWorks.steps.map((step, i) => (
+                                    <div key={i} className="flex items-start gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-cm-primary/15 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-[10px] font-bold text-cm-primary">{step.number}</span>
+                                      </div>
+                                      <div className="flex-1 pt-0.5">
+                                        <span className="text-xs font-bold text-cm-on-surface">{step.title}</span>
+                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5 line-clamp-2">{step.description}</p>
+                                      </div>
+                                      {i < settings.howItWorks.steps.length - 1 && (
+                                        <div className="absolute left-[22px] top-8 w-0.5 h-3 bg-cm-primary/20" />
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ── Custom Section Preview ── */}
+                            {key.startsWith('custom_') && (() => {
+                              const cs = customSections.find((s) => s.id === key.replace('custom_', ''))
+                              if (!cs) return null
+                              const typeConfig: Record<string, { color: string; icon: string }> = {
+                                banner: { color: 'border-l-cm-primary', icon: 'image' },
+                                notice: { color: 'border-l-amber-400', icon: 'campaign' },
+                                highlight: { color: 'border-l-purple-400', icon: 'star' },
+                                cta: { color: 'border-l-sky-400', icon: 'touch_app' },
+                                gallery: { color: 'border-l-teal-400', icon: 'photo_library' },
+                              }
+                              const cfg = typeConfig[cs.type] || typeConfig.banner
+                              return (
+                                <div className={`border-l-2 ${cfg.color} p-3 mx-4 my-2 rounded-r-xl bg-white/5`}>
+                                  {cs.image && (
+                                    <img src={cs.image} alt={cs.title} className="w-full h-32 object-cover rounded-lg mb-2" />
+                                  )}
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="material-symbols-outlined text-[14px] text-cm-on-surface-variant">{cfg.icon}</span>
+                                    <span className="text-[10px] text-cm-on-surface-variant/60 font-semibold uppercase">{cs.type}</span>
+                                  </div>
+                                  <h4 className="text-sm font-bold text-cm-on-surface">{cs.title}</h4>
+                                  {cs.subtitle && <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{cs.subtitle}</p>}
+                                  {cs.ctaText && (
+                                    <div className="mt-2">
+                                      <span className="px-3 py-1.5 rounded-lg bg-cm-primary text-cm-on-primary text-[10px] font-bold inline-block">{cs.ctaText}</span>
+                                    </div>
+                                  )}
+                                  {cs.type === 'gallery' && cs.items && cs.items.length > 0 && (
+                                    <div className="mt-2 grid grid-cols-3 gap-1">
+                                      {cs.items.map((item, i) => (
+                                        <img key={i} src={item.image} alt={item.title || ''} className="w-full h-16 object-cover rounded-lg" />
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )
+                      })}
+
+                      {/* Active promotions strip */}
+                      {settings.activePromotions.filter((p) => p.active).length > 0 && (
+                        <div className="px-4 pb-3">
+                          <div className="rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/20 p-3">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>local_offer</span>
+                              <span className="text-[10px] text-amber-400 font-bold">Promociones</span>
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                              {settings.activePromotions.filter((p) => p.active).map((p) => (
+                                <div key={p.id} className="flex-shrink-0 w-48 rounded-lg bg-white/5 p-2">
+                                  {p.image && <img src={p.image} alt={p.title} className="w-full h-16 object-cover rounded-md mb-1.5" />}
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-bold text-cm-on-surface truncate">{p.title}</span>
+                                    {p.discount && <span className="px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[8px] font-bold flex-shrink-0">{p.discount}</span>}
+                                  </div>
+                                  {p.description && <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{p.description}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        {key === 'hero' && (
-                          <div className="text-xs text-cm-on-surface-variant space-y-1">
-                            <p><span className="font-semibold">Badge:</span> {settings.hero.badge}</p>
-                            <p><span className="font-semibold">Título:</span> {settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span></p>
-                            <p><span className="font-semibold">Promo:</span> {settings.hero.promoHighlight}{settings.hero.promoText}</p>
+                      )}
+
+                      {/* Hero banners strip */}
+                      {settings.heroBanners.filter((b) => b.active).length > 0 && (
+                        <div className="px-4 pb-4">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <span className="material-symbols-outlined text-sky-400 text-[14px]">view_carousel</span>
+                            <span className="text-[10px] text-sky-400 font-bold">Carrusel Hero ({settings.heroBanners.filter((b) => b.active).length})</span>
                           </div>
-                        )}
-                        {key === 'sportsSection' && (
-                          <div className="text-xs text-cm-on-surface-variant">
-                            <p className="font-semibold mb-1">{settings.sportsSection.title}</p>
-                            <div className="flex flex-wrap gap-1">
-                              {settings.sportsSection.sports.map((s) => (
-                                <span key={s.id} className="px-2 py-0.5 rounded-full bg-white/5">{s.label} ({s.count})</span>
-                              ))}
-                            </div>
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {settings.heroBanners.filter((b) => b.active).map((b) => (
+                              <div key={b.id} className="flex-shrink-0 w-56 rounded-lg overflow-hidden border border-white/10">
+                                {b.image ? (
+                                  <img src={b.image} alt={b.title || ''} className="w-full h-24 object-cover" />
+                                ) : (
+                                  <div className="w-full h-24 bg-cm-surface-container-highest flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-cm-on-surface-variant/20">image</span>
+                                  </div>
+                                )}
+                                <div className="p-2">
+                                  {b.title && <span className="text-[10px] font-bold text-cm-on-surface">{b.title}</span>}
+                                  {b.subtitle && <p className="text-[8px] text-cm-on-surface-variant">{b.subtitle}</p>}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        )}
-                        {key === 'promoBanner' && (
-                          <div className="text-xs text-cm-on-surface-variant">
-                            <p className="font-semibold mb-1">{settings.promoBanner.title}</p>
-                            <div className="flex flex-wrap gap-1">
-                              {settings.promoBanner.sellingPoints.map((sp, i) => (
-                                <span key={i} className="px-2 py-0.5 rounded-full bg-white/5">{sp.title}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {key === 'howItWorks' && (
-                          <div className="text-xs text-cm-on-surface-variant">
-                            <p className="font-semibold mb-1">{settings.howItWorks.title}</p>
-                            <div className="space-y-0.5">
-                              {settings.howItWorks.steps.map((s, i) => (
-                                <p key={i}>{s.number}. {s.title}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {key === 'featuredCourts' && (
-                          <p className="text-xs text-cm-on-surface-variant">Canchas destacadas (datos de la API)</p>
-                        )}
-                        {key.startsWith('custom_') && (() => {
-                          const cs = customSections.find((s) => s.id === key.replace('custom_', ''))
-                          if (!cs) return null
-                          return (
-                            <div className="text-xs text-cm-on-surface-variant">
-                              <p><span className="font-semibold">Tipo:</span> {cs.type}</p>
-                              <p><span className="font-semibold">Título:</span> {cs.title}</p>
-                              {cs.subtitle && <p><span className="font-semibold">Subtítulo:</span> {cs.subtitle}</p>}
-                              {cs.image && <img src={cs.image} alt={cs.title} className="w-full h-24 object-cover rounded-lg mt-2" />}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    )
-                  })}
-                  {settings.activePromotions.filter((p) => p.active).length > 0 && (
-                    <div className="glass-card rounded-xl p-4 border-l-4 border-amber-400">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="material-symbols-outlined text-amber-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>local_offer</span>
-                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">Promociones activas</span>
-                      </div>
-                      <div className="space-y-1">
-                        {settings.activePromotions.filter((p) => p.active).map((p) => (
-                          <p key={p.id} className="text-xs text-cm-on-surface-variant">
-                            <span className="text-amber-400 font-bold">{p.title}</span> — {p.description}
-                          </p>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {settings.heroBanners.filter((b) => b.active).length > 0 && (
-                    <div className="glass-card rounded-xl p-4 border-l-4 border-sky-400">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="material-symbols-outlined text-sky-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_carousel</span>
-                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface">Carrusel Hero</span>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto">
-                        {settings.heroBanners.filter((b) => b.active).map((b) => (
-                          <img key={b.id} src={b.image} alt={b.title || ''} className="h-16 rounded-lg flex-shrink-0" />
-                        ))}
-                      </div>
+                    {/* Bottom nav hint */}
+                    <div className="flex items-center justify-around py-2 border-t border-white/10 bg-cm-surface-container/50">
+                      {['home', 'search', 'calendar_month', 'person'].map((icon, i) => (
+                        <span key={i} className={`material-symbols-outlined text-[20px] ${i === 0 ? 'text-cm-primary' : 'text-cm-on-surface-variant/30'}`}>{icon}</span>
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </motion.div>

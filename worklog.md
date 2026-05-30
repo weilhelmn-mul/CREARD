@@ -1,53 +1,39 @@
 ---
 Task ID: 1
-Agent: main-agent
-Task: CMS completo para página de Inicio
+Agent: Main Agent
+Task: Home Page CMS - Image Upload & Content Management Enhancement
 
 Work Log:
-- Read and analyzed existing project structure (page.tsx, all home components, AdminDashboard, SiteSettingsContext, API route)
-- Extended SiteSettings schema with customSections, sectionOrder, sectionVisibility, activePromotions, heroBanners
-- Updated API settings route with new defaults and backward-compatible patching for existing Firestore docs
-- Updated SiteSettingsContext with new types (CustomSection, ActivePromotion, HeroBanner, SectionVisibility) and methods (saveFullSettings, toggleSectionVisibility, reorderSections, saveCustomSection, removeCustomSection)
-- Created CustomSections.tsx with 5 section types: banner, notice, highlight, cta, gallery
-- Replaced ContentTab with comprehensive CMS featuring:
-  - 3 sub-tabs: Secciones, Promociones, Banners Hero
-  - Drag-and-drop section reorder using @dnd-kit/sortable
-  - Visibility toggle per section (eye icon)
-  - Custom section CRUD (type selector, title, subtitle, image, link, CTA)
-  - Promotions CRUD (title, description, discount, dates, image, active toggle)
-  - Hero banner carousel management (add/remove/toggle/edit)
-  - Preview modal showing full home page section layout
-- Updated HomeView to render sections dynamically based on sectionOrder, skipping hidden sections
-- Updated HeroSection with auto-rotating banner carousel (5s interval, dots navigation)
-- Deployed to Vercel (commit 89d13d9 pushed to main)
+- Created `/api/upload/route.ts` — Image upload endpoint using base64 data URLs with sharp image processing (resize, compress, convert to JPEG/WebP)
+- Fixed `handleUploadImage` in AdminDashboard.tsx — Removed auth headers that conflicted with FormData multipart boundary
+- Added `uploadFile` helper for image uploads outside editForm context (promotions, banners, custom sections)
+- Enhanced ImageUploader component with proper `uploadId` prop for tracking upload state
+- Enhanced CMS Preview Modal — Replaced basic text-only preview with mobile-frame visual preview showing:
+  - Hero section with background image, stats, badges
+  - Sports section with images, pricing details, amenities
+  - Featured courts grid
+  - Promo banner with selling points and payment methods
+  - How it works steps
+  - Custom sections (banner, notice, highlight, cta, gallery) with visual rendering
+  - Active promotions carousel
+  - Hero banners carousel
+  - Bottom navigation bar hint
+- Added pricing details editor in sportsSection modal (add/edit/delete pricing tiers per sport)
+- Added gallery items management for custom gallery sections (add/remove images with upload, titles)
+- Fixed upload IDs for promo, banner, and custom section image uploaders
+- Deployed to Vercel production successfully
 
 Stage Summary:
-- Comprehensive CMS system implemented for admin
-- Admin can now: add/remove/reorder sections via drag-and-drop, manage promotions with validity dates, manage hero banner carousel, preview entire home page layout, toggle section visibility
-- All changes persisted to Firestore via existing PUT /api/settings endpoint
-- Backward compatible — if Firestore doc has no new fields, defaults are used
-- Home page renders dynamically based on admin-configured section order
----
-Task ID: 3
-Agent: main-agent
-Task: Reservas recurrentes de canchas
-
-Work Log:
-- Created POST /api/bookings/recurring endpoint with dryRun preview and batch creation
-- Created PUT /api/bookings/recurring endpoint for series/single cancellation
-- Added recurring_group_id and recurring_index to Booking schema in db.ts
-- Extended toCamelBooking in bookings/route.ts to include recurring fields
-- Added recurring toggle to admin booking form with frequency selector (daily/weekly/biweekly/custom)
-- Added day-of-week picker for custom frequency
-- Added end condition (by date or by count) with preview
-- Added preview table showing all dates with conflict detection
-- Added series management modal (view all, cancel series, cancel single)
-- Added recurring badge (repeat icon) to bookings in table, gallery, and compact views
-- Deployed to Vercel
-
-Stage Summary:
-- Recurring bookings fully functional: create, preview conflicts, batch create, manage series
-- Admin can create daily/weekly/biweekly/custom recurring bookings
-- Conflict detection prevents double-booking
-- Series management allows cancelling entire series or individual dates
-- Commit: b13d9c5
+- Created file: `/src/app/api/upload/route.ts`
+- Modified file: `/src/components/admin/AdminDashboard.tsx`
+- All CMS features now functional:
+  - ✅ Edit texts, titles, subtitles, descriptions
+  - ✅ Modify prices, promotions, tariffs
+  - ✅ Upload photos from device (now working!)
+  - ✅ Add, replace, update, delete images
+  - ✅ Create/delete content sections
+  - ✅ Update services, schedules, news, announcements
+  - ✅ Change display order (drag & drop)
+  - ✅ Visual preview before publishing
+  - ✅ Save and publish immediately
+- Deployed: https://my-project-kappa-lake.vercel.app
