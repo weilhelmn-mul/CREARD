@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, useInView } from 'framer-motion'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
 
 interface PricingScheduleItem {
   label: string
@@ -91,6 +92,8 @@ function CourtCardSkeleton() {
 
 export default function FeaturedCourts() {
   const { setView, setSelectedCourt } = useAppStore()
+  const { settings } = useSiteSettings()
+  const fcSettings = settings?.featuredCourts
   const [courts, setCourts] = useState<Court[]>([])
   const [loading, setLoading] = useState(true)
   const sectionRef = useRef<HTMLElement>(null)
@@ -147,18 +150,28 @@ export default function FeaturedCourts() {
           className="flex items-end justify-between mb-8"
         >
           <div>
+            {fcSettings?.badge && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 mb-3">
+                <span className="material-symbols-outlined text-teal-400 text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                  sports_soccer
+                </span>
+                <span className="text-xs font-semibold text-teal-400 uppercase tracking-wider font-[family-name:var(--font-inter)]">
+                  {fcSettings.badge}
+                </span>
+              </div>
+            )}
             <h2 className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-bold text-cm-on-surface">
-              Canchas Destacadas
+              {fcSettings?.title || 'Canchas Destacadas'}
             </h2>
             <p className="text-cm-on-surface-variant text-sm mt-1.5 font-[family-name:var(--font-inter)]">
-              Elige tu espacio ideal y reserva al instante
+              {fcSettings?.subtitle || 'Elige tu espacio ideal y reserva al instante'}
             </p>
           </div>
           <button
             onClick={() => setView('search')}
             className="hidden sm:flex items-center gap-1 text-cm-primary text-sm font-semibold hover:text-glow transition-all group"
           >
-            Ver Todas
+            {fcSettings?.ctaText || 'Ver Todas'}
             <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
           </button>
         </motion.div>

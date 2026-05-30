@@ -140,6 +140,11 @@ function getDefaults() {
         },
       ],
     },
+    featuredCourts: {
+      title: 'Canchas Destacadas',
+      subtitle: 'Elige tu espacio ideal y reserva al instante',
+      ctaText: 'Ver Todas',
+    },
     // ── CMS: Section order & visibility ──
     sectionOrder: ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks'],
     sectionVisibility: {
@@ -155,6 +160,8 @@ function getDefaults() {
     activePromotions: [],
     // ── CMS: Hero banners ──
     heroBanners: [],
+    // ── CMS: News / Announcements ──
+    news: [],
   }
 }
 
@@ -188,6 +195,8 @@ export async function GET() {
       if (!data.customSections) data.customSections = defaults.customSections
       if (!data.activePromotions) data.activePromotions = defaults.activePromotions
       if (!data.heroBanners) data.heroBanners = defaults.heroBanners
+      if (!data.news) data.news = defaults.news
+      if (!data.featuredCourts) data.featuredCourts = defaults.featuredCourts
       // Remove todaysSchedule from persisted order/visibility if present
       if (data.sectionOrder) data.sectionOrder = data.sectionOrder.filter((k: string) => k !== 'todaysSchedule')
       if (data.sectionVisibility) delete (data.sectionVisibility as Record<string, unknown>).todaysSchedule

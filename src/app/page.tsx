@@ -10,6 +10,7 @@ import SportsSection from '@/components/home/SportsSection'
 import PromoBanner from '@/components/home/PromoBanner'
 import HowItWorks from '@/components/home/HowItWorks'
 import CustomSections from '@/components/home/CustomSections'
+import NewsSection from '@/components/home/NewsSection'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import SearchView from '@/components/search/SearchView'
 import CourtDetail from '@/components/courts/CourtDetail'
@@ -55,6 +56,8 @@ function HomeView() {
       transition={{ duration: 0.3 }}
     >
       {sectionOrder.map((key) => renderSection(key))}
+      {/* News section rendered after all ordered sections if there are active news */}
+      <NewsSection />
     </motion.div>
   )
 }

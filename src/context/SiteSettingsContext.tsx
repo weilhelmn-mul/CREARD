@@ -94,6 +94,18 @@ export interface HeroBanner {
   active: boolean
 }
 
+// ── CMS: News / Announcements ──
+export interface NewsItem {
+  id: string
+  title: string
+  content: string
+  image?: string
+  link?: string
+  active: boolean
+  createdAt?: unknown
+  pinned: boolean
+}
+
 // ── Section visibility map ──
 export interface SectionVisibility {
   hero: boolean
@@ -102,6 +114,13 @@ export interface SectionVisibility {
   promoBanner: boolean
   howItWorks: boolean
   [key: string]: boolean
+}
+
+export interface FeaturedCourtsSettings {
+  badge?: string
+  title: string
+  subtitle: string
+  ctaText: string
 }
 
 export interface SiteSettings {
@@ -123,6 +142,7 @@ export interface SiteSettings {
     subtitle: string
     sports: SportItem[]
   }
+  featuredCourts: FeaturedCourtsSettings
   promoBanner: {
     badge: string
     title: string
@@ -145,6 +165,7 @@ export interface SiteSettings {
   customSections: CustomSection[]
   activePromotions: ActivePromotion[]
   heroBanners: HeroBanner[]
+  news: NewsItem[]
 }
 
 interface SiteSettingsContextValue {

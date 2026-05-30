@@ -37,3 +37,30 @@ Stage Summary:
   - ✅ Visual preview before publishing
   - ✅ Save and publish immediately
 - Deployed: https://my-project-kappa-lake.vercel.app
+---
+Task ID: 1
+Agent: Main Agent
+Task: CMS integral de página de inicio - mejoras y deploy
+
+Work Log:
+- Analizado código actual del CMS (ContentTab en AdminDashboard.tsx, SiteSettingsContext, API settings)
+- Agregado tipo `FeaturedCourtsSettings` con campos badge, title, subtitle, ctaText
+- Agregado tipo `NewsItem` con campos id, title, content, image, link, active, createdAt, pinned
+- Actualizado `SiteSettings` interface con `featuredCourts` y `news: NewsItem[]`
+- Actualizado defaults en `/api/settings/route.ts` con featuredCourts y news vacíos
+- Agregado backward compat migration para featuredCourts y news en GET handler
+- Agregado sub-tab "Noticias" en el CMS con CRUD completo (crear, editar, eliminar, activar/desactivar, fijar)
+- Agregado editor de sección "Canchas Destacadas" con badge, título, subtítulo, texto CTA
+- Actualizado preview modal para mostrar noticias y featuredCourts con datos CMS
+- Creado componente `NewsSection.tsx` que renderiza noticias activas en la página de inicio
+- Actualizado `FeaturedCourts.tsx` para usar textos del CMS (title, subtitle, ctaText, badge)
+- Agregado `NewsSection` al `page.tsx` de la página de inicio
+- Deploy exitoso a Vercel: https://my-project-kappa-lake.vercel.app
+
+Stage Summary:
+- CMS ahora tiene 4 sub-tabs: Secciones, Promociones, Banners Hero, Noticias
+- Sección "Canchas Destacadas" ahora es completamente editable desde el CMS
+- Noticias/Anuncios: CRUD con soporte para fijar (pinned), activar, imagen, enlace
+- Todas las secciones del home ahora son administrables desde una sola interfaz
+- Deploy completado exitosamente en Vercel
+

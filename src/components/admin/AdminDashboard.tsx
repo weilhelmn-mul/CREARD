@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
-import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner } from '@/context/SiteSettingsContext'
+import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner, type NewsItem } from '@/context/SiteSettingsContext'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
@@ -211,7 +211,7 @@ function SortableSectionCard({
 /* ─── Main ContentTab ─── */
 function ContentTab() {
   const { settings, saveSection, saveFullSettings, toggleSectionVisibility, reorderSections, saveCustomSection, removeCustomSection } = useSiteSettings()
-  const [activeSubTab, setActiveSubTab] = useState<'secciones' | 'promociones' | 'banners'>('secciones')
+  const [activeSubTab, setActiveSubTab] = useState<'secciones' | 'promociones' | 'banners' | 'noticias'>('secciones')
   const [editSection, setEditSection] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Record<string, unknown> | null>(null)
   const [saving, setSaving] = useState(false)
@@ -231,6 +231,11 @@ function ContentTab() {
   const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null)
   const [bannerForm, setBannerForm] = useState<HeroBanner | null>(null)
   const [savingBanner, setSavingBanner] = useState(false)
+
+  // News editing
+  const [editingNews, setEditingNews] = useState<NewsItem | null>(null)
+  const [newsForm, setNewsForm] = useState<NewsItem | null>(null)
+  const [savingNews, setSavingNews] = useState(false)
 
   // Preview modal
   const [showPreview, setShowPreview] = useState(false)
@@ -385,6 +390,47 @@ function ContentTab() {
     if (!settings) return
     const ok = await saveFullSettings({ ...settings, heroBanners: settings.heroBanners.filter((b) => b.id !== bannerId) })
     if (ok) toast({ title: 'Banner eliminado' })
+  }
+
+  // News CRUD
+  const addNews = () => {
+    const newItem: NewsItem = {
+      id: `news_${Date.now()}`, title: '', content: '', image: '', link: '', active: true, pinned: false, createdAt: new Date().toISOString(),
+    }
+    setEditingNews(newItem)
+    setNewsForm({ ...newItem })
+  }
+
+  const handleSaveNews = async () => {
+    if (!newsForm || !settings) return
+    setSavingNews(true)
+    const existing = settings.news.findIndex((n) => n.id === newsForm.id)
+    let updated: NewsItem[]
+    if (existing >= 0) { updated = [...settings.news]; updated[existing] = newsForm }
+    else { updated = [...settings.news, newsForm] }
+    const ok = await saveFullSettings({ ...settings, news: updated })
+    setSavingNews(false)
+    if (ok) { setEditingNews(null); setNewsForm(null); toast({ title: 'Noticia guardada' }) }
+    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+  }
+
+  const toggleNewsActive = async (newsId: string) => {
+    if (!settings) return
+    const updated = settings.news.map((n) => n.id === newsId ? { ...n, active: !n.active } : n)
+    await saveFullSettings({ ...settings, news: updated })
+  }
+
+  const toggleNewsPinned = async (newsId: string) => {
+    if (!settings) return
+    const updated = settings.news.map((n) => n.id === newsId ? { ...n, pinned: !n.pinned } : n)
+    await saveFullSettings({ ...settings, news: updated })
+  }
+
+  const deleteNews = async (newsId: string) => {
+    if (!confirm('¿Eliminar esta noticia?')) return
+    if (!settings) return
+    const ok = await saveFullSettings({ ...settings, news: settings.news.filter((n) => n.id !== newsId) })
+    if (ok) toast({ title: 'Noticia eliminada' })
   }
 
   /* ─── Image upload ─── */
@@ -560,11 +606,12 @@ function ContentTab() {
         </div>
 
         {/* Sub-tabs */}
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
           {([
             { key: 'secciones' as const, label: 'Secciones', icon: 'dashboard' },
             { key: 'promociones' as const, label: 'Promociones', icon: 'local_offer' },
             { key: 'banners' as const, label: 'Banners Hero', icon: 'view_carousel' },
+            { key: 'noticias' as const, label: 'Noticias', icon: 'newspaper' },
           ]).map((tab) => (
             <button
               key={tab.key}
@@ -582,6 +629,9 @@ function ContentTab() {
               )}
               {tab.key === 'banners' && settings.heroBanners?.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.heroBanners.length}</span>
+              )}
+              {tab.key === 'noticias' && (settings.news?.length || 0) > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.news.length}</span>
               )}
             </button>
           ))}
@@ -756,6 +806,66 @@ function ContentTab() {
             )}
           </div>
         )}
+
+        {/* ═══════ NOTICIAS TAB ═══════ */}
+        {activeSubTab === 'noticias' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Noticias y Anuncios</h3>
+              <button onClick={addNews} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Nueva noticia
+              </button>
+            </div>
+            {(!settings.news || settings.news.length === 0) ? (
+              <div className="glass-card rounded-xl p-8 text-center">
+                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">newspaper</span>
+                <p className="text-cm-on-surface-variant text-sm">No hay noticias. Crea una para mostrar anuncios en la página de inicio.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {[...settings.news].sort((a, b) => {
+                  if (a.pinned && !b.pinned) return -1
+                  if (!a.pinned && b.pinned) return 1
+                  return 0
+                }).map((newsItem) => (
+                  <div key={newsItem.id} className={`glass-card rounded-xl p-4 flex items-start gap-3 ${!newsItem.active ? 'opacity-40' : ''}`}>
+                    {newsItem.image ? (
+                      <img src={newsItem.image} alt={newsItem.title} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">article</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {newsItem.pinned && (
+                          <span className="material-symbols-outlined text-[14px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>push_pin</span>
+                        )}
+                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface truncate">{newsItem.title || 'Sin título'}</span>
+                      </div>
+                      <p className="text-cm-on-surface-variant text-xs mt-0.5 line-clamp-2">{newsItem.content}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => toggleNewsPinned(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.pinned ? 'text-cm-primary' : 'text-cm-on-surface-variant/40 hover:text-cm-primary/60'}`} title={newsItem.pinned ? 'Desfijar' : 'Fijar'}>
+                        <span className="material-symbols-outlined text-[16px]">push_pin</span>
+                      </button>
+                      <button onClick={() => toggleNewsActive(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                        <span className="material-symbols-outlined text-[16px]">{newsItem.active ? 'toggle_on' : 'toggle_off'}</span>
+                      </button>
+                      <button onClick={() => { setEditingNews(newsItem); setNewsForm({ ...newsItem }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      <button onClick={() => deleteNews(newsItem.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* ═══════ SECTION EDIT MODAL ═══════ */}
@@ -864,6 +974,20 @@ function ContentTab() {
                   </div>
                 </div>
               ))}
+            </>
+          )}
+          {editSection === 'featuredCourts' && (
+            <>
+              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} placeholder="Ej. Nuestras canchas" />
+              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} placeholder="Canchas Destacadas" />
+              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" placeholder="Elige tu espacio ideal y reserva al instante" />
+              <FormField label="Texto del botón CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} placeholder="Ver Todas" />
+              <div className="p-3 rounded-xl bg-cm-surface-container-highest/20 border border-white/5">
+                <p className="text-[10px] text-cm-on-surface-variant flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  Las canchas mostradas provienen del módulo "Canchas". Usa esa pestaña para editar nombres, precios e imágenes de cada cancha.
+                </p>
+              </div>
             </>
           )}
           {editSection === 'promoBanner' && (
@@ -1114,6 +1238,34 @@ function ContentTab() {
         )}
       </EditModal>
 
+      {/* ═══════ NEWS MODAL ═══════ */}
+      <EditModal
+        open={!!editingNews}
+        onClose={() => { setEditingNews(null); setNewsForm(null) }}
+        title={newsForm?.id && settings?.news.some((n) => n.id === newsForm.id) ? 'Editar noticia' : 'Nueva noticia'}
+        onSave={handleSaveNews}
+        saving={savingNews}
+      >
+        {newsForm && (
+          <>
+            <FormField label="Título" value={newsForm.title} onChange={(v) => setNewsForm({ ...newsForm, title: v })} placeholder="Título de la noticia" />
+            <FormField label="Contenido" value={newsForm.content} onChange={(v) => setNewsForm({ ...newsForm, content: v })} type="textarea" rows={4} placeholder="Escribe el contenido o descripción de la noticia..." />
+            <FormField label="Enlace (URL opcional)" value={newsForm.link || ''} onChange={(v) => setNewsForm({ ...newsForm, link: v })} placeholder="https://..." />
+            <ImageUploader label="Imagen de la noticia" path="" currentUrl={newsForm.image || ''} onUpload={(url) => setNewsForm({ ...newsForm, image: url })} uploadId="news-image" />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+                <input type="checkbox" checked={newsForm.active} onChange={(e) => setNewsForm({ ...newsForm, active: e.target.checked })} className="accent-green-500" />
+                Publicada (activa)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+                <input type="checkbox" checked={newsForm.pinned} onChange={(e) => setNewsForm({ ...newsForm, pinned: e.target.checked })} className="accent-cm-primary" />
+                Fijar como destacada
+              </label>
+            </div>
+          </>
+        )}
+      </EditModal>
+
       {/* ═══════ PREVIEW MODAL ═══════ */}
       <AnimatePresence>
         {showPreview && (
@@ -1260,8 +1412,13 @@ function ContentTab() {
                             {/* ── Featured Courts Preview ── */}
                             {key === 'featuredCourts' && (
                               <div className="p-4">
-                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1">Canchas Destacadas</h3>
-                                <p className="text-[10px] text-cm-on-surface-variant mb-3">Reserva tu espacio favorito</p>
+                                {settings.featuredCourts?.badge && (
+                                  <div className="px-2.5 py-1 rounded-full bg-teal-500/15 inline-block mb-1">
+                                    <span className="text-[10px] text-teal-400 font-bold">{settings.featuredCourts.badge}</span>
+                                  </div>
+                                )}
+                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1">{settings.featuredCourts?.title || 'Canchas Destacadas'}</h3>
+                                <p className="text-[10px] text-cm-on-surface-variant mb-3">{settings.featuredCourts?.subtitle || 'Reserva tu espacio favorito'}</p>
                                 <div className="grid grid-cols-2 gap-2">
                                   {['Cancha Fútbol 1', 'Cancha Fútbol 2', 'Cancha Vóley A', 'Cancha Vóley B'].map((name, i) => (
                                     <div key={i} className="rounded-xl border border-white/10 p-2.5 bg-cm-surface-container/30">
@@ -1421,6 +1578,32 @@ function ContentTab() {
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* News strip */}
+                      {settings.news && settings.news.filter((n) => n.active).length > 0 && (
+                        <div className="px-4 pb-3">
+                          <div className="rounded-xl bg-gradient-to-r from-cm-primary/10 to-teal-500/10 border border-cm-primary/20 p-3">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>newspaper</span>
+                              <span className="text-[10px] text-cm-primary font-bold">Noticias</span>
+                            </div>
+                            <div className="space-y-2">
+                              {[...settings.news].filter((n) => n.active).sort((a, b) => (a.pinned && !b.pinned ? -1 : 0)).slice(0, 3).map((n) => (
+                                <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                                  {n.image && <img src={n.image} alt={n.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      {n.pinned && <span className="material-symbols-outlined text-[10px] text-cm-primary">push_pin</span>}
+                                      <span className="text-[10px] font-bold text-cm-on-surface truncate">{n.title}</span>
+                                    </div>
+                                    <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{n.content}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
