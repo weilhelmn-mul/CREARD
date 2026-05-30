@@ -1,25 +1,29 @@
 ---
-Task ID: 2
-Agent: Main Agent
-Task: Implementar reserva manual por admin y registro de adelantos
+Task ID: 1
+Agent: main-agent
+Task: CMS completo para página de Inicio
 
 Work Log:
-- Exploró BookingForm.tsx, API /api/bookings (POST), /api/courts, /api/admin/users
-- Identificó que admins ya pueden crear reservas para cualquier userId vía API
-- Añadió 8 nuevos estados para formulario de reserva y modal de adelanto
-- Implementó loadBookingFormData() para obtener usuarios y canchas con precios
-- Creó handleBookingFormChange() con auto-cálculo de precio según cancha y horas
-- Creó validateBookingForm() con validación de campos requeridos
-- Creó handleCreateBooking() que envía POST a /api/bookings
-- Añadió botón "Nueva Reserva" (verde, primario) junto a "Ver Horarios"
-- Implementó modal completo de nueva reserva con: cancha, cliente, fecha, horas,
-  precio total, adelanto, estado inicial, 6 métodos de pago, notas
-- Implementó modal de "Registrar Adelanto" para reservas existentes con:
-  resumen de la reserva, monto, método de pago, botón completar saldo
-- Añadió botón de adelanto (ícono 💰) en los 3 modos de vista (tabla, galería, compacto)
-- Commit f48b1e5, push a Vercel exitoso
+- Read and analyzed existing project structure (page.tsx, all home components, AdminDashboard, SiteSettingsContext, API route)
+- Extended SiteSettings schema with customSections, sectionOrder, sectionVisibility, activePromotions, heroBanners
+- Updated API settings route with new defaults and backward-compatible patching for existing Firestore docs
+- Updated SiteSettingsContext with new types (CustomSection, ActivePromotion, HeroBanner, SectionVisibility) and methods (saveFullSettings, toggleSectionVisibility, reorderSections, saveCustomSection, removeCustomSection)
+- Created CustomSections.tsx with 5 section types: banner, notice, highlight, cta, gallery
+- Replaced ContentTab with comprehensive CMS featuring:
+  - 3 sub-tabs: Secciones, Promociones, Banners Hero
+  - Drag-and-drop section reorder using @dnd-kit/sortable
+  - Visibility toggle per section (eye icon)
+  - Custom section CRUD (type selector, title, subtitle, image, link, CTA)
+  - Promotions CRUD (title, description, discount, dates, image, active toggle)
+  - Hero banner carousel management (add/remove/toggle/edit)
+  - Preview modal showing full home page section layout
+- Updated HomeView to render sections dynamically based on sectionOrder, skipping hidden sections
+- Updated HeroSection with auto-rotating banner carousel (5s interval, dots navigation)
+- Deployed to Vercel (commit 89d13d9 pushed to main)
 
 Stage Summary:
-- AdminDashboard.tsx pasó de 1544 a 2119 líneas (+575)
-- Funcionalidades nuevas: crear reservas manualmente, registrar adelantos
-- Desplegado exitosamente a Vercel
+- Comprehensive CMS system implemented for admin
+- Admin can now: add/remove/reorder sections via drag-and-drop, manage promotions with validity dates, manage hero banner carousel, preview entire home page layout, toggle section visibility
+- All changes persisted to Firestore via existing PUT /api/settings endpoint
+- Backward compatible — if Firestore doc has no new fields, defaults are used
+- Home page renders dynamically based on admin-configured section order
