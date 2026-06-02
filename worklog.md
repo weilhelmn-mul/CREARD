@@ -64,3 +64,25 @@ Stage Summary:
 - Todas las secciones del home ahora son administrables desde una sola interfaz
 - Deploy completado exitosamente en Vercel
 
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Revisar y corregir módulo de reservas - eliminar restricciones de tiempo para admin
+
+Work Log:
+- Analizó todos los archivos de reservas: bookings/route.ts, recurring/route.ts, CourtDetail.tsx, AdminDashboard.tsx, auth-middleware.ts
+- Identificó 6 puntos de bloqueo donde el admin tenía restricciones de tiempo
+- Corrigió API de reservas individuales: eliminada toda validación de tiempo para admin (antes tenía 5 min)
+- Corrigió API de reservas recurrentes: eliminada validación de 5 min (endpoint solo admin)
+- Corrigió CourtDetail.tsx: isAdmin ahora incluye super_admin, slots pasados ya no se marcan como 'past' para admin
+- Corrigió AdminDashboard.tsx: eliminadas restricciones en dropdowns de hora inicio/fin, eliminado label "mín. 30 min"
+- Verificó obtención de rol desde Firebase: usa colección 'users' consistentemente
+- Verificó validación de duplicados: ya existente y funcional en ambas rutas API
+- Build exitoso, deploy a Vercel completado
+
+Stage Summary:
+- Admin puede ahora reservar CUALQUIER horario del día actual, incluyendo slots en curso o pasados (walk-in)
+- Usuarios normales mantienen restricción de 30 minutos de anticipación
+- Validación de duplicados por cancha/fecha/horario funciona para todos los roles
+- Deploy exitoso en: https://creard.vercel.app
