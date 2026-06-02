@@ -177,9 +177,8 @@ function getAdminSlotInfo(
   })
 
   if (!booking) {
-    if (isTodayDate && hour <= currentHour) {
-      return { status: 'past', booking: null }
-    }
+    // Admin: NO time restrictions — all unbooked slots are available (including past hours)
+    // This allows admin to register walk-in bookings for in-progress or past slots
     return { status: 'available', booking: null }
   }
 
@@ -302,7 +301,7 @@ export default function CourtDetail() {
   const timeSlots = useMemo(() => generateTimeSlots(), [])
   const next7Days = useMemo(() => getNext7Days(), [])
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   const isUser = !!user && !isAdmin
   const isGuest = !user
 
@@ -393,18 +392,11 @@ export default function CourtDetail() {
   const pastHours = useMemo(() => {
     const todayFlag = isToday(selectedDate)
     if (!todayFlag) return new Set<number>()
-    // Non-admin: all today's slots are unavailable (users cannot see/book today)
-    if (!isAdmin) {
-      const hours = new Set<number>()
-      for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
-      return hours
-    }
-    // Admin: only past/restricted hours
-    const restrictedH = getRestrictedHour()
+    // Admin/super_admin: NO time restrictions — no hours are blocked
+    if (isAdmin) return new Set<number>()
+    // Regular users: all today's slots are unavailable (users cannot book today last-minute)
     const hours = new Set<number>()
-    for (let h = SLOT_START; h <= SLOT_END; h++) {
-      if (h <= restrictedH) hours.add(h)
-    }
+    for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
     return hours
   }, [selectedDate, isAdmin])
 

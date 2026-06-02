@@ -2456,20 +2456,13 @@ export default function AdminDashboard() {
     bookings: scheduleBookings.filter((b) => b.courtId === c.id),
   }))
 
-  /* time slots — for today's date, exclude hours within 30 min of now */
+  /* time slots — admin has NO time restrictions, all slots available for any date */
   const timeSlots: Array<{ value: string; disabled: boolean; label?: string }> = []
-  const adminNow = new Date()
-  const adminCurH = adminNow.getHours()
-  const adminCurM = adminNow.getMinutes()
-  // Restricted hour: if current minute >= 30, next hour is also too soon
-  const adminRestrictedH = adminCurM >= 30 ? adminCurH + 1 : adminCurH
-  const adminToday = todayStr()
   for (let h = 6; h <= 23; h++) {
-    const isRestricted = bookingForm.date === adminToday && h <= adminRestrictedH
     timeSlots.push({
       value: `${String(h).padStart(2, '0')}:00`,
-      disabled: isRestricted,
-      label: isRestricted && h > adminCurH ? '30 min' : undefined,
+      disabled: false,
+      label: undefined,
     })
   }
 
@@ -3449,9 +3442,6 @@ export default function AdminDashboard() {
                   <div>
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
                       Hora inicio *
-                      {bookingForm.date === adminToday && (
-                        <span className="text-cm-primary ml-1">mín. 30 min</span>
-                      )}
                     </label>
                     <select
                       value={bookingForm.startTime}
@@ -3474,10 +3464,9 @@ export default function AdminDashboard() {
                     >
                       {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
                         const val = `${String(h).padStart(2, '0')}:00`
-                        const isRest = bookingForm.date === adminToday && h <= adminRestrictedH
                         return (
-                          <option key={h} value={val} disabled={isRest}>
-                            {val}{isRest && h > adminCurH ? ' (30 min)' : ''}
+                          <option key={h} value={val}>
+                            {val}
                           </option>
                         )
                       })}
