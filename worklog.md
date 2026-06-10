@@ -86,3 +86,24 @@ Stage Summary:
 - Usuarios normales mantienen restricción de 30 minutos de anticipación
 - Validación de duplicados por cancha/fecha/horario funciona para todos los roles
 - Deploy exitoso en: https://creard.vercel.app
+---
+Task ID: 1
+Agent: Main Agent
+Task: Analyze and fix multi-court booking system bugs
+
+Work Log:
+- Analyzed 31 source files across the booking system (API routes, components, DB layer, store)
+- Identified 9 bugs (3 critical, 3 high, 3 medium) related to multi-court booking handling
+- Fixed db.ts: getBookings() now runs dual Firestore queries (court_id == X AND court_ids array-contains X) with deduplication
+- Fixed AdminDashboard.tsx: schedule view, court filter, search, and price calculation all handle courtIds array
+- Fixed stats/route.ts: bookings by sport and top courts now iterate ALL court_ids per booking
+- Fixed recurring/route.ts: accepts courtIds array, validates conflicts for ALL courts, creates bookings with court_ids
+- Added courts field to Booking interface for multi-court search
+- Built and deployed successfully to Vercel
+
+Stage Summary:
+- 4 files modified: db.ts, AdminDashboard.tsx, stats/route.ts, recurring/route.ts
+- Commit: 1d6a869 pushed to main
+- Deploy: dpl_FbMxrsoHieRFjna5VKMsDVP9x6Qb — READY
+- URL: https://creard.vercel.app
+
