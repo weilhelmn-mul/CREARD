@@ -53,6 +53,7 @@ interface Booking {
   recurringGroupId?: string
   recurringIndex?: number
   court: { id: string; name: string; sport: string; branch?: { name: string } } | null
+  courts: Array<{ id: string; name: string; sport: string; branch?: { name: string } }>
   user: { id: string; name: string; email: string; phone?: string } | null
 }
 
@@ -1983,34 +1984,35 @@ export default function AdminDashboard() {
     return { total: Math.round(total * 100) / 100, breakdown }
   }
 
+  /** Calculate total price for ALL selected courts combined */
+  const calculateMultiCourtPrice = (courtIds: string[], startTime: string, endTime: string): number => {
+    let total = 0
+    for (const cId of courtIds) {
+      const court = bookingCourtDetails.find((c) => c.id === cId)
+      if (!court) continue
+      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+        const { total: slotTotal } = calculatePriceForTimeSlot(court.pricingSchedule, startTime, endTime)
+        total += slotTotal > 0 ? slotTotal : court.pricePerHour * calculateHours(startTime, endTime)
+      } else {
+        total += court.pricePerHour * calculateHours(startTime, endTime)
+      }
+    }
+    return Math.round(total * 100) / 100
+  }
+
   const handleBookingFormChange = (field: string, value: string) => {
     setBookingForm((prev) => {
       const updated = { ...prev, [field]: value }
-      // Auto-calculate price when court or times change
+      // Auto-calculate price when courts or times change — sum ALL selected courts
       if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
-        const court = bookingCourtDetails.find((c) => c.id === updated.courtId)
-        if (court) {
-          if (court.pricingSchedule && court.pricingSchedule.length > 0) {
-            const { total } = calculatePriceForTimeSlot(court.pricingSchedule, updated.startTime, updated.endTime)
-            const price = total > 0 ? total : court.pricePerHour * calculateHours(updated.startTime, updated.endTime)
-            updated.totalPrice = String(price)
-            if (!updated.advanceAmount || updated.advanceAmount === String(court.pricePerHour * calculateHours(prev.startTime, prev.endTime) * 0.5)) {
-              updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-            }
-          } else {
-            const hours = calculateHours(updated.startTime, updated.endTime)
-            const price = court.pricePerHour * hours
-            updated.totalPrice = String(price)
-            if (!updated.advanceAmount || updated.advanceAmount === String(court.pricePerHour * calculateHours(prev.startTime, prev.endTime) * 0.5)) {
-              updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-            }
+        const ids = updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : [])
+        if (ids.length > 0 && updated.startTime && updated.endTime) {
+          const price = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+          updated.totalPrice = String(price)
+          if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
           }
         }
-      }
-      // Auto-recalculate remaining
-      if (['totalPrice', 'advanceAmount'].includes(field)) {
-        const total = parseFloat(updated.totalPrice) || 0
-        const adv = parseFloat(updated.advanceAmount) || 0
       }
       return updated
     })
@@ -2088,7 +2090,7 @@ export default function AdminDashboard() {
 
   /* ─── recurring booking handlers ─── */
   const handlePreviewRecurring = async () => {
-    if (!bookingForm.courtId || !bookingForm.userId || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.date) {
+    if (bookingForm.courtIds.length === 0 || !bookingForm.userId || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.date) {
       toast({ title: 'Error', description: 'Completa la cancha, cliente, fecha y horario primero.', variant: 'destructive' })
       return
     }
@@ -2104,7 +2106,7 @@ export default function AdminDashboard() {
     setPreviewLoading(true)
     try {
       const body: Record<string, unknown> = {
-        courtId: bookingForm.courtId,
+        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
         userId: bookingForm.userId,
         startTime: bookingForm.startTime,
         endTime: bookingForm.endTime,
@@ -2156,7 +2158,7 @@ export default function AdminDashboard() {
     setCreatingRecurring(true)
     try {
       const body: Record<string, unknown> = {
-        courtId: bookingForm.courtId,
+        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
         userId: bookingForm.userId,
         startTime: bookingForm.startTime,
         endTime: bookingForm.endTime,
@@ -2319,12 +2321,13 @@ export default function AdminDashboard() {
         b.user?.name?.toLowerCase().includes(q) ||
         b.user?.email?.toLowerCase().includes(q) ||
         b.court?.name?.toLowerCase().includes(q) ||
-        b.id.toLowerCase().includes(q)
+        b.id.toLowerCase().includes(q) ||
+        (b.courts && b.courts.some((c) => c.name?.toLowerCase().includes(q)))
       )
     }
     if (dateFrom) result = result.filter((b) => b.date >= dateFrom)
     if (dateTo) result = result.filter((b) => b.date <= dateTo)
-    if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter)
+    if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter || (b.courtIds && b.courtIds.includes(courtFilter)))
     if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
     switch (sortBy) {
       case 'date_desc': {
@@ -2454,7 +2457,7 @@ export default function AdminDashboard() {
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
   const scheduleCourts = allCourts.map((c) => ({
     ...c,
-    bookings: scheduleBookings.filter((b) => b.courtId === c.id),
+    bookings: scheduleBookings.filter((b) => b.courtId === c.id || (b.courtIds && b.courtIds.includes(c.id))),
   }))
 
   /* time slots — admin has NO time restrictions, all slots available for any date */
@@ -3418,11 +3421,23 @@ export default function AdminDashboard() {
                                 const newIds = isSelected
                                   ? prev.courtIds.filter((id) => id !== c.id)
                                   : [...prev.courtIds, c.id]
-                                return {
+                                const updated = {
                                   ...prev,
                                   courtIds: newIds,
                                   courtId: newIds[0] || '',
                                 }
+                                // Auto-recalculate price for all selected courts
+                                if (newIds.length > 0 && updated.startTime && updated.endTime) {
+                                  const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+                                  updated.totalPrice = String(price)
+                                  if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+                                    updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+                                  }
+                                } else {
+                                  updated.totalPrice = ''
+                                  updated.advanceAmount = ''
+                                }
+                                return updated
                               })
                             }}
                             className="w-4 h-4 rounded border-white/20 text-cm-primary focus:ring-cm-primary/40 bg-transparent"
@@ -3537,7 +3552,26 @@ export default function AdminDashboard() {
                 {/* Price preview */}
                 {bookingForm.totalPrice && (
                   <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1">
+                    {/* Per-court breakdown */}
+                    {bookingForm.courtIds.length > 1 && bookingForm.startTime && bookingForm.endTime && (
+                      <>
+                        <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por cancha:</p>
+                        {bookingForm.courtIds.map((cId) => {
+                          const court = bookingCourtDetails.find((c) => c.id === cId)
+                          if (!court) return null
+                          const courtPrice = calculateMultiCourtPrice([cId], bookingForm.startTime, bookingForm.endTime)
+                          return (
+                            <div key={cId} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                              <span className="text-cm-on-surface-variant truncate mr-2">{court.name}</span>
+                              <span className="text-cm-on-surface whitespace-nowrap">S/ {courtPrice.toFixed(2)}</span>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+                    {/* Time-slot breakdown for single court */}
                     {(() => {
+                      if (bookingForm.courtIds.length > 1) return null
                       const court = bookingCourtDetails.find((c) => c.id === bookingForm.courtId)
                       if (court && court.pricingSchedule && court.pricingSchedule.length > 0 && bookingForm.startTime && bookingForm.endTime) {
                         const { breakdown } = calculatePriceForTimeSlot(court.pricingSchedule, bookingForm.startTime, bookingForm.endTime)

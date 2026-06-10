@@ -109,15 +109,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      courtId, userId, startTime, endTime,
+      courtId, courtIds: bodyCourtIds, userId, startTime, endTime,
       startDate, frequency, daysOfWeek,
       endDate, count, totalPrice, advanceAmount,
       status, paymentMethod, notes, dryRun,
     } = body;
 
-    if (!courtId || !userId || !startTime || !endTime || !startDate || !frequency) {
+    // Resolve all court IDs (support both single courtId and multi-court courtIds)
+    const allCourtIds: string[] = Array.isArray(bodyCourtIds) && bodyCourtIds.length > 0
+      ? bodyCourtIds
+      : courtId ? [courtId] : [];
+
+    if (allCourtIds.length === 0 || !userId || !startTime || !endTime || !startDate || !frequency) {
       return NextResponse.json(
-        { error: 'Faltan campos requeridos: courtId, userId, startTime, endTime, startDate, frequency' },
+        { error: 'Faltan campos requeridos: courtId/courtIds, userId, startTime, endTime, startDate, frequency' },
         { status: 400 }
       );
     }
@@ -148,38 +153,46 @@ export async function POST(request: NextRequest) {
     const adv = parseFloat(advanceAmount) || price * 0.5;
 
     // Check each date for conflicts (no time restrictions — admin-only endpoint)
-    const previewItems = [];
+    const previewItems: Array<{
+      date: string; dayName: string; available: boolean;
+      conflict: { bookingId: string; startTime: string; endTime: string; userName: string; courtName?: string } | undefined;
+      price: number;
+    }> = [];
     let availableCount = 0;
     let conflictCount = 0;
 
     for (const date of dates) {
-      let conflict: { bookingId: string; startTime: string; endTime: string; userName: string } | undefined;
+      let conflict: { bookingId: string; startTime: string; endTime: string; userName: string; courtName?: string } | undefined;
 
-      // Check overlap with existing bookings (no time restriction for admin)
-      const existing = await getBookings({ courtId, date });
-      const overlapping = existing.filter(
-        (b) =>
-          !['cancelled'].includes(migrateStatus(b.status || '')) &&
-          (b.start_time || '') < endTime &&
-          (b.end_time || '') > startTime
-      );
+      // Check overlap with existing bookings for ALL courts
+      for (const cId of allCourtIds) {
+        const existing = await getBookings({ courtId: cId, date });
+        const overlapping = existing.filter(
+          (b) =>
+            !['cancelled'].includes(migrateStatus(b.status || '')) &&
+            (b.start_time || '') < endTime &&
+            (b.end_time || '') > startTime
+        );
 
-      if (overlapping.length > 0) {
-        const ob = overlapping[0];
-        let userName = 'Cliente';
-        try {
-          if (ob.user_id) {
-            const user = await getUserById(ob.user_id as string);
-            if (user?.name) userName = user.name as string;
-          }
-        } catch { /* fallback */ }
+        if (overlapping.length > 0) {
+          const ob = overlapping[0];
+          let userName = 'Cliente';
+          try {
+            if (ob.user_id) {
+              const user = await getUserById(ob.user_id as string);
+              if (user?.name) userName = user.name as string;
+            }
+          } catch { /* fallback */ }
 
-        conflict = {
-          bookingId: ob.id,
-          startTime: ob.start_time as string,
-          endTime: ob.end_time as string,
-          userName,
-        };
+          conflict = {
+            bookingId: ob.id as string,
+            startTime: (ob.start_time as string) || '',
+            endTime: (ob.end_time as string) || '',
+            userName,
+            courtName: cId,
+          };
+          break; // one conflict is enough to mark this date unavailable
+        }
       }
 
       const available = !conflict?.bookingId;
@@ -218,7 +231,7 @@ export async function POST(request: NextRequest) {
       if (!item.available) continue;
 
       const id = await createBooking({
-        court_id: courtId,
+        court_ids: allCourtIds,
         user_id: userId,
         user_email: authUser.email,
         date: dates[i],

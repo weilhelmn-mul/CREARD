@@ -68,11 +68,22 @@ export async function GET() {
       .filter((b) => b.status === 'partially_paid' || b.status === 'confirmed')
       .reduce((sum, b) => sum + ((b.remaining_amount as number) || 0), 0);
 
-    // Bookings by sport
+    // Bookings by sport — count ALL courts in each booking, not just primary
     const bookingsBySport: Record<string, number> = { futbol: 0, voley: 0 };
+    const courtCache: Record<string, Record<string, unknown> | null> = {};
+    const getCourtCached = async (cid: string) => {
+      if (!(cid in courtCache)) {
+        courtCache[cid] = await getCourtById(cid);
+      }
+      return courtCache[cid];
+    };
     for (const b of allBookings) {
-      if (b.court_id) {
-        const court = await getCourtById(b.court_id as string);
+      // Collect all court IDs for this booking
+      const cIds: string[] = Array.isArray(b.court_ids)
+        ? b.court_ids as string[]
+        : (b.court_id ? [b.court_id as string] : []);
+      for (const cid of cIds) {
+        const court = await getCourtCached(cid);
         if (court?.sport && bookingsBySport[court.sport as string] !== undefined) {
           bookingsBySport[court.sport as string]++;
         }
@@ -86,16 +97,20 @@ export async function GET() {
       bookingsByStatus[s] = (bookingsByStatus[s] || 0) + 1;
     }
 
-    // Top courts
+    // Top courts — count ALL courts in each booking, distribute revenue proportionally
     const courts = await getAllFromCollection('courts');
     const courtBookingCounts: Record<string, number> = {};
     const courtRevenue: Record<string, number> = {};
     for (const b of allBookings) {
-      const cid = b.court_id as string;
-      if (cid) {
+      const cIds: string[] = Array.isArray(b.court_ids)
+        ? b.court_ids as string[]
+        : (b.court_id ? [b.court_id as string] : []);
+      const courtCount = Math.max(cIds.length, 1);
+      const priceShare = ((b.total_price as number) || 0) / courtCount;
+      for (const cid of cIds) {
         courtBookingCounts[cid] = (courtBookingCounts[cid] || 0) + 1;
         if (b.status === 'completed' || b.status === 'fully_paid') {
-          courtRevenue[cid] = (courtRevenue[cid] || 0) + ((b.total_price as number) || 0);
+          courtRevenue[cid] = (courtRevenue[cid] || 0) + priceShare;
         }
       }
     }

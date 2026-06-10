@@ -132,6 +132,7 @@ function buildQuery(
       case '>=': q = q.where(c.field, '>=', c.value); break;
       case 'in': q = q.where(c.field, 'in', c.value as unknown[]); break;
       case 'not-in': q = q.where(c.field, 'not-in', c.value as unknown[]); break;
+      case 'array-contains': q = q.where(c.field, 'array-contains', c.value); break;
     }
   }
   return q;
@@ -273,13 +274,52 @@ export async function getBookings(filters?: {
   date?: string;
   status?: string;
 }): Promise<Partial<Booking>[]> {
-  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
-  if (filters?.courtId) constraints.push({ field: 'court_id', op: '==', value: filters.courtId });
-  if (filters?.userId) constraints.push({ field: 'user_id', op: '==', value: filters.userId });
-  if (filters?.userEmail) constraints.push({ field: 'user_email', op: '==', value: filters.userEmail });
-  if (filters?.date) constraints.push({ field: 'date', op: '==', value: filters.date });
-  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
-  return queryDocs('bookings', constraints, 'start_time');
+  // Build non-court constraints (shared by both queries)
+  const baseConstraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.userId) baseConstraints.push({ field: 'user_id', op: '==', value: filters.userId });
+  if (filters?.userEmail) baseConstraints.push({ field: 'user_email', op: '==', value: filters.userEmail });
+  if (filters?.date) baseConstraints.push({ field: 'date', op: '==', value: filters.date });
+  if (filters?.status) baseConstraints.push({ field: 'status', op: '==', value: filters.status });
+
+  // No court filter — single query
+  if (!filters?.courtId) {
+    return queryDocs('bookings', baseConstraints, 'start_time');
+  }
+
+  // Court filter present — need TWO queries:
+  //   1) court_id == X  (primary court)
+  //   2) court_ids array-contains X  (secondary court in multi-court booking)
+  const [byPrimary, byArray] = await Promise.all([
+    queryDocs('bookings', [
+      ...baseConstraints,
+      { field: 'court_id', op: '==', value: filters.courtId },
+    ], 'start_time'),
+    queryDocs('bookings', [
+      ...baseConstraints,
+      { field: 'court_ids', op: 'array-contains', value: filters.courtId },
+    ], 'start_time'),
+  ]);
+
+  // Merge & deduplicate by document ID
+  const seen = new Set<string>();
+  const merged: DocumentData[] = [];
+  for (const doc of [...byPrimary, ...byArray]) {
+    if (!seen.has(doc.id)) {
+      seen.add(doc.id);
+      merged.push(doc);
+    }
+  }
+
+  // Client-side sort (already sorted individually, but merge breaks order)
+  merged.sort((a, b) => {
+    const va = a.start_time ?? '';
+    const vb = b.start_time ?? '';
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+    return 0;
+  });
+
+  return merged as Partial<Booking>[];
 }
 
 export async function createBooking(data: Record<string, unknown>): Promise<string> {
