@@ -30,6 +30,7 @@ function migrateStatus(s: string): string {
 
 // Transformar snake_case (Firestore) a camelCase (frontend)
 function toCamelBooking(b: Record<string, unknown>) {
+  // Primary court (backward compat)
   const courtRaw = b._court as Record<string, unknown> | null;
   const court = courtRaw ? {
     id: courtRaw.id || courtRaw.court_id,
@@ -41,6 +42,15 @@ function toCamelBooking(b: Record<string, unknown>) {
     },
   } : null;
 
+  // Additional courts (multi-court bookings)
+  const courtsRaw = b._courts as Array<Record<string, unknown>> | null;
+  const courts = courtsRaw ? courtsRaw.map((cr) => ({
+    id: cr.id || cr.court_id,
+    name: cr.name || cr.court_name,
+    sport: cr.sport,
+    branch: (cr.branch as Record<string, unknown>) || { id: 'branch-1', name: 'CREARD' },
+  })) : [];
+
   const userRaw = b._user as Record<string, unknown> | null;
   const user = userRaw ? {
     id: userRaw.id,
@@ -48,9 +58,13 @@ function toCamelBooking(b: Record<string, unknown>) {
     email: userRaw.email,
   } : null;
 
+  // Court IDs array
+  const courtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : (b.court_id ? [b.court_id] : []);
+
   return {
     id: b.id,
     courtId: b.court_id,
+    courtIds,
     userId: b.user_id,
     date: b.date,
     startTime: b.start_time,
@@ -67,22 +81,42 @@ function toCamelBooking(b: Record<string, unknown>) {
     recurringGroupId: b.recurring_group_id,
     recurringIndex: b.recurring_index,
     court,
+    courts,
     user,
   };
 }
 
-// Enrich a single booking (court + user), safe — never throws
+// Enrich a single booking (all courts + user), safe — never throws
 async function safeEnrichBooking(b: Record<string, unknown>): Promise<Record<string, unknown>> {
   let court: Record<string, unknown> | null = null;
+  let courts: Array<Record<string, unknown>> = [];
   let user: Record<string, unknown> | null = null;
 
+  // Get all court IDs (from court_ids array or single court_id)
+  const allCourtIds: string[] = Array.isArray(b.court_ids)
+    ? b.court_ids as string[]
+    : (b.court_id ? [b.court_id as string] : []);
+
+  // Enrich primary court (first one)
   try {
-    if (b.court_id) {
-      const c = await getCourtById(b.court_id as string);
+    if (allCourtIds.length > 0) {
+      const c = await getCourtById(allCourtIds[0]);
       if (c) court = c as Record<string, unknown>;
     }
   } catch (e) {
-    console.warn('[BOOKINGS] Failed to load court for booking:', b.id, e);
+    console.warn('[BOOKINGS] Failed to load primary court for booking:', b.id, e);
+  }
+
+  // Enrich all courts for multi-court bookings
+  if (allCourtIds.length > 1) {
+    const enrichedCourts: Array<Record<string, unknown>> = [];
+    for (const cid of allCourtIds) {
+      try {
+        const c = await getCourtById(cid);
+        if (c) enrichedCourts.push(c as Record<string, unknown>);
+      } catch { /* skip failed court enrichment */ }
+    }
+    courts = enrichedCourts;
   }
 
   try {
@@ -94,7 +128,7 @@ async function safeEnrichBooking(b: Record<string, unknown>): Promise<Record<str
     console.warn('[BOOKINGS] Failed to load user for booking:', b.id, e);
   }
 
-  return { ...b, _court: court, _user: user };
+  return { ...b, _court: court, _courts: courts, _user: user };
 }
 
 // Search bookings by userId OR userEmail, deduplicate
@@ -278,6 +312,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       courtId,
+      courtIds: bodyCourtIds,
       userId,
       date,
       startTime,
@@ -290,9 +325,16 @@ export async function POST(request: NextRequest) {
       notes,
     } = body;
 
-    if (!courtId || !userId || !date || !startTime || !endTime) {
+    // ── Resolve court IDs (support both single courtId and multi-court courtIds) ──
+    const allCourtIds: string[] = Array.isArray(bodyCourtIds) && bodyCourtIds.length > 0
+      ? bodyCourtIds
+      : courtId
+        ? [courtId]
+        : [];
+
+    if (allCourtIds.length === 0 || !userId || !date || !startTime || !endTime) {
       return NextResponse.json(
-        { error: 'Faltan campos requeridos: courtId, userId, date, startTime, endTime' },
+        { error: 'Faltan campos requeridos: courtId/courtIds, userId, date, startTime, endTime' },
         { status: 400 }
       );
     }
@@ -332,33 +374,60 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check overlap
-    const existing = await getBookings({ courtId, date });
-    const overlapping = existing.filter(
-      (b) =>
-        !['cancelled'].includes(migrateStatus(b.status || '')) &&
-        (b.start_time || '') < endTime &&
-        (b.end_time || '') > startTime
-    );
+    // ── Check overlap for ALL courts ──
+    const conflicts: Array<{ courtId: string; courtName: string }> = [];
+    for (const cId of allCourtIds) {
+      const existing = await getBookings({ courtId: cId, date });
+      const overlapping = existing.filter(
+        (b) => {
+          const bCourtIds: string[] = Array.isArray(b.court_ids)
+            ? b.court_ids as string[]
+            : [b.court_id as string];
+          // Skip if this existing booking doesn't include the court we're checking
+          if (!bCourtIds.includes(cId)) return false;
+          return (
+            !['cancelled'].includes(migrateStatus(b.status || '')) &&
+            (b.start_time || '') < endTime &&
+            (b.end_time || '') > startTime
+          );
+        }
+      );
+      if (overlapping.length > 0) {
+        let courtName = cId;
+        try {
+          const c = await getCourtById(cId);
+          if (c?.name) courtName = c.name as string;
+        } catch { /* use ID */ }
+        conflicts.push({ courtId: cId, courtName });
+      }
+    }
 
-    if (overlapping.length > 0) {
+    if (conflicts.length > 0) {
+      const conflictNames = conflicts.map((c) => c.courtName).join(', ');
       return NextResponse.json(
-        { error: 'Este horario ya esta reservado. Por favor selecciona otro.' },
+        {
+          error: `Cancha${conflicts.length > 1 ? 's' : ''} no disponible${conflicts.length > 1 ? 's' : ''}: ${conflictNames}. Por favor selecciona otro horario o cancha.`,
+          conflicts,
+        },
         { status: 409 }
       );
     }
 
-    // Get court price if not provided — use time-based pricing schedule
+    // ── Calculate price (sum all courts if not provided) ──
     let price = parseFloat(totalPrice) || 0;
     if (!totalPrice) {
-      const court = await getCourtById(courtId);
-      if (court) {
-        const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
-        if (schedule && schedule.length > 0) {
-          price = calculatePriceForTimeSlot(schedule, startTime, endTime);
-          if (price <= 0) price = (court.price_per_hour as number) || 0;
-        } else {
-          price = (court.price_per_hour as number) || 0;
+      for (const cId of allCourtIds) {
+        const court = await getCourtById(cId);
+        if (court) {
+          const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
+          let courtPrice = 0;
+          if (schedule && schedule.length > 0) {
+            courtPrice = calculatePriceForTimeSlot(schedule, startTime, endTime);
+            if (courtPrice <= 0) courtPrice = (court.price_per_hour as number) || 0;
+          } else {
+            courtPrice = (court.price_per_hour as number) || 0;
+          }
+          price += courtPrice;
         }
       }
     }
@@ -367,9 +436,9 @@ export async function POST(request: NextRequest) {
     const rem = parseFloat(remainingAmount) || price - adv;
     const bookingStatus = migrateStatus(status || 'reserved');
 
-    // Save to Firestore
+    // Save to Firestore — single booking with all courts
     const id = await createBooking({
-      court_id: courtId,
+      court_ids: allCourtIds,
       user_id: userId,
       user_email: authUser.email,
       date,
@@ -399,7 +468,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       id,
-      courtId,
+      courtId: allCourtIds[0],
+      courtIds: allCourtIds,
       userId,
       date,
       startTime,

@@ -60,6 +60,7 @@ export interface User {
 export interface Booking {
   id: string;
   court_id: string;
+  court_ids?: string[];
   user_id: string;
   user_email: string | null;
   date: string;
@@ -282,8 +283,10 @@ export async function getBookings(filters?: {
 }
 
 export async function createBooking(data: Record<string, unknown>): Promise<string> {
+  const courtIds: string[] = Array.isArray(data.court_ids) ? data.court_ids : [data.court_id];
   return addDoc('bookings', {
-    court_id: data.court_id,
+    court_id: courtIds[0] || data.court_id, // Primary court (backward compat)
+    court_ids: courtIds, // All courts in this booking
     user_id: data.user_id,
     user_email: data.user_email || null, // Denormalized for fallback search
     date: data.date,

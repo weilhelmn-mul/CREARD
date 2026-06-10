@@ -29,6 +29,7 @@ interface Court {
 interface BookingResponse {
   id: string
   courtId: string
+  courtIds: string[]
   userId: string
   date: string
   startTime: string
@@ -234,7 +235,7 @@ export default function BookingForm() {
     }
   }, [user])
 
-  /* ──── Submit: Create bookings for all courts, then go to payment step ──── */
+  /* ──── Submit: Create ONE booking for ALL courts ──── */
   const handleSubmit = useCallback(async () => {
     if (courts.length === 0 || !selectedDate || !timeParts.start || !timeParts.end) return
     if (!user?.id) {
@@ -248,68 +249,58 @@ export default function BookingForm() {
     }
 
     setSubmitting(true)
-    let created: BookingResponse[] = []
-    let createdN = 0
-    let failedN = 0
 
-    for (const c of courts) {
-      const cp = courtPricings.find((p) => p.court.id === c.id)
-      const courtTotal = cp?.total || c.pricePerHour
-      const courtAdv = courtTotal * 0.5
-      const courtRem = courtTotal - courtAdv
+    try {
+      // Single API call with all court IDs
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          courtIds: courts.map((c) => c.id),
+          userId: user.id,
+          date: selectedDate,
+          startTime: timeParts.start,
+          endTime: timeParts.end,
+          totalPrice,
+          advanceAmount,
+          remainingAmount,
+          status: 'reserved',
+          paymentMethod,
+        }),
+      })
 
-      try {
-        const res = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            courtId: c.id,
-            userId: user.id,
-            date: selectedDate,
-            startTime: timeParts.start,
-            endTime: timeParts.end,
-            totalPrice: courtTotal,
-            advanceAmount: courtAdv,
-            remainingAmount: courtRem,
-            status: 'reserved',
-            paymentMethod,
-          }),
+      if (!res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Error al crear reserva',
+          description: data.error || 'Horario no disponible.',
+          variant: 'destructive',
         })
-
-        if (!res.ok) {
-          const data = await res.json()
-          failedN++
-          toast({
-            title: `Error en ${c.name}`,
-            description: data.error || 'Horario no disponible.',
-            variant: 'destructive',
-          })
-          continue
-        }
-
-        const booking = await res.json() as BookingResponse
-        created.push(booking)
-        createdN++
-      } catch {
-        failedN++
+        setSubmitting(false)
+        return
       }
-    }
 
-    setCreatedCount(createdN)
-    setFailedCount(failedN)
-    setBookingDataList(created)
-    setBookingRefs(created.map((b) => getRefCode(b.id)))
+      const booking = await res.json() as BookingResponse
+      setBookingDataList([booking])
+      setCreatedCount(1)
+      setFailedCount(0)
+      setBookingRefs([getRefCode(booking.id)])
 
-    if (createdN > 0) {
       // Clear the court selection cart
       clearSelectedCourtIds()
       setFormStep('payment')
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'No se pudo crear la reserva.',
+        variant: 'destructive',
+      })
     }
 
     setSubmitting(false)
   }, [
-    courts, courtPricings, selectedDate, timeParts, user, clientName, clientPhone,
-    totalPrice, advanceAmount, remainingAmount, paymentMethod, bookingDate,
+    courts, selectedDate, timeParts, user, clientName, clientPhone,
+    totalPrice, advanceAmount, remainingAmount, paymentMethod,
     addNotification, setView, clearSelectedCourtIds,
   ])
 
@@ -320,8 +311,8 @@ export default function BookingForm() {
     const courtNames = courts.map((c) => c.name).join(', ')
     if (bookingDataList.length > 0) {
       addNotification({
-        title: `${bookingDataList.length} reserva${bookingDataList.length > 1 ? 's' : ''} confirmada${bookingDataList.length > 1 ? 's' : ''}`,
-        message: `Reserva en ${courtNames} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRefs.join(', ')}`,
+        title: 'Reserva confirmada',
+        message: `${courts.length} cancha${courts.length > 1 ? 's' : ''}: ${courtNames} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRefs.join(', ')}`,
         type: 'success',
       })
     }

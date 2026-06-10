@@ -39,6 +39,7 @@ interface PricingScheduleItem {
 interface Booking {
   id: string
   courtId: string
+  courtIds?: string[]
   userId: string
   date: string
   startTime: string
@@ -1841,7 +1842,7 @@ export default function AdminDashboard() {
   const [showBookingForm, setShowBookingForm] = useState(false)
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [bookingForm, setBookingForm] = useState({
-    courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
+    courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
     totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string }>>([])
@@ -2025,7 +2026,7 @@ export default function AdminDashboard() {
 
   const validateBookingForm = (): boolean => {
     const errors: Record<string, string> = {}
-    if (!bookingForm.courtId) errors.courtId = 'Selecciona una cancha'
+    if (bookingForm.courtIds.length === 0) errors.courtId = 'Selecciona al menos una cancha'
     if (!bookingForm.userId) errors.userId = 'Selecciona un cliente'
     if (!bookingForm.date) errors.date = 'Selecciona una fecha'
     if (!bookingForm.startTime) errors.startTime = 'Hora de inicio requerida'
@@ -2041,7 +2042,7 @@ export default function AdminDashboard() {
     setSubmittingBooking(true)
     try {
       const body = {
-        courtId: bookingForm.courtId,
+        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
         userId: bookingForm.userId,
         date: bookingForm.date,
         startTime: bookingForm.startTime,
@@ -2061,7 +2062,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
         setFormErrors({})
         fetchData()
       } else {
@@ -2190,7 +2191,7 @@ export default function AdminDashboard() {
           description: `${created} reservas recurrentes creadas exitosamente${data.conflictCount > 0 ? ` (${data.conflictCount} conflictos omitidos)` : ''}`,
         })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
         setFormErrors({})
         setShowRecurring(false)
         setRecurringStep('config')
@@ -2791,7 +2792,10 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
-                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
+                                  {b.courtIds && b.courtIds.length > 1
+                                    ? <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.courtIds.length} canchas</span>
+                                    : <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
+                                  }
                                 </div>
                               </td>
                               <td className="px-4 py-3 hidden md:table-cell">
@@ -2885,7 +2889,9 @@ export default function AdminDashboard() {
                               <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
                             </div>
                             <div className="min-w-0">
-                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface truncate">{b.court?.name || 'N/A'}</p>
+                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface truncate">
+                                {b.courtIds && b.courtIds.length > 1 ? `${b.courtIds.length} canchas` : (b.court?.name || 'N/A')}
+                              </p>
                               {b.court?.branch && <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.court.branch.name}</p>}
                             </div>
                           </div>
@@ -3382,27 +3388,53 @@ export default function AdminDashboard() {
               </div>
 
               <div className="overflow-auto flex-1 space-y-3">
-                {/* Court */}
+                {/* Courts - Multi-select with checkboxes */}
                 <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cancha *</label>
-                  <select
-                    value={bookingForm.courtId}
-                    onChange={(e) => handleBookingFormChange('courtId', e.target.value)}
-                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.courtId ? 'border-red-400' : 'border-white/10'}`}
-                  >
-                    <option value="">Selecciona una cancha</option>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Cancha(s) *</label>
+                    <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                      {bookingForm.courtIds.length} seleccionada{bookingForm.courtIds.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="max-h-36 overflow-y-auto bg-cm-surface-container-highest/40 border border-white/10 rounded-xl p-2 space-y-1">
                     {bookingCourtDetails.map((c) => {
+                      const isSelected = bookingForm.courtIds.includes(c.id)
                       const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
                       const priceLabel = hasSchedule
-                        ? c.pricingSchedule.map((s) => `${s.label} S/${s.pricePerHour}`).join(' / ')
+                        ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
                         : `S/ ${c.pricePerHour}/h`
                       return (
-                        <option key={c.id} value={c.id}>
-                          {c.name} — {c.sport} — {priceLabel}
-                        </option>
+                        <label
+                          key={c.id}
+                          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all ${
+                            isSelected ? 'bg-cm-primary/10 border border-cm-primary/30' : 'hover:bg-cm-surface-container-highest/60'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setBookingForm((prev) => {
+                                const newIds = isSelected
+                                  ? prev.courtIds.filter((id) => id !== c.id)
+                                  : [...prev.courtIds, c.id]
+                                return {
+                                  ...prev,
+                                  courtIds: newIds,
+                                  courtId: newIds[0] || '',
+                                }
+                              })
+                            }}
+                            className="w-4 h-4 rounded border-white/20 text-cm-primary focus:ring-cm-primary/40 bg-transparent"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-cm-on-surface truncate font-[family-name:var(--font-inter)]">{c.name}</p>
+                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{c.sport} · {priceLabel}</p>
+                          </div>
+                        </label>
                       )
                     })}
-                  </select>
+                  </div>
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
                 </div>
 
@@ -4045,7 +4077,7 @@ export default function AdminDashboard() {
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[sb.court?.sport || ''] || 'sports'}</span>
-                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{sb.court?.name || 'N/A'}</span>
+                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{sb.courtIds && sb.courtIds.length > 1 ? `${sb.courtIds.length} canchas` : (sb.court?.name || 'N/A')}</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
