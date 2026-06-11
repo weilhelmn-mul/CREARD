@@ -2016,6 +2016,10 @@ export default function AdminDashboard() {
       if (equipRes.ok) {
         const equipData = await equipRes.json()
         setEquipmentList(Array.isArray(equipData) ? equipData : [])
+      } else {
+        const eqErr = await equipRes.json().catch(() => ({ error: 'Error desconocido' }))
+        console.error('[CREARD Admin] Error loading equipment:', equipRes.status, eqErr)
+        toast({ title: 'Error cargando equipamiento', description: eqErr.error || `Status ${equipRes.status}`, variant: 'destructive' })
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudieron cargar los datos. Verifica la conexion a la base de datos.', variant: 'destructive' })
