@@ -8,6 +8,7 @@ import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBan
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
+import EquipmentManager from '@/components/admin/EquipmentManager'
 import {
   DndContext,
   closestCenter,
@@ -36,6 +37,23 @@ interface PricingScheduleItem {
   pricePerHour: number;
 }
 
+interface EquipmentItem {
+  equipmentId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  subtotal: number
+}
+
+interface Equipment {
+  id: string
+  name: string
+  sport: string
+  pricePerRental: number
+  stock: number
+  active: boolean
+}
+
 interface Booking {
   id: string
   courtId: string
@@ -45,6 +63,9 @@ interface Booking {
   startTime: string
   endTime: string
   totalPrice: number
+  courtSubtotal?: number
+  equipmentSubtotal?: number
+  equipmentItems?: EquipmentItem[]
   advanceAmount: number
   remainingAmount: number
   status: string
@@ -52,6 +73,8 @@ interface Booking {
   createdAt?: unknown
   recurringGroupId?: string
   recurringIndex?: number
+  equipmentDelivered?: boolean
+  equipmentReturned?: boolean
   court: { id: string; name: string; sport: string; branch?: { name: string } } | null
   courts: Array<{ id: string; name: string; sport: string; branch?: { name: string } }>
   user: { id: string; name: string; email: string; phone?: string } | null
@@ -83,7 +106,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'usuarios' | 'canchas' | 'contenido'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'usuarios' | 'canchas' | 'contenido'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -111,6 +134,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'reservas',  label: 'Reservas',  icon: 'calendar_month' },
   { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
+  { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
   { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
@@ -1873,6 +1897,12 @@ export default function AdminDashboard() {
   const [seriesGroupId, setSeriesGroupId] = useState('')
   const [cancellingSeries, setCancellingSeries] = useState(false)
 
+  /* equipment */
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
+  const [selectedEquipItems, setSelectedEquipItems] = useState<Array<{ equipmentId: string; name: string; quantity: number; unitPrice: number; subtotal: number }>>([])
+  const [showEquipPanel, setShowEquipPanel] = useState(false)
+  const [showEquipDetail, setShowEquipDetail] = useState<Booking | null>(null)
+
   /* advance payment modal */
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
@@ -1885,11 +1915,12 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
       const headers = getAuthHeaders()
-      const [statsRes, bookingsRes, expensesRes, courtsRes] = await Promise.all([
+      const [statsRes, bookingsRes, expensesRes, courtsRes, equipRes] = await Promise.all([
         fetch('/api/stats', { headers }),
         fetch('/api/bookings', { headers }),
         fetch('/api/expenses', { headers }),
         fetch('/api/courts', { headers }),
+        fetch('/api/equipment', { headers }),
       ])
 
       if (!bookingsRes.ok) {
@@ -1908,6 +1939,10 @@ export default function AdminDashboard() {
       if (courtsRes.ok) {
         const courtsData = await courtsRes.json()
         setAllCourts(Array.isArray(courtsData) ? courtsData : [])
+      }
+      if (equipRes.ok) {
+        const equipData = await equipRes.json()
+        setEquipmentList(Array.isArray(equipData) ? equipData : [])
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudieron cargar los datos. Verifica la conexion a la base de datos.', variant: 'destructive' })
@@ -2039,6 +2074,57 @@ export default function AdminDashboard() {
     return Object.keys(errors).length === 0
   }
 
+  /* ─── equipment selection helpers ─── */
+  const addEquipmentToForm = (eq: Equipment) => {
+    const existing = selectedEquipItems.find(i => i.equipmentId === eq.id)
+    if (existing) {
+      if (existing.quantity < eq.stock) {
+        setSelectedEquipItems(selectedEquipItems.map(i =>
+          i.equipmentId === eq.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice } : i
+        ))
+      }
+    } else if (eq.stock > 0) {
+      setSelectedEquipItems([...selectedEquipItems, { equipmentId: eq.id, name: eq.name, quantity: 1, unitPrice: eq.pricePerRental, subtotal: eq.pricePerRental }])
+    }
+  }
+
+  const removeEquipmentFromForm = (eqId: string) => {
+    setSelectedEquipItems(selectedEquipItems.filter(i => i.equipmentId !== eqId))
+  }
+
+  const updateEquipQty = (eqId: string, qty: number, stock: number) => {
+    const clamped = Math.max(1, Math.min(qty, stock))
+    setSelectedEquipItems(selectedEquipItems.map(i =>
+      i.equipmentId === eqId ? { ...i, quantity: clamped, subtotal: clamped * i.unitPrice } : i
+    ))
+  }
+
+  const equipmentFormTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+
+  const recalcBookingPrice = useCallback(() => {
+    setBookingForm(prev => {
+      const courtPrice = parseFloat(prev.totalPrice) || 0
+      // Only recalculate if there was a prior court price set (not including equipment)
+      // We store the equipment portion separately, totalPrice is always the grand total
+      return prev
+    })
+  }, [])
+
+  // Effect: whenever selectedEquipItems changes, update totalPrice
+  useEffect(() => {
+    // Find current court-only price by looking at court details
+    const courtPrice = bookingCourtDetails.reduce((sum, c) => {
+      const idx = bookingForm.courtIds.indexOf(c.id)
+      if (idx === -1 && bookingForm.courtId !== c.id) return sum
+      const hrs = calculateHours(bookingForm.startTime, bookingForm.endTime)
+      return sum + c.pricePerHour * hrs
+    }, 0)
+    const newTotal = courtPrice + equipmentFormTotal
+    if (courtPrice > 0 && newTotal > 0) {
+      setBookingForm(prev => ({ ...prev, totalPrice: String(newTotal) }))
+    }
+  }, [selectedEquipItems, bookingForm.courtIds, bookingForm.courtId, bookingForm.startTime, bookingForm.endTime])
+
   const handleCreateBooking = async () => {
     if (!validateBookingForm()) return
     setSubmittingBooking(true)
@@ -2055,6 +2141,12 @@ export default function AdminDashboard() {
         status: bookingForm.status,
         paymentMethod: bookingForm.paymentMethod,
         notes: bookingForm.notes || null,
+        equipmentItems: selectedEquipItems.map(i => ({
+          equipment_id: i.equipmentId,
+          name: i.name,
+          quantity: i.quantity,
+          unit_price: i.unitPrice,
+        })),
       }
       const res = await fetch('/api/bookings', {
         method: 'POST',
@@ -2066,6 +2158,8 @@ export default function AdminDashboard() {
         setShowBookingForm(false)
         setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
         setFormErrors({})
+        setSelectedEquipItems([])
+        setShowEquipPanel(false)
         fetchData()
       } else {
         const err = await res.json()
@@ -2433,6 +2527,24 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleToggleEquipment = async (bookingId: string, field: 'equipmentDelivered' | 'equipmentReturned', value: boolean) => {
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bookingId, [field]: value }),
+      })
+      if (res.ok) {
+        setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, [field]: value } : b)))
+        if (showEquipDetail?.id === bookingId) {
+          setShowEquipDetail((prev) => prev ? { ...prev, [field]: value } : null)
+        }
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' })
+    }
+  }
+
   const handleAddExpense = async () => {
     if (!expForm.description || !expForm.amount || !expForm.category || !expForm.date) {
       toast({ title: 'Error', description: 'Completa todos los campos requeridos', variant: 'destructive' })
@@ -2777,6 +2889,7 @@ export default function AdminDashboard() {
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
+                          <th className="text-center px-2 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]" title="Equipamiento alquilado">Equip.</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden md:table-cell">Cliente</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
                           <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Adelanto</th>
@@ -2809,6 +2922,24 @@ export default function AdminDashboard() {
                                     : <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
                                   }
                                 </div>
+                              </td>
+                              <td className="px-2 py-3 text-center">
+                                {b.equipmentItems && b.equipmentItems.length > 0 ? (
+                                  <button
+                                    onClick={() => setShowEquipDetail(b)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                                    title={b.equipmentItems.map(e => `${e.name} x${e.quantity}`).join(', ')}
+                                    style={{
+                                      backgroundColor: b.equipmentReturned ? 'rgba(34,197,94,0.15)' : b.equipmentDelivered ? 'rgba(234,179,8,0.15)' : 'rgba(59,130,246,0.15)',
+                                      color: b.equipmentReturned ? '#4ade80' : b.equipmentDelivered ? '#facc15' : '#60a5fa',
+                                    }}
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">sports_tennis</span>
+                                    {b.equipmentItems.reduce((s, e) => s + e.quantity, 0)}
+                                  </button>
+                                ) : (
+                                  <span className="text-cm-on-surface-variant/30 text-xs">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 hidden md:table-cell">
                                 <div>
@@ -3360,6 +3491,13 @@ export default function AdminDashboard() {
             <CourtsTab allCourts={allCourts} onRefresh={fetchData} />
           )}
 
+          {/* ─── EQUIPOS (Equipment Management) ─── */}
+          {activeTab === 'equipos' && (
+            <motion.div key="equipos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+              <EquipmentManager equipmentList={equipmentList} onRefresh={fetchData} />
+            </motion.div>
+          )}
+
           {/* ─── CONTENIDO (Edit Home Page) ─── */}
           {activeTab === 'contenido' && (
             <ContentTab />
@@ -3662,6 +3800,74 @@ export default function AdminDashboard() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* ═══ Equipment Selection ═══ */}
+                <div className="border-t border-white/5 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEquipPanel(!showEquipPanel)}
+                    className="flex items-center gap-2.5 w-full text-left"
+                  >
+                    <div className={`w-9 h-5 rounded-full transition-colors flex items-center ${showEquipPanel ? 'bg-blue-500 justify-end' : 'bg-cm-surface-container-highest justify-start'} px-0.5`}>
+                      <div className={`w-4 h-4 rounded-full transition-all ${showEquipPanel ? 'bg-white shadow-lg' : 'bg-cm-on-surface-variant/60'}`} />
+                    </div>
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                      <span className="material-symbols-outlined text-[18px] text-blue-400">sports_tennis</span>
+                      Agregar Equipamiento
+                    </span>
+                    {selectedEquipItems.length > 0 && (
+                      <span className="ml-auto px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full text-[10px] font-bold">{selectedEquipItems.reduce((s, i) => s + i.quantity, 0)} items</span>
+                    )}
+                  </button>
+
+                  {showEquipPanel && (
+                    <div className="mt-3 space-y-2">
+                      {equipmentList.length === 0 ? (
+                        <p className="text-xs text-cm-on-surface-variant text-center py-3">No hay equipos registrados. Ve a la pestana "Equipos" para agregar.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {equipmentList.map(eq => {
+                            const selected = selectedEquipItems.find(i => i.equipmentId === eq.id)
+                            return (
+                              <div key={eq.id} className="flex items-center gap-2 p-2 rounded-lg bg-cm-surface-container-highest/30">
+                                <span className="material-symbols-outlined text-blue-400 text-[16px]">{sportIcons[eq.sport] || 'sports_tennis'}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">{eq.name}</p>
+                                  <p className="text-[10px] text-cm-on-surface-variant">{fmtCurrency(eq.pricePerRental)}/alquiler · Stock: {eq.stock}</p>
+                                </div>
+                                {selected ? (
+                                  <div className="flex items-center gap-1">
+                                    <button onClick={() => updateEquipQty(eq.id, selected.quantity - 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-red-500/20">-</button>
+                                    <span className="w-6 text-center text-xs font-bold text-cm-on-surface">{selected.quantity}</span>
+                                    <button onClick={() => updateEquipQty(eq.id, selected.quantity + 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-green-500/20">+</button>
+                                    <span className="text-[10px] text-blue-400 font-semibold w-14 text-right">{fmtCurrency(selected.subtotal)}</span>
+                                    <button onClick={() => removeEquipmentFromForm(eq.id)} className="p-1 text-red-400 hover:bg-red-400/10 rounded">
+                                      <span className="material-symbols-outlined text-[14px]">close</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addEquipmentToForm(eq)}
+                                    disabled={eq.stock <= 0}
+                                    className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                  >
+                                    + Agregar
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {equipmentFormTotal > 0 && (
+                        <div className="flex justify-between text-xs font-semibold pt-2 border-t border-white/5">
+                          <span className="text-cm-on-surface-variant">Subtotal Equipamiento</span>
+                          <span className="text-blue-400">{fmtCurrency(equipmentFormTotal)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Notes */}
@@ -3990,6 +4196,22 @@ export default function AdminDashboard() {
                   <span className="text-cm-on-surface-variant">Restante</span>
                   <span className="text-orange-400 font-semibold">{fmtCurrency(advanceTarget.remainingAmount)}</span>
                 </div>
+                {(advanceTarget.courtSubtotal !== undefined && advanceTarget.equipmentSubtotal! > 0) && (
+                  <>
+                    <div className="flex justify-between text-[10px] font-[family-name:var(--font-inter)] pt-1 border-t border-white/5">
+                      <span className="text-cm-on-surface-variant">Subtotal Cancha</span>
+                      <span className="text-cm-on-surface">{fmtCurrency(advanceTarget.courtSubtotal || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant">Subtotal Equipamiento</span>
+                      <span className="text-blue-400">{fmtCurrency(advanceTarget.equipmentSubtotal || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant">Detalle equipo</span>
+                      <span className="text-cm-on-surface">{advanceTarget.equipmentItems?.map(e => `${e.name} x${e.quantity}`).join(', ')}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -4058,6 +4280,87 @@ export default function AdminDashboard() {
                   <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
                 )}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Equipment Detail Modal (delivered/returned) ─── */}
+      <AnimatePresence>
+        {showEquipDetail && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowEquipDetail(null)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-sm glass-card rounded-2xl p-6 border-blue-400/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>sports_tennis</span>
+                  </div>
+                  <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Equipamiento</h3>
+                </div>
+                <button onClick={() => setShowEquipDetail(null)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                  <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                </button>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {showEquipDetail.equipmentItems?.map((eq, i) => (
+                  <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-cm-surface-container-highest/30">
+                    <div>
+                      <p className="text-xs font-medium text-cm-on-surface font-[family-name:var(--font-sora)]">{eq.name}</p>
+                      <p className="text-[10px] text-cm-on-surface-variant">Cantidad: {eq.quantity} · {fmtCurrency(eq.unitPrice)}/u</p>
+                    </div>
+                    <span className="text-sm font-bold text-blue-400">{fmtCurrency(eq.subtotal)}</span>
+                  </div>
+                ))}
+                {(showEquipDetail.courtSubtotal !== undefined) && (
+                  <div className="pt-2 border-t border-white/5 space-y-1">
+                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Cancha</span><span>{fmtCurrency(showEquipDetail.courtSubtotal || 0)}</span></div>
+                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Equip.</span><span className="text-blue-400">{fmtCurrency(showEquipDetail.equipmentSubtotal || 0)}</span></div>
+                    <div className="flex justify-between text-xs font-bold pt-1 border-t border-white/5"><span>Total</span><span className="text-cm-primary">{fmtCurrency(showEquipDetail.totalPrice)}</span></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Delivery / Return toggles */}
+              <div className="space-y-3 pt-3 border-t border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px] text-amber-400">inventory_2</span>
+                    <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Entregado</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentDelivered', !showEquipDetail.equipmentDelivered)}
+                    className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentDelivered ? 'bg-amber-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full transition-all shadow ${showEquipDetail.equipmentDelivered ? 'bg-white' : 'bg-cm-on-surface-variant/60'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px] text-green-400">done_all</span>
+                    <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Devuelto</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentReturned', !showEquipDetail.equipmentReturned)}
+                    className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentReturned ? 'bg-green-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full transition-all shadow ${showEquipDetail.equipmentReturned ? 'bg-white' : 'bg-cm-on-surface-variant/60'}`} />
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}

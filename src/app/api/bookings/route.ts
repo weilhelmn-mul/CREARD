@@ -61,6 +61,15 @@ function toCamelBooking(b: Record<string, unknown>) {
   // Court IDs array
   const courtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : (b.court_id ? [b.court_id] : []);
 
+  // Equipment items
+  const equipmentItems = Array.isArray(b.equipment_items) ? b.equipment_items.map((eq: Record<string, unknown>) => ({
+    equipmentId: eq.equipment_id || eq.id,
+    name: eq.name,
+    quantity: eq.quantity || 1,
+    unitPrice: eq.unit_price || eq.price_per_rental || 0,
+    subtotal: (eq.quantity || 1) * (eq.unit_price || eq.price_per_rental || 0),
+  })) : [];
+
   return {
     id: b.id,
     courtId: b.court_id,
@@ -70,6 +79,9 @@ function toCamelBooking(b: Record<string, unknown>) {
     startTime: b.start_time,
     endTime: b.end_time,
     totalPrice: b.total_price || 0,
+    courtSubtotal: b.court_subtotal || b.total_price || 0,
+    equipmentSubtotal: b.equipment_subtotal || 0,
+    equipmentItems,
     advanceAmount: b.advance_amount || 0,
     remainingAmount: b.remaining_amount || 0,
     status: migrateStatus(b.status || 'reserved'),
@@ -80,6 +92,8 @@ function toCamelBooking(b: Record<string, unknown>) {
     updatedAt: b.updated_at,
     recurringGroupId: b.recurring_group_id,
     recurringIndex: b.recurring_index,
+    equipmentDelivered: b.equipment_delivered || false,
+    equipmentReturned: b.equipment_returned || false,
     court,
     courts,
     user,
@@ -323,6 +337,7 @@ export async function POST(request: NextRequest) {
       status,
       paymentMethod,
       notes,
+      equipmentItems,
     } = body;
 
     // ── Resolve court IDs (support both single courtId and multi-court courtIds) ──
@@ -414,8 +429,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Calculate price (sum all courts if not provided) ──
-    let price = parseFloat(totalPrice) || 0;
+    let courtPriceTotal = parseFloat(totalPrice) || 0;
     if (!totalPrice) {
+      courtPriceTotal = 0;
       for (const cId of allCourtIds) {
         const court = await getCourtById(cId);
         if (court) {
@@ -427,10 +443,18 @@ export async function POST(request: NextRequest) {
           } else {
             courtPrice = (court.price_per_hour as number) || 0;
           }
-          price += courtPrice;
+          courtPriceTotal += courtPrice;
         }
       }
     }
+
+    // ── Equipment subtotal ──
+    const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
+    let equipmentSubtotal = 0;
+    for (const eq of eqItems) {
+      equipmentSubtotal += (eq.quantity || 0) * (eq.unitPrice || 0);
+    }
+    const price = courtPriceTotal + equipmentSubtotal;
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
     const rem = parseFloat(remainingAmount) || price - adv;
@@ -445,6 +469,9 @@ export async function POST(request: NextRequest) {
       start_time: startTime,
       end_time: endTime,
       total_price: price,
+      court_subtotal: courtPriceTotal,
+      equipment_subtotal: equipmentSubtotal,
+      equipment_items: eqItems,
       advance_amount: adv,
       remaining_amount: rem,
       status: bookingStatus,
@@ -503,7 +530,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -535,6 +562,8 @@ export async function PUT(request: NextRequest) {
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
     if (reqPaymentMethod) updateData.payment_method = reqPaymentMethod;
+    if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
+    if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
 
     await updateBooking(id, updateData);
 

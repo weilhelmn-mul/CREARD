@@ -113,6 +113,17 @@ export interface Review {
   created_at: Date;
 }
 
+export interface Equipment {
+  id: string;
+  name: string;
+  sport: string;
+  price_per_rental: number;
+  stock: number;
+  active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -631,4 +642,33 @@ export async function updateCourt(id: string, data: Record<string, unknown>): Pr
 
 export async function deleteCourt(id: string): Promise<void> {
   await deleteDocById('courts', id);
+}
+
+// --- Equipment CRUD ---
+export async function getEquipments(filters?: { active?: boolean }): Promise<Partial<Equipment>[]> {
+  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.active !== undefined) constraints.push({ field: 'active', op: '==', value: filters.active });
+  return queryDocs('equipment', constraints, 'name');
+}
+
+export async function getEquipmentById(id: string): Promise<Partial<Equipment> | null> {
+  return getDocById('equipment', id);
+}
+
+export async function createEquipment(data: Record<string, unknown>): Promise<string> {
+  return addDoc('equipment', {
+    name: data.name,
+    sport: data.sport || 'general',
+    price_per_rental: data.price_per_rental || 0,
+    stock: data.stock || 0,
+    active: data.active !== false,
+  });
+}
+
+export async function updateEquipment(id: string, data: Record<string, unknown>): Promise<void> {
+  await updateDocById('equipment', id, data);
+}
+
+export async function deleteEquipment(id: string): Promise<void> {
+  await deleteDocById('equipment', id);
 }
