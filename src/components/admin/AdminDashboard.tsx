@@ -126,7 +126,7 @@ const fmtDateFull = (d: string) => {
   const date = new Date(d + 'T00:00:00')
   return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-const todayStr = () => new Date().toISOString().split('T')[0]
+const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 
 /** Compare Firestore Timestamps (seconds) or ISO strings for sorting */
 function compareTimestamps(a: unknown, b: unknown): number {
@@ -2337,7 +2337,7 @@ export default function AdminDashboard() {
     if (dateFrom) result = result.filter((b) => b.date >= dateFrom)
     if (dateTo) result = result.filter((b) => b.date <= dateTo)
     if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter || (b.courtIds && b.courtIds.includes(courtFilter)))
-    if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter)
+    if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter || (b.courts && b.courts.some((c) => c.sport === sportFilter)))
     switch (sortBy) {
       case 'date_desc': {
         const today = todayStr();

@@ -268,7 +268,7 @@ export async function GET(request: NextRequest) {
 
     // Default server-side sort: today first, future ascending, past descending
     // Within each date: chronological time
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
     enriched.sort((a, b) => {
       const dA = String(a.date || ''), dB = String(b.date || '');
       const aIsToday = dA === today, bIsToday = dB === today;
