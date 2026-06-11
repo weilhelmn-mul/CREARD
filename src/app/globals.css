@@ -158,6 +158,11 @@
   body {
     @apply bg-cm-background text-cm-on-surface antialiased;
   }
+  /* Fix: native <option> elements must have dark bg so light text is visible */
+  select option {
+    background-color: #2d382a;
+    color: #dae6d2;
+  }
 }
 
 /* Custom CREARD utility classes */
