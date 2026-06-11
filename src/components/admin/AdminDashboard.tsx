@@ -9,6 +9,8 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
+import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
+import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
 import {
   DndContext,
   closestCenter,
@@ -106,7 +108,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'usuarios' | 'canchas' | 'contenido'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'usuarios' | 'canchas' | 'contenido'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -135,6 +137,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
   { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
+  { key: 'alarmas',   label: 'Alarmas',   icon: 'notifications_active' },
   { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
@@ -1825,6 +1828,54 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
 }
 
 /* ═══════════════════════════════════════════════════
+   LIVE CLOCK (Lima timezone)
+   ═══════════════════════════════════════════════════ */
+function LiveClock({ alarmsCount, settings }: { alarmsCount: number; settings: NotificationSettings }) {
+  const [time, setTime] = useState('')
+
+  useEffect(() => {
+    const update = () => {
+      setTime(new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    }
+    update()
+    const interval = setInterval(update, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="flex items-center justify-between mb-3 px-1">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10">
+          <span className="material-symbols-outlined text-cm-primary text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>schedule</span>
+          <span className="text-sm font-bold text-cm-on-surface font-mono tracking-wider">{time}</span>
+          <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Lima</span>
+        </div>
+        {settings.enabled && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cm-surface-container-highest/60">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400"></span>
+            </span>
+            <span className="text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+              Monitoreando cada 15s
+            </span>
+          </div>
+        )}
+      </div>
+      {alarmsCount > 0 && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-all animate-pulse"
+        >
+          <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>notification_important</span>
+          <span className="text-xs font-bold font-[family-name:var(--font-inter)]">{alarmsCount} alarma{alarmsCount > 1 ? 's' : ''}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════════════════ */
 export default function AdminDashboard() {
@@ -1909,6 +1960,24 @@ export default function AdminDashboard() {
   const [advanceAmount, setAdvanceAmount] = useState('')
   const [advanceMethod, setAdvanceMethod] = useState('yape')
   const [submittingAdvance, setSubmittingAdvance] = useState(false)
+
+  /* notification alarm system */
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS)
+  const { alerts: bookingAlerts, dismissAlert: dismissBookingAlert, clearAllAlerts, getAlertLevel } = useBookingAlarm(bookings, notifSettings)
+
+  // Fetch notification settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const headers = getAuthHeaders()
+        const res = await fetch('/api/notifications/settings', { headers })
+        if (res.ok) {
+          const data = await res.json()
+          setNotifSettings({ ...DEFAULT_SETTINGS, ...data })
+        }
+      } catch { /* silent */ }
+    })()
+  }, [])
 
   /* ─── fetch all data ─── */
   const fetchData = useCallback(async () => {
@@ -2619,6 +2688,13 @@ export default function AdminDashboard() {
      ═══════════════════════════════════════════════════ */
   return (
     <div className="px-4 py-6 pb-28">
+      {/* Notification Banner - always visible */}
+      <NotificationBanner
+        alerts={bookingAlerts}
+        onDismiss={dismissBookingAlert}
+        onClearAll={clearAllAlerts}
+      />
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -2628,14 +2704,24 @@ export default function AdminDashboard() {
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
-              Panel de Administración
+              Panel de Administracion
             </h1>
             <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
-              Gestión integral de CREARD
+              Gestion integral de CREARD
             </p>
           </div>
+          {/* Live alarm indicator */}
+          {notifSettings.enabled && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-primary/10 border border-cm-primary/20">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cm-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cm-primary"></span>
+              </span>
+              <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">Alarmas activas</span>
+            </div>
+          )}
         </div>
 
         {/* KPI Cards */}
@@ -2689,6 +2775,9 @@ export default function AdminDashboard() {
           {/* ─── RESERVAS ─── */}
           {activeTab === 'reservas' && (
             <motion.div key="reservas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+              {/* ─── Live Clock + Alarm Indicator ─── */}
+              <LiveClock alarmsCount={bookingAlerts.length} settings={notifSettings} />
+
               {/* ─── Filter Bar ─── */}
               <div className="glass-card rounded-xl p-4 mb-4">
                 {/* Top row: search, view toggle, sort, filter toggle */}
@@ -2901,8 +2990,14 @@ export default function AdminDashboard() {
                       <tbody>
                         {filteredBookings.map((b) => {
                           const st = statusConfig[b.status] || statusConfig.reserved
+                          const alertLv = getAlertLevel(b.id)
+                          const rowClass = alertLv === 'expired'
+                            ? 'bg-red-500/10 border-l-2 border-l-red-500 animate-pulse'
+                            : alertLv === 'warning'
+                            ? 'bg-amber-500/10 border-l-2 border-l-amber-500'
+                            : 'border-b border-white/[0.03] hover:bg-white/[0.02]'
                           return (
-                            <tr key={b.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                            <tr key={b.id} className={`${rowClass} transition-colors`}>
                               <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
                                 <div className="flex items-center gap-1.5">
                                   {fmtDate(b.date)}
@@ -2913,7 +3008,21 @@ export default function AdminDashboard() {
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</td>
+                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
+                                <div className="flex items-center gap-2">
+                                  {b.startTime}-{b.endTime}
+                                  {alertLv === 'warning' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold animate-pulse">
+                                      <span className="material-symbols-outlined text-[10px]">timer</span>
+                                    </span>
+                                  )}
+                                  {alertLv === 'expired' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-bold animate-pulse">
+                                      <span className="material-symbols-outlined text-[10px]">timer_off</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
@@ -3000,13 +3109,15 @@ export default function AdminDashboard() {
                   {filteredBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
                     const statusAccent = b.status === 'completed' ? 'bg-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
+                    const galertLv = getAlertLevel(b.id)
+                    const cardBorder = galertLv === 'expired' ? 'border-red-500/60 animate-pulse' : galertLv === 'warning' ? 'border-amber-500/60' : ''
                     return (
                       <motion.div
                         key={b.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-                        className="glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group"
+                        className={`glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group ${cardBorder}`}
                       >
                         {/* Top accent bar */}
                         <div className={`h-1 ${statusAccent}`} />
@@ -3110,13 +3221,15 @@ export default function AdminDashboard() {
                 <div className="space-y-2">
                   {filteredBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
+                    const calertLv = getAlertLevel(b.id)
+                    const compactBorder = calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
                     return (
                       <motion.div
                         key={b.id}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
-                        className="glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200"
+                        className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                           {/* Date & Time */}
@@ -3495,6 +3608,16 @@ export default function AdminDashboard() {
           {activeTab === 'equipos' && (
             <motion.div key="equipos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
               <EquipmentManager equipmentList={equipmentList} onRefresh={fetchData} />
+            </motion.div>
+          )}
+
+          {/* ─── ALARMAS (Notification Settings) ─── */}
+          {activeTab === 'alarmas' && (
+            <motion.div key="alarmas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+              <NotificationSettingsPanel
+                settings={notifSettings}
+                onSettingsChange={setNotifSettings}
+              />
             </motion.div>
           )}
 
