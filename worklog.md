@@ -131,3 +131,33 @@ Stage Summary:
 - Fixed: Demo mode fallback for all operations
 - Fixed: Admin actions no longer crash if user doesn't exist in Firebase Auth
 - Deployed to https://creard.vercel.app
+
+---
+Task ID: 1
+Agent: main
+Task: Implement notification & alarm system for end-of-match alerts
+
+Work Log:
+- Created NotificationMonitor.tsx with useBookingAlarm hook (15s polling, Lima timezone)
+- Created NotificationSettings.tsx with 3-section settings panel (General, Google, WhatsApp)
+- Created /api/notifications/settings/route.ts (GET/PUT settings in Firestore)
+- Created /api/notifications/dispatch/route.ts (Google Chat webhook + WhatsApp Business API)
+- Integrated into AdminDashboard.tsx:
+  - New 'Alarmas' tab with full settings panel
+  - Live clock (Lima timezone, updates every second)
+  - Pulsing alarm indicator in header
+  - Table rows: amber border+bg for warning, red+pulse for expired
+  - Gallery/compact views: matching border highlights
+  - Time column: inline timer icons for alerting bookings
+  - Floating NotificationBanner at top
+  - Active alarms count button
+- Build passed clean, deployed to Vercel (dpl_3wwxUuQqcemg4V1HwsHV89D7dokS, READY)
+
+Stage Summary:
+- 4 new files, 1 modified (AdminDashboard.tsx)
+- Visual alerts: row highlighting (amber/red), pulse animation, border indicators
+- Sound alerts: Web Audio API beeps (no audio files needed)
+- Google Chat: webhook URL config + test button
+- WhatsApp Business: admin alerts + client reminders
+- Settings persisted in Firestore (site_settings/notifications)
+- Deployed to https://creard.vercel.app
