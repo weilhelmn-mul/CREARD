@@ -161,3 +161,22 @@ Stage Summary:
 - WhatsApp Business: admin alerts + client reminders
 - Settings persisted in Firestore (site_settings/notifications)
 - Deployed to https://creard.vercel.app
+
+---
+Task ID: 1
+Agent: main
+Task: Deploy real-time notifications & alarms module to Vercel
+
+Work Log:
+- Explored codebase: found notification module already fully implemented (NotificationMonitor.tsx, NotificationSettings.tsx, API routes)
+- Verified AdminDashboard.tsx integration: useBookingAlarm hook, NotificationBanner, row highlighting (yellow/red), alarmas tab
+- Fixed type import bug in NotificationSettings.tsx (imported DEFAULT_SETTINGS as type, changed to value-only import)
+- Ran next build - all 24 routes compiled successfully including /api/notifications/settings and /api/notifications/dispatch
+- Pushed to GitHub, triggered Vercel deployment dpl_8s2SbVy3P8ZYmruTo5jMiK4akTF5
+- Deployment reached READY state
+
+Stage Summary:
+- The notifications & alarms module was already built and integrated in a prior session
+- Fixed 1 bug (incorrect type import in NotificationSettings.tsx)
+- Deployed successfully to https://creard.vercel.app
+- Module includes: 15s polling alarm system, visual row highlighting (amber/red), Web Audio API beeps, Google Chat webhook, WhatsApp Business API (admin + client reminders), settings panel with 3 sub-tabs
