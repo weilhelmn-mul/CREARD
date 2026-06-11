@@ -2036,7 +2036,15 @@ export default function AdminDashboard() {
       ])
       if (usersRes.ok) {
         const data = await usersRes.json()
-        setBookingUsers(Array.isArray(data) ? data : [])
+        const users = Array.isArray(data) ? data : []
+        setBookingUsers(users)
+        if (users.length === 0) {
+          console.warn('[loadBookingFormData] No users returned from API')
+        }
+      } else {
+        const err = await usersRes.json().catch(() => ({}))
+        console.error('[loadBookingFormData] Users API error:', usersRes.status, err)
+        toast({ title: 'Error cargando clientes', description: 'No se pudieron obtener los usuarios', variant: 'destructive' })
       }
       if (courtsRes.ok) {
         const data = await courtsRes.json()
@@ -2049,7 +2057,10 @@ export default function AdminDashboard() {
           pricingSchedule: Array.isArray(c.pricingSchedule) ? c.pricingSchedule as PricingScheduleItem[] : [],
         })))
       }
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error('[loadBookingFormData] Exception:', err)
+      toast({ title: 'Error de conexion', description: 'No se pudo cargar el formulario', variant: 'destructive' })
+    }
   }, [])
 
   /* ─── computed ─── */

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllUsers, getUserById, updateUser } from '@/lib/db';
-import { adminAuth } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 import {
@@ -13,14 +13,14 @@ import { generateId } from '@/lib/json-storage';
 
 // ── GET /api/admin/users ──
 // Lista todos los usuarios con sus datos
+// Strategy: try Auth listUsers() → fallback to Firestore users collection → fallback to JSON demo
 export async function GET(request: NextRequest) {
-  // Verificar que el solicitante es admin
   const authResult = await requireAuth(request, 'admin');
   if (authResult instanceof NextResponse) return authResult;
 
-  try {
-    // ── DEMO MODE: no Firebase configured ──
-    if (!isFirebaseAvailable()) {
+  // ── DEMO MODE: no Firebase env vars at all ──
+  if (!isFirebaseAvailable()) {
+    try {
       const jsonUsers = await jsonGetAllUsers();
       const sorted = jsonUsers.sort((a: any, b: any) => {
         const statusOrder: Record<string, number> = { pending: 0, approved: 1, rejected: 2, disabled: 3 };
@@ -30,10 +30,17 @@ export async function GET(request: NextRequest) {
         return 0;
       });
       return NextResponse.json(sorted);
+    } catch (err) {
+      console.error('[USERS GET] Demo mode error:', err);
+      return NextResponse.json([]);
     }
+  }
 
-    // ── FIREBASE MODE ──
-    // Step 1: Get ALL Firebase Auth users via listUsers()
+  // ── FIREBASE MODE: try multiple strategies ──
+
+  // STRATEGY 1: Firebase Auth listUsers() + Firestore merge
+  try {
+    const adminAuth = getAdminAuth(); // Direct call, not proxy — throws if init fails
     const authUsers: Record<string, any> = {};
     let pageToken: string | undefined;
     do {
@@ -49,17 +56,12 @@ export async function GET(request: NextRequest) {
             creationTime: user.metadata.creationTime,
             lastSignInTime: user.metadata.lastSignInTime,
           },
-          firebaseExists: true,
-          providerData: user.providerData?.map((p: any) => ({
-            providerId: p.providerId,
-            email: p.email,
-          })) || [],
         };
       }
       pageToken = result.pageToken;
     } while (pageToken);
 
-    // Step 2: Get Firestore user documents (enrichment data: role, status, custom fields)
+    // Enrich with Firestore data
     let firestoreUsers: Record<string, any> = {};
     try {
       const fsUsers = await getAllUsers();
@@ -67,68 +69,75 @@ export async function GET(request: NextRequest) {
         firestoreUsers[u.id] = u;
       }
     } catch (err) {
-      console.warn('[USERS GET] Could not fetch Firestore users, using Auth-only data:', err);
+      console.warn('[USERS GET] Firestore enrichment failed (non-critical):', err);
     }
 
-    // Step 3: Merge: Auth users as base, Firestore data as enrichment
-    const allMerged: Record<string, any>[] = [];
-
-    // 3a: All Auth users
+    const allMerged: any[] = [];
     for (const [uid, authData] of Object.entries(authUsers)) {
-      const fsData = firestoreUsers[uid] || {};
+      const fs = firestoreUsers[uid] || {};
       allMerged.push({
         id: uid,
-        name: fsData.name || authData.displayName || authData.email?.split('@')[0] || 'Sin nombre',
+        name: fs.name || authData.displayName || authData.email?.split('@')[0] || 'Sin nombre',
         email: authData.email,
-        phone: fsData.phone || authData.phone || null,
-        role: fsData.role || 'user',
-        status: authData.disabled ? 'disabled' : (fsData.status || 'approved'),
-        is_active: fsData.is_active ?? !authData.disabled,
+        phone: fs.phone || authData.phone || null,
+        role: fs.role || 'user',
+        status: authData.disabled ? 'disabled' : (fs.status || 'approved'),
+        is_active: fs.is_active ?? !authData.disabled,
         metadata: authData.metadata,
-        firebaseExists: true,
-        created_at: fsData.created_at || authData.metadata?.creationTime || null,
-        updated_at: fsData.updated_at || null,
-        // Track if user has a Firestore profile
-        has_firestore_profile: !!firestoreUsers[uid],
+        created_at: fs.created_at || authData.metadata?.creationTime || null,
+        updated_at: fs.updated_at || null,
       });
     }
-
-    // 3b: Firestore-only users (might exist in Firestore but not in Auth, e.g. demo remnants)
-    for (const [uid, fsData] of Object.entries(firestoreUsers)) {
+    for (const [uid, fs] of Object.entries(firestoreUsers)) {
       if (!authUsers[uid]) {
         allMerged.push({
           id: uid,
-          name: fsData.name || 'Sin nombre',
-          email: fsData.email || '',
-          phone: fsData.phone || null,
-          role: fsData.role || 'user',
-          status: fsData.status || 'approved',
-          is_active: fsData.is_active ?? true,
-          firebaseExists: false,
-          created_at: fsData.created_at || null,
-          updated_at: fsData.updated_at || null,
-          has_firestore_profile: true,
+          name: fs.name || 'Sin nombre',
+          email: fs.email || '',
+          phone: fs.phone || null,
+          role: fs.role || 'user',
+          status: fs.status || 'approved',
+          is_active: fs.is_active ?? true,
+          created_at: fs.created_at || null,
+          updated_at: fs.updated_at || null,
         });
       }
     }
 
-    // Sort: pending first, then by creation time
     const sorted = allMerged.sort((a, b) => {
-      const statusOrder: Record<string, number> = { pending: 0, approved: 1, rejected: 2, disabled: 3 };
-      const aS = statusOrder[a.status] ?? 1;
-      const bS = statusOrder[b.status] ?? 1;
-      if (aS !== bS) return aS - bS;
-      return 0;
+      const o: Record<string, number> = { pending: 0, approved: 1, rejected: 2, disabled: 3 };
+      const aS = o[a.status] ?? 1;
+      const bS = o[b.status] ?? 1;
+      return aS !== bS ? aS - bS : 0;
     });
-
+    console.log(`[USERS GET] Strategy 1 (Auth+Firestore): ${sorted.length} users`);
     return NextResponse.json(sorted);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener usuarios' },
-      { status: 500 }
-    );
+  } catch (authErr: any) {
+    console.warn('[USERS GET] Auth listUsers() failed, falling back to Firestore-only:', authErr?.message || authErr);
   }
+
+  // STRATEGY 2: Firestore users collection only (no Auth)
+  try {
+    const fsUsers = await getAllUsers();
+    const users = fsUsers.map((u: any) => ({
+      id: u.id,
+      name: u.name || 'Sin nombre',
+      email: u.email || '',
+      phone: u.phone || null,
+      role: u.role || 'user',
+      status: u.status || 'approved',
+      is_active: u.is_active ?? true,
+      created_at: u.created_at || null,
+      updated_at: u.updated_at || null,
+    }));
+    console.log(`[USERS GET] Strategy 2 (Firestore only): ${users.length} users`);
+    return NextResponse.json(users);
+  } catch (fsErr: any) {
+    console.error('[USERS GET] Firestore also failed:', fsErr?.message || fsErr);
+  }
+
+  // STRATEGY 3: Last resort — empty array (shouldn't happen)
+  return NextResponse.json([]);
 }
 
 // ── PUT /api/admin/users ──
@@ -226,6 +235,8 @@ export async function PUT(request: NextRequest) {
     }
 
     // ── FIREBASE MODE ──
+    const adminAuth = getAdminAuth(); // Direct call, not proxy
+
     // Check if user exists in Firestore (create doc if missing)
     let targetUser = await getUserById(userId);
 
@@ -424,6 +435,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     // ── FIREBASE MODE ──
+    const adminAuth = getAdminAuth(); // Direct call, not proxy
+
     // Delete from Firebase Auth (best-effort)
     try {
       await adminAuth.deleteUser(userId);
