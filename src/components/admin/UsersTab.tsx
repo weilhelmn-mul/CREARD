@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore } from '@/store/useAppStore'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 
 // Helper: add auth headers to fetch calls
 function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = useAppStore.getState().firebaseToken
   const headers = new Headers(options.headers || {})
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+  const authHeaders = getAuthHeaders()
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (value) headers.set(key, value)
   }
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -64,7 +64,7 @@ export default function UsersTab() {
         setUsers(data)
       }
     } catch (err) {
-      console.error('Error fetching users:', err)
+      console.error('[UsersTab] Error fetching users:', err)
     } finally {
       setLoading(false)
     }
