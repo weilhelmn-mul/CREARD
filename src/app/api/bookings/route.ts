@@ -503,7 +503,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -532,6 +532,9 @@ export async function PUT(request: NextRequest) {
     const updateData: Record<string, unknown> = {};
     if (status) updateData.status = migrateStatus(status);
     if (slot_status) updateData.slot_status = slot_status;
+    if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
+    if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
+    if (reqPaymentMethod) updateData.payment_method = reqPaymentMethod;
 
     await updateBooking(id, updateData);
 

@@ -2281,8 +2281,9 @@ export default function AdminDashboard() {
     try {
       // Update booking status and adjust amounts
       const newAdvance = advanceTarget.advanceAmount + parseFloat(advanceAmount)
-      const newRemaining = advanceTarget.totalPrice - newAdvance
+      const newRemaining = Math.max(0, advanceTarget.totalPrice - newAdvance)
       const newStatus = newRemaining <= 0 ? 'completed' : 'reserved'
+      const isFullPayment = newRemaining <= 0
 
       const res = await fetch('/api/bookings', {
         method: 'PUT',
@@ -2290,10 +2291,18 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           id: advanceTarget.id,
           status: newStatus,
+          advanceAmount: newAdvance,
+          remainingAmount: newRemaining,
+          paymentMethod: advanceMethod,
         }),
       })
       if (res.ok) {
-        toast({ title: 'Pago registrado', description: `Adelanto de ${fmtCurrency(parseFloat(advanceAmount))} registrado. Estado: ${statusConfig[newStatus]?.label || newStatus}` })
+        toast({
+          title: isFullPayment ? 'Pago total registrado' : 'Adelanto registrado',
+          description: isFullPayment
+            ? `Se registró el pago total de ${fmtCurrency(parseFloat(advanceAmount))}. Saldo: S/ 0.00`
+            : `Adelanto de ${fmtCurrency(parseFloat(advanceAmount))} registrado. Restante: ${fmtCurrency(newRemaining)}`,
+        })
         setShowAdvanceModal(false)
         setAdvanceTarget(null)
         fetchData()
@@ -2796,7 +2805,7 @@ export default function AdminDashboard() {
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
                                   {b.courtIds && b.courtIds.length > 1
-                                    ? <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.courtIds.length} canchas</span>
+                                    ? <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`}</span>
                                     : <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
                                   }
                                 </div>
@@ -2831,7 +2840,7 @@ export default function AdminDashboard() {
                                     <button
                                       onClick={() => openAdvanceModal(b)}
                                       className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                                      title="Registrar adelanto"
+                                      title={parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto'}
                                     >
                                       <span className="material-symbols-outlined text-[16px]">payments</span>
                                     </button>
@@ -2892,8 +2901,10 @@ export default function AdminDashboard() {
                               <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
                             </div>
                             <div className="min-w-0">
-                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface truncate">
-                                {b.courtIds && b.courtIds.length > 1 ? `${b.courtIds.length} canchas` : (b.court?.name || 'N/A')}
+                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface">
+                                {b.courtIds && b.courtIds.length > 1
+                                  ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+                                  : (b.court?.name || 'N/A')}
                               </p>
                               {b.court?.branch && <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.court.branch.name}</p>}
                             </div>
@@ -2952,7 +2963,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => openAdvanceModal(b)}
                                 className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
-                                title="Registrar adelanto"
+                                title="Registrar pago"
                               >
                                 <span className="material-symbols-outlined text-[16px]">payments</span>
                               </button>
@@ -2995,7 +3006,11 @@ export default function AdminDashboard() {
                           {/* Court */}
                           <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
                             <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
-                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">{b.court?.name || 'N/A'}</span>
+                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
+                              {b.courtIds && b.courtIds.length > 1
+                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+                                : (b.court?.name || 'N/A')}
+                            </span>
                           </div>
                           {/* Client */}
                           <div className="flex-1 min-w-0 hidden md:block">
@@ -3022,7 +3037,7 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => openAdvanceModal(b)}
                                 className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                                title="Registrar adelanto"
+                                title="Registrar pago"
                               >
                                 <span className="material-symbols-outlined text-[14px]">payments</span>
                               </button>
@@ -3938,8 +3953,12 @@ export default function AdminDashboard() {
                     <span className="material-symbols-outlined text-amber-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
                   </div>
                   <div>
-                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Registrar Adelanto</h3>
-                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Agregar pago a reserva existente</p>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">
+                      {advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'Registrar el Total' : 'Registrar Adelanto'}
+                    </h3>
+                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
+                      {advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'Cancelar la totalidad de la deuda' : 'Agregar pago a reserva existente'}
+                    </p>
                   </div>
                 </div>
                 {!submittingAdvance && (
@@ -3953,7 +3972,7 @@ export default function AdminDashboard() {
               <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 mb-4 space-y-1.5">
                 <div className="flex items-center gap-2 text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
                   <span className="material-symbols-outlined text-[14px]">sports</span>
-                  <span className="font-medium">{advanceTarget.court?.name || 'N/A'}</span>
+                  <span className="font-medium">{advanceTarget.courtIds && advanceTarget.courtIds.length > 1 ? (advanceTarget.courts?.map(c => c.name).join(', ') || `${advanceTarget.courtIds.length} canchas`) : (advanceTarget.court?.name || 'N/A')}</span>
                   <span className="text-cm-on-surface-variant">•</span>
                   <span>{fmtDate(advanceTarget.date)}</span>
                   <span className="text-cm-on-surface-variant">•</span>
@@ -4027,10 +4046,14 @@ export default function AdminDashboard() {
               <button
                 onClick={handleSubmitAdvance}
                 disabled={submittingAdvance || !advanceAmount || parseFloat(advanceAmount) <= 0}
-                className="w-full mt-5 py-3 bg-amber-500 text-white rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className={`w-full mt-5 py-3 text-white rounded-xl font-semibold font-[family-name:var(--font-sora)] transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-500 hover:bg-amber-600'
+                }`}
               >
                 {submittingAdvance ? (
                   <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Registrando...</>
+                ) : advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? (
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar el Total — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
                 ) : (
                   <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
                 )}
