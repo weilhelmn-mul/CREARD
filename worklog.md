@@ -107,3 +107,27 @@ Stage Summary:
 - Deploy: dpl_FbMxrsoHieRFjna5VKMsDVP9x6Qb — READY
 - URL: https://creard.vercel.app
 
+
+---
+Task ID: 1
+Agent: main
+Task: Fix Users management tab showing no users
+
+Work Log:
+- Read and analyzed UsersTab.tsx, /api/admin/users/route.ts, db.ts, auth-middleware.ts, firebase-admin.ts, firebase-check.ts, json-storage.ts, and auth/route.ts
+- Root cause: GET handler only queried Firestore `users` collection. Users registered via Firebase Auth without a Firestore profile document were invisible. Also, all adminAuth calls in PUT/DELETE had no error handling.
+- Rewrote /api/admin/users/route.ts:
+  - GET: Uses adminAuth.listUsers() as primary source (all Firebase Auth users), merged with Firestore docs for role/status enrichment
+  - GET: Users in Auth without Firestore profile auto-display with default values
+  - GET: Demo/JSON fallback when Firebase not configured (matches auth route pattern)
+  - PUT: All adminAuth calls wrapped in try/catch
+  - PUT: Auto-creates Firestore profile if missing when admin acts on user
+  - PUT: Demo mode uses jsonUpdateUser for all actions
+  - DELETE: Demo mode removes from JSON storage; Firebase mode best-effort deletes from Auth + Firestore
+- Committed and deployed to Vercel (dpl_6AnfWGjDLJF9V6CKiiWa1Bz6qbDA, state: READY)
+
+Stage Summary:
+- Fixed: Users tab now shows ALL Firebase Auth users (not just those with Firestore docs)
+- Fixed: Demo mode fallback for all operations
+- Fixed: Admin actions no longer crash if user doesn't exist in Firebase Auth
+- Deployed to https://creard.vercel.app
