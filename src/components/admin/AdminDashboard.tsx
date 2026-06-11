@@ -1921,9 +1921,13 @@ export default function AdminDashboard() {
     courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
     totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '',
   })
-  const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string }>>([])
+  const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string; phone?: string | null }>>([])
   const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+  const [startTimeDrop, setStartTimeDrop] = useState(false)
+  const [endTimeDrop, setEndTimeDrop] = useState(false)
 
   /* recurring booking */
   const [showRecurring, setShowRecurring] = useState(false)
@@ -2244,6 +2248,10 @@ export default function AdminDashboard() {
   const openBookingForm = () => {
     loadBookingFormData()
     setShowBookingForm(true)
+    setClientDropdownOpen(false)
+    setClientSearch('')
+    setStartTimeDrop(false)
+    setEndTimeDrop(false)
     // Reset recurring state
     setShowRecurring(false)
     setRecurringStep('config')
@@ -3729,21 +3737,101 @@ export default function AdminDashboard() {
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
                 </div>
 
-                {/* Client */}
-                <div>
+                {/* Client - Custom searchable dropdown (native select clipped by modal overflow) */}
+                <div className="relative" ref={(el) => {
+                  if (!el) return
+                  const handler = (e: MouseEvent) => {
+                    if (!el.contains(e.target as Node)) setClientDropdownOpen(false)
+                  }
+                  // Cleanup previous
+                  el.querySelectorAll('[data-click-outside]').forEach(n => n.removeEventListener('click', handler as any))
+                  el.setAttribute('data-click-outside', '1')
+                  el.addEventListener('mousedown', handler as any, true)
+                }}>
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cliente *</label>
-                  <select
-                    value={bookingForm.userId}
-                    onChange={(e) => handleBookingFormChange('userId', e.target.value)}
-                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
+                  <button
+                    type="button"
+                    onClick={() => { setClientDropdownOpen(!clientDropdownOpen); setClientSearch('') }}
+                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
                   >
-                    <option value="">Selecciona un cliente</option>
-                    {bookingUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} {u.email ? `(${u.email})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <span className={bookingForm.userId ? 'text-cm-on-surface' : 'text-cm-on-surface-variant/40'}>
+                      {(() => {
+                        const selected = bookingUsers.find(u => u.id === bookingForm.userId)
+                        return selected ? `${selected.name}${selected.email ? ` (${selected.email})` : ''}` : 'Selecciona un cliente'
+                      })()}
+                    </span>
+                    <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                  </button>
+
+                  {clientDropdownOpen && (
+                    <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden">
+                      <div className="p-2 border-b border-white/10">
+                        <div className="flex items-center gap-2 px-2">
+                          <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/50">search</span>
+                          <input
+                            type="text"
+                            value={clientSearch}
+                            onChange={(e) => setClientSearch(e.target.value)}
+                            placeholder="Buscar por nombre o email..."
+                            autoFocus
+                            className="w-full bg-transparent text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none font-[family-name:var(--font-inter)]"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {bookingUsers
+                          .filter(u => {
+                            if (!clientSearch) return true
+                            const q = clientSearch.toLowerCase()
+                            return u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q))
+                          })
+                          .map((u) => {
+                            const isSelected = u.id === bookingForm.userId
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => {
+                                  handleBookingFormChange('userId', u.id)
+                                  setClientDropdownOpen(false)
+                                  setClientSearch('')
+                                }}
+                                className={`w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 transition-colors font-[family-name:var(--font-inter)] ${
+                                  isSelected ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
+                                }`}
+                              >
+                                <div className="w-7 h-7 rounded-full bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">
+                                    {u.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="truncate">{u.name}</p>
+                                  {u.email && <p className="text-[10px] text-cm-on-surface-variant truncate">{u.email}</p>}
+                                </div>
+                                {isSelected && (
+                                  <span className="material-symbols-outlined text-[16px] text-cm-primary">check</span>
+                                )}
+                              </button>
+                            )
+                          })
+                        }
+                        {bookingUsers.length === 0 && (
+                          <div className="px-3 py-4 text-center text-xs text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">
+                            No hay clientes registrados
+                          </div>
+                        )}
+                        {bookingUsers.length > 0 && clientSearch && bookingUsers.filter(u => {
+                          const q = clientSearch.toLowerCase()
+                          return u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q))
+                        }).length === 0 && (
+                          <div className="px-3 py-4 text-center text-xs text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">
+                            Sin resultados para "{clientSearch}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {formErrors.userId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.userId}</p>}
                 </div>
 
@@ -3760,40 +3848,73 @@ export default function AdminDashboard() {
                   {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
                 </div>
 
-                {/* Time */}
+                {/* Time - Custom dropdowns (native select clipped by modal overflow) */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
+                  <div className="relative">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
                       Hora inicio *
                     </label>
-                    <select
-                      value={bookingForm.startTime}
-                      onChange={(e) => handleBookingFormChange('startTime', e.target.value)}
-                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
+                    <button
+                      type="button"
+                      onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
+                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
                     >
-                      {timeSlots.map((ts) => (
-                        <option key={ts.value} value={ts.value} disabled={ts.disabled}>
-                          {ts.value}{ts.label ? ` (${ts.label})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-cm-on-surface">{bookingForm.startTime}</span>
+                      <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                    </button>
+                    {startTimeDrop && (
+                      <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
+                        {timeSlots.map((ts) => (
+                          <button
+                            key={ts.value}
+                            type="button"
+                            disabled={ts.disabled}
+                            onClick={() => { handleBookingFormChange('startTime', ts.value); setStartTimeDrop(false) }}
+                            className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
+                              ts.disabled
+                                ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
+                                : bookingForm.startTime === ts.value
+                                  ? 'bg-cm-primary/15 text-cm-primary'
+                                  : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
+                            }`}
+                          >
+                            {ts.value}{ts.label ? ` (${ts.label})` : ''}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
-                    <select
-                      value={bookingForm.endTime}
-                      onChange={(e) => handleBookingFormChange('endTime', e.target.value)}
-                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
+                    <button
+                      type="button"
+                      onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
+                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
                     >
-                      {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
-                        const val = `${String(h).padStart(2, '0')}:00`
-                        return (
-                          <option key={h} value={val}>
-                            {val}
-                          </option>
-                        )
-                      })}
-                    </select>
+                      <span className="text-cm-on-surface">{bookingForm.endTime}</span>
+                      <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                    </button>
+                    {endTimeDrop && (
+                      <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
+                        {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
+                          const val = `${String(h).padStart(2, '0')}:00`
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              onClick={() => { handleBookingFormChange('endTime', val); setEndTimeDrop(false) }}
+                              className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
+                                bookingForm.endTime === val
+                                  ? 'bg-cm-primary/15 text-cm-primary'
+                                  : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
+                              }`}
+                            >
+                              {val}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                     {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
                   </div>
                 </div>
