@@ -3,7 +3,7 @@
 // Firebase Admin SDK v13+
 // ============================================================
 
-import { adminDb } from './firebase-admin';
+import { getAdminDb } from './firebase-admin';
 import { Timestamp, FieldValue, DocumentData } from 'firebase-admin/firestore';
 import type { Query, DocumentReference, CollectionReference, QuerySnapshot, DocumentSnapshot, WriteResult } from 'firebase-admin/firestore';
 
@@ -132,7 +132,7 @@ function buildQuery(
   collectionName: string,
   constraints: Array<{ field: string; op: string; value: unknown }>
 ): Query {
-  let q: Query = adminDb.collection(collectionName);
+  let q: Query = getAdminDb().collection(collectionName);
   for (const c of constraints) {
     switch (c.op) {
       case '==': q = q.where(c.field, '==', c.value); break;
@@ -174,7 +174,7 @@ async function queryDocs(
 }
 
 async function getDocById(collectionName: string, id: string): Promise<DocumentData | null> {
-  const docSnap = await adminDb.collection(collectionName).doc(id).get();
+  const docSnap = await getAdminDb().collection(collectionName).doc(id).get();
   if (!docSnap.exists) return null;
   return { id: docSnap.id, ...docSnap.data() };
 }
@@ -184,7 +184,7 @@ async function addDoc(
   data: Record<string, unknown>
 ): Promise<string> {
   const now = Timestamp.now();
-  const docRef = await adminDb.collection(collectionName).add({
+  const docRef = await getAdminDb().collection(collectionName).add({
     ...data,
     created_at: now,
     updated_at: now,
@@ -197,7 +197,7 @@ async function updateDocById(
   id: string,
   data: Record<string, unknown>
 ): Promise<void> {
-  await adminDb.collection(collectionName).doc(id).update({
+  await getAdminDb().collection(collectionName).doc(id).update({
     ...data,
     updated_at: Timestamp.now(),
   });
@@ -209,7 +209,7 @@ async function setDocById(
   data: Record<string, unknown>
 ): Promise<void> {
   const now = Timestamp.now();
-  await adminDb.collection(collectionName).doc(id).set({
+  await getAdminDb().collection(collectionName).doc(id).set({
     ...data,
     created_at: now,
     updated_at: now,
@@ -217,11 +217,11 @@ async function setDocById(
 }
 
 export async function deleteDocById(collectionName: string, id: string): Promise<void> {
-  await adminDb.collection(collectionName).doc(id).delete();
+  await getAdminDb().collection(collectionName).doc(id).delete();
 }
 
 async function getCollectionSize(collectionName: string): Promise<number> {
-  const snapshot = await adminDb.collection(collectionName).count().get();
+  const snapshot = await getAdminDb().collection(collectionName).count().get();
   return snapshot.data().count;
 }
 
@@ -547,13 +547,13 @@ export async function getCount(collectionName: string): Promise<number> {
     return await getCollectionSize(collectionName);
   } catch {
     // Fallback si count() no está disponible
-    const snapshot = await adminDb.collection(collectionName).get();
+    const snapshot = await getAdminDb().collection(collectionName).get();
     return snapshot.size;
   }
 }
 
 export async function getAllFromCollection(collectionName: string): Promise<DocumentData[]> {
-  const snapshot = await adminDb.collection(collectionName).get();
+  const snapshot = await getAdminDb().collection(collectionName).get();
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -621,13 +621,13 @@ export async function getSiteSettings(): Promise<DocumentData | null> {
 export async function updateSiteSettings(data: Record<string, unknown>): Promise<void> {
   const now = Timestamp.now();
   try {
-    await adminDb.collection('site_settings').doc('main').update({
+    await getAdminDb().collection('site_settings').doc('main').update({
       ...data,
       updated_at: now,
     });
   } catch {
     // Si no existe, crearlo
-    await adminDb.collection('site_settings').doc('main').set({
+    await getAdminDb().collection('site_settings').doc('main').set({
       ...data,
       created_at: now,
       updated_at: now,

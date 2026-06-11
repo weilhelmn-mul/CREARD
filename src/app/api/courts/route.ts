@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCourts, getCourtById, createCourt } from '@/lib/db';
-import { adminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 // Fallback courts for when Firebase is not configured
@@ -102,7 +102,7 @@ async function toCamelCourt(c: Record<string, unknown>): Promise<Record<string, 
   const branchId = c.branch_id as string | null;
   if (branchId) {
     try {
-      const branchSnap = await adminDb.collection('branches').doc(branchId).get();
+      const branchSnap = await getAdminDb().collection('branches').doc(branchId).get();
       if (branchSnap.exists) {
         const bData = branchSnap.data();
         branch = {

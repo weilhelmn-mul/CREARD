@@ -6,7 +6,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { adminDb } from '@/lib/firebase-admin'
+import { getAdminDb } from '@/lib/firebase-admin'
 import { requireAuth } from '@/lib/auth-middleware'
 import { Timestamp } from 'firebase-admin/firestore'
 
@@ -106,8 +106,8 @@ export async function PUT(request: NextRequest) {
     const authResult = await requireAuth(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const batch = adminDb.batch()
-    const colRef = adminDb.collection('courts')
+    const batch = getAdminDb().batch()
+    const colRef = getAdminDb().collection('courts')
     const results: string[] = []
 
     for (const [id, data] of Object.entries(CORRECT_COURTS)) {
@@ -125,7 +125,7 @@ export async function PUT(request: NextRequest) {
 
     // Handle aliased court IDs from seed-firebase.ts
     const aliasResults: string[] = []
-    const batch2 = adminDb.batch()
+    const batch2 = getAdminDb().batch()
 
     for (const [oldId, newId] of Object.entries(ALIAS_MAP)) {
       const correctData = CORRECT_COURTS[newId]
@@ -160,7 +160,7 @@ export async function PUT(request: NextRequest) {
 // GET - Show current court state for debugging
 export async function GET() {
   try {
-    const snapshot = await adminDb.collection('courts').get()
+    const snapshot = await getAdminDb().collection('courts').get()
     const courts: Record<string, unknown>[] = []
     snapshot.forEach((doc) => {
       courts.push({ id: doc.id, ...doc.data() })
