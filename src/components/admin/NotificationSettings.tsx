@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
-import type { NotificationSettings, DEFAULT_SETTINGS } from './NotificationMonitor'
+import type { NotificationSettings } from './NotificationMonitor'
 
 const FALLBACK_SETTINGS: NotificationSettings = {
   enabled: true,
