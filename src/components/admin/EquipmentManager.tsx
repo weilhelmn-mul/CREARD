@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useToast } from '@/hooks/use-toast'
+import { getAuthHeaders } from '@/lib/auth-helpers'
 
 interface EqItem {
   id: string
@@ -27,16 +28,6 @@ export default function EquipmentManager({ equipmentList, onRefresh }: { equipme
   const [editing, setEditing] = useState<EqItem | null>(null)
   const [form, setForm] = useState({ name: '', sport: 'futbol', pricePerRental: '', stock: '' })
   const [submitting, setSubmitting] = useState(false)
-
-  const getAuthHeaders = () => {
-    if (typeof window === 'undefined') return {}
-    const session = localStorage.getItem('creard_session')
-    if (session) {
-      try { return { Authorization: `Bearer ${JSON.parse(session).token}` } } catch { /* ignore */ }
-    }
-    const token = localStorage.getItem('creard_token')
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
 
   const openCreate = () => {
     setEditing(null)

@@ -16,12 +16,14 @@ function toCamelEquipment(e: Record<string, unknown>) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    console.log('[EQUIPMENT] GET request received');
     if (!isFirebaseAvailable()) {
+      console.warn('[EQUIPMENT] Firebase not configured');
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
-    const authResult = await requireAnyAuth();
+    const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     if (authResult.user.role !== 'admin' && authResult.user.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
@@ -36,10 +38,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[EQUIPMENT] POST request received');
     if (!isFirebaseAvailable()) {
+      console.warn('[EQUIPMENT] Firebase not configured');
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
-    const authResult = await requireAnyAuth();
+    const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     if (authResult.user.role !== 'admin' && authResult.user.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
@@ -52,6 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 });
     }
 
+    console.log('[EQUIPMENT] Creating:', name, 'sport:', sport, 'price:', pricePerRental, 'stock:', stock);
     const id = await createEquipment({
       name,
       sport: sport || 'general',
@@ -60,6 +65,7 @@ export async function POST(request: NextRequest) {
       active: active !== false,
     });
 
+    console.log('[EQUIPMENT] Created with ID:', id);
     return NextResponse.json({ id, success: true }, { status: 201 });
   } catch (error) {
     console.error('[EQUIPMENT] POST error:', error);
@@ -69,10 +75,12 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    console.log('[EQUIPMENT] PUT request received');
     if (!isFirebaseAvailable()) {
+      console.warn('[EQUIPMENT] Firebase not configured');
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
-    const authResult = await requireAnyAuth();
+    const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     if (authResult.user.role !== 'admin' && authResult.user.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
@@ -92,7 +100,9 @@ export async function PUT(request: NextRequest) {
     if (stock !== undefined) data.stock = parseInt(stock);
     if (active !== undefined) data.active = active;
 
+    console.log('[EQUIPMENT] Updating ID:', id, 'data:', data);
     await updateEquipment(id, data);
+    console.log('[EQUIPMENT] Updated successfully');
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[EQUIPMENT] PUT error:', error);
@@ -102,10 +112,12 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    console.log('[EQUIPMENT] DELETE request received');
     if (!isFirebaseAvailable()) {
+      console.warn('[EQUIPMENT] Firebase not configured');
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
-    const authResult = await requireAnyAuth();
+    const authResult = await requireAnyAuth(request);
     if (authResult instanceof NextResponse) return authResult;
     if (authResult.user.role !== 'admin' && authResult.user.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
@@ -118,7 +130,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID es requerido' }, { status: 400 });
     }
 
+    console.log('[EQUIPMENT] Deleting ID:', id);
     await deleteEquipment(id);
+    console.log('[EQUIPMENT] Deleted successfully');
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[EQUIPMENT] DELETE error:', error);

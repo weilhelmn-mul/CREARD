@@ -38,13 +38,14 @@ export async function requireAuth(
 
   try {
     const adminModule = await import('@/lib/firebase-admin');
-    adminAuth = adminModule.adminAuth;
+    adminAuth = adminModule.getAdminAuth();
     const dbModule = await import('@/lib/db');
     getUserById = dbModule.getUserById;
 
     const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
     firebaseAvailable = pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
+  } catch (err) {
+    console.warn('[AUTH] Firebase Admin init failed, falling back to headers:', err);
     firebaseAvailable = false;
   }
 
@@ -154,13 +155,14 @@ export async function requireAnyAuth(
 
   try {
     const adminModule = await import('@/lib/firebase-admin');
-    adminAuth = adminModule.adminAuth;
+    adminAuth = adminModule.getAdminAuth();
     const dbModule = await import('@/lib/db');
     getUserById = dbModule.getUserById;
 
     const pk = process.env.FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY || '';
     firebaseAvailable = pk.length > 20 && !pk.includes('AQUI') && !pk.includes('tu_');
-  } catch {
+  } catch (err) {
+    console.warn('[AUTH] Firebase Admin init failed, falling back to headers:', err);
     firebaseAvailable = false;
   }
 
