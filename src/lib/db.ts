@@ -67,6 +67,11 @@ export interface Booking {
   start_time: string;
   end_time: string;
   total_price: number;
+  court_subtotal?: number;
+  equipment_subtotal?: number;
+  equipment_items?: Array<{ equipment_id: string; name: string; quantity: number; unit_price: number }>;
+  equipment_delivered?: boolean;
+  equipment_returned?: boolean;
   advance_amount: number;
   remaining_amount: number;
   status: string;
@@ -344,6 +349,11 @@ export async function createBooking(data: Record<string, unknown>): Promise<stri
     start_time: data.start_time,
     end_time: data.end_time,
     total_price: data.total_price || 0,
+    court_subtotal: data.court_subtotal || 0,
+    equipment_subtotal: data.equipment_subtotal || 0,
+    equipment_items: data.equipment_items || [],
+    equipment_delivered: data.equipment_delivered || false,
+    equipment_returned: data.equipment_returned || false,
     advance_amount: data.advance_amount || 0,
     remaining_amount: data.remaining_amount || 0,
     status: data.status || 'pending',
