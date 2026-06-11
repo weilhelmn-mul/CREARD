@@ -1658,12 +1658,20 @@ function ContentTab() {
    COURTS MANAGEMENT TAB
    ═══════════════════════════════════════════════════ */
 
-function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>; onRefresh: () => void }) {
+function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; name: string; sport?: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }>; onRefresh: () => void }) {
   const [migrating, setMigrating] = useState(false)
   const [editingCourt, setEditingCourt] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editPrice, setEditPrice] = useState('')
+  const [editSchedule, setEditSchedule] = useState<PricingScheduleItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [showSchedule, setShowSchedule] = useState<string | null>(null)
+
+  const blockPresets = [
+    { label: 'Mañana', startHour: 7, endHour: 13, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { label: 'Tarde', startHour: 13, endHour: 18, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
+    { label: 'Noche', startHour: 18, endHour: 23, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
+  ]
 
   const handleMigrate = async () => {
     setMigrating(true)
@@ -1685,15 +1693,24 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
 
   const handleSaveCourt = async () => {
     if (!editingCourt || !editName) return
+    // Validate schedule: no overlapping, positive prices
+    const validSchedule = editSchedule
+      .filter(s => s.startHour < s.endHour && s.pricePerHour > 0)
+      .sort((a, b) => a.startHour - b.startHour)
     setSaving(true)
     try {
       const res = await fetch('/api/admin/courts', {
         method: 'PUT',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingCourt, name: editName, price_per_hour: parseFloat(editPrice) || undefined }),
+        body: JSON.stringify({
+          id: editingCourt,
+          name: editName,
+          price_per_hour: parseFloat(editPrice) || undefined,
+          pricing_schedule: validSchedule,
+        }),
       })
       if (res.ok) {
-        toast({ title: 'Cancha actualizada', description: `"${editName}" guardada correctamente.` })
+        toast({ title: 'Cancha actualizada', description: `"${editName}" guardada con ${validSchedule.length} bloques de tarifa.` })
         setEditingCourt(null)
         onRefresh()
       } else {
@@ -1707,14 +1724,41 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
     }
   }
 
-  const startEdit = (court: { id: string; name: string; pricePerHour?: number }) => {
+  const startEdit = (court: { id: string; name: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }) => {
     setEditingCourt(court.id)
     setEditName(court.name)
     setEditPrice(String(court.pricePerHour || 0))
+    setEditSchedule(
+      Array.isArray(court.pricingSchedule) && court.pricingSchedule.length > 0
+        ? court.pricingSchedule.map(s => ({ ...s }))
+        : blockPresets.map(p => ({ label: p.label, startHour: p.startHour, endHour: p.endHour, pricePerHour: 0 }))
+    )
   }
+
+  const updateScheduleItem = (idx: number, field: keyof PricingScheduleItem, value: string | number) => {
+    setEditSchedule(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  }
+
+  const addScheduleBlock = () => {
+    setEditSchedule(prev => [...prev, { label: 'Bloque', startHour: 0, endHour: 1, pricePerHour: 0 }])
+  }
+
+  const removeScheduleBlock = (idx: number) => {
+    setEditSchedule(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`
 
   const sportLabels: Record<string, string> = { futbol: 'Fútbol 7', voley: 'Vóley' }
   const sportColors: Record<string, string> = { futbol: 'bg-green-500/15 text-green-400 border-green-500/30', voley: 'bg-amber-500/15 text-amber-400 border-amber-500/30' }
+
+  const getBlockStyle = (label: string) => {
+    const l = label.toLowerCase()
+    if (l.includes('mañana') || l.includes('manana') || l.includes('dia')) return { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', dot: 'bg-amber-400' }
+    if (l.includes('tarde')) return { color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30', dot: 'bg-orange-400' }
+    if (l.includes('noche')) return { color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', dot: 'bg-indigo-400' }
+    return { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', dot: 'bg-blue-400' }
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -1723,7 +1767,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
         <div>
           <h2 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestión de Canchas</h2>
           <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
-            {allCourts.length} canchas registradas en el sistema
+            {allCourts.length} canchas registradas · Configura tarifas por bloques horarios
           </p>
         </div>
         <button
@@ -1732,85 +1776,315 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
           className="flex items-center gap-2 px-4 py-2.5 bg-[#00ff41]/10 text-[#00ff41] text-sm font-semibold rounded-xl border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all disabled:opacity-50 font-[family-name:var(--font-sora)]"
         >
           <span className="material-symbols-outlined text-[18px]">{migrating ? 'progress_activity' : 'sync'}</span>
-          {migrating ? 'Migrando...' : 'Sincronizar Canchas'}
+          {migrating ? 'Migrando...' : 'Sincronizar'}
         </button>
       </div>
 
       {/* Courts List */}
-      <div className="space-y-3">
-        {allCourts.map((court) => (
-          <div key={court.id} className="glass-card rounded-xl p-4">
-            {editingCourt === court.id ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Nombre</label>
-                    <input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Precio base (S/)</label>
-                    <input
-                      type="number"
-                      value={editPrice}
-                      onChange={(e) => setEditPrice(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setEditingCourt(null)}
-                    className="px-3 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSaveCourt}
-                    disabled={saving}
-                    className="px-4 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {saving ? <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span> : <span className="material-symbols-outlined text-[14px]">check</span>}
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
-                      {sportIcons[court.sport || 'futbol'] || 'sports'}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">{court.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sportColors[court.sport || ''] || 'bg-gray-500/15 text-gray-400 border-gray-500/30'}`}>
-                        {sportLabels[court.sport || 'futbol'] || court.sport}
-                      </span>
-                      <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                        ID: {court.id}
-                      </span>
+      <div className="space-y-4">
+        {allCourts.map((court) => {
+          const schedule = court.pricingSchedule || []
+          const courtEditing = editingCourt === court.id
+
+          return (
+            <div key={court.id} className="glass-card rounded-xl overflow-hidden">
+              {courtEditing ? (
+                /* ─── EDIT MODE ─── */
+                <div className="p-5 space-y-5">
+                  {/* Name + Base Price */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Nombre de la cancha</label>
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio base / respaldo (S/ hora)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                      />
                     </div>
                   </div>
+
+                  {/* Pricing Schedule */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-cm-on-surface font-[family-name:var(--font-sora)] flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[16px] text-[#00ff41]">schedule</span>
+                          Tarifas por Bloques Horarios
+                        </h4>
+                        <p className="text-[10px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)]">Define precios diferentes según el turno. Las reservas calcularán automáticamente.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addScheduleBlock}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-[#00ff41] bg-[#00ff41]/10 border border-[#00ff41]/30 rounded-lg hover:bg-[#00ff41]/20 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span>
+                        Bloque
+                      </button>
+                    </div>
+
+                    {editSchedule.length === 0 ? (
+                      <div className="text-center py-6 border border-dashed border-white/10 rounded-xl">
+                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[32px]">schedule</span>
+                        <p className="text-xs text-cm-on-surface-variant mt-2">Sin bloques de tarifa. Se usará el precio base.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {editSchedule.map((slot, idx) => {
+                          const style = getBlockStyle(slot.label)
+                          return (
+                            <div key={idx} className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${style.bg} ${style.border}`}>
+                              {/* Label */}
+                              <input
+                                value={slot.label}
+                                onChange={(e) => updateScheduleItem(idx, 'label', e.target.value)}
+                                className="w-24 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs font-semibold text-cm-on-surface focus:outline-none focus:border-white/30 font-[family-name:var(--font-sora)]"
+                                placeholder="Turno"
+                              />
+                              {/* Time Range */}
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={23}
+                                  value={slot.startHour}
+                                  onChange={(e) => updateScheduleItem(idx, 'startHour', parseInt(e.target.value) || 0)}
+                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+                                />
+                                <span className="text-cm-on-surface-variant text-xs font-mono">:</span>
+                                <span className="text-cm-on-surface-variant text-[10px]">00</span>
+                                <span className="text-cm-on-surface-variant text-xs mx-1">—</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={24}
+                                  value={slot.endHour}
+                                  onChange={(e) => updateScheduleItem(idx, 'endHour', parseInt(e.target.value) || 1)}
+                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+                                />
+                                <span className="text-cm-on-surface-variant text-xs font-mono">:00</span>
+                              </div>
+                              {/* Price */}
+                              <div className="flex items-center gap-1 ml-auto">
+                                <span className="text-cm-on-surface-variant text-xs">S/</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  value={slot.pricePerHour}
+                                  onChange={(e) => updateScheduleItem(idx, 'pricePerHour', parseFloat(e.target.value) || 0)}
+                                  className="w-20 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono font-semibold"
+                                />
+                                <span className="text-cm-on-surface-variant text-[10px]">/hr</span>
+                              </div>
+                              {/* Remove */}
+                              <button
+                                type="button"
+                                onClick={() => removeScheduleBlock(idx)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Visual Timeline Preview */}
+                    {editSchedule.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-white/5">
+                        <p className="text-[10px] text-cm-on-surface-variant mb-2 font-semibold uppercase tracking-wider">Vista previa del horario</p>
+                        <div className="flex rounded-lg overflow-hidden h-8 border border-white/10">
+                          {(() => {
+                            const sorted = [...editSchedule].sort((a, b) => a.startHour - b.startHour)
+                            const totalHours = 24
+                            const segments: Array<{ pct: number; label: string; color: string; price: number }> = []
+                            let cursor = 0
+                            for (const s of sorted) {
+                              if (s.startHour > cursor) {
+                                segments.push({ pct: ((s.startHour - cursor) / totalHours) * 100, label: '', color: 'bg-cm-surface-container-highest/30', price: 0 })
+                              }
+                              const width = Math.max(0, s.endHour - s.startHour)
+                              const st = getBlockStyle(s.label)
+                              const bgMap: Record<string, string> = { 'text-amber-400': 'bg-amber-500/30', 'text-orange-400': 'bg-orange-500/30', 'text-indigo-400': 'bg-indigo-500/30' }
+                              segments.push({ pct: (width / totalHours) * 100, label: s.label, color: bgMap[st.color] || 'bg-blue-500/30', price: s.pricePerHour })
+                              cursor = s.endHour
+                            }
+                            if (cursor < totalHours) {
+                              segments.push({ pct: ((totalHours - cursor) / totalHours) * 100, label: '', color: 'bg-cm-surface-container-highest/30', price: 0 })
+                            }
+                            return segments.map((seg, i) => (
+                              <div key={i} className={`${seg.color} flex items-center justify-center transition-all`} style={{ width: `${seg.pct}%` }}>
+                                {seg.label && (
+                                  <span className="text-[9px] font-bold text-cm-on-surface truncate px-1">
+                                    {seg.label} S/{seg.price}
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          })()}
+                        </div>
+                        <div className="flex justify-between mt-1 px-0.5">
+                          <span className="text-[8px] text-cm-on-surface-variant/50 font-mono">00:00</span>
+                          <span className="text-[8px] text-cm-on-surface-variant/50 font-mono">06:00</span>
+                          <span className="text-[8px] text-cm-on-surface-variant/50 font-mono">12:00</span>
+                          <span className="text-[8px] text-cm-on-surface-variant/50 font-mono">18:00</span>
+                          <span className="text-[8px] text-cm-on-surface-variant/50 font-mono">24:00</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 justify-end pt-1">
+                    <button
+                      onClick={() => setEditingCourt(null)}
+                      className="px-4 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg transition-all font-[family-name:var(--font-inter)]"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveCourt}
+                      disabled={saving}
+                      className="px-5 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1.5 transition-all font-[family-name:var(--font-sora)]"
+                    >
+                      {saving ? <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span> : <span className="material-symbols-outlined text-[14px]">check</span>}
+                      Guardar Cambios
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-sm">S/ {court.pricePerHour || 0}</span>
-                  <button
-                    onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number })}
-                    className="p-2 rounded-lg hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                  </button>
+              ) : (
+                /* ─── VIEW MODE ─── */
+                <div className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
+                          {sportIcons[court.sport || 'futbol'] || 'sports'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">{court.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sportColors[court.sport || ''] || 'bg-gray-500/15 text-gray-400 border-gray-500/30'}`}>
+                            {sportLabels[court.sport || 'futbol'] || court.sport}
+                          </span>
+                          <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                            Precio base: S/ {court.pricePerHour || 0}/hr
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {/* Toggle schedule view */}
+                      <button
+                        onClick={() => setShowSchedule(showSchedule === court.id ? null : court.id)}
+                        className={`p-2 rounded-lg transition-all ${showSchedule === court.id ? 'bg-[#00ff41]/10 text-[#00ff41]' : 'hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface'}`}
+                        title="Ver tarifas"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">schedule</span>
+                      </button>
+                      <button
+                        onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number; pricingSchedule?: PricingScheduleItem[] })}
+                        className="p-2 rounded-lg hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+                        title="Editar"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Pricing Schedule Preview */}
+                  {showSchedule === court.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className="mt-3 pt-3 border-t border-white/5"
+                    >
+                      {schedule.length > 0 ? (
+                        <div className="space-y-2">
+                          {/* Timeline Bar */}
+                          <div className="flex rounded-lg overflow-hidden h-7 border border-white/10 mb-1">
+                            {(() => {
+                              const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+                              const totalHours = 24
+                              const segments: Array<{ pct: number; label: string; color: string; price: number }> = []
+                              let cursor = 0
+                              for (const s of sorted) {
+                                if (s.startHour > cursor) {
+                                  segments.push({ pct: ((s.startHour - cursor) / totalHours) * 100, label: '', color: 'bg-cm-surface-container-highest/20', price: 0 })
+                                }
+                                const width = Math.max(0, s.endHour - s.startHour)
+                                const st = getBlockStyle(s.label)
+                                const bgMap: Record<string, string> = { 'text-amber-400': 'bg-amber-500/25', 'text-orange-400': 'bg-orange-500/25', 'text-indigo-400': 'bg-indigo-500/25' }
+                                segments.push({ pct: (width / totalHours) * 100, label: s.label, color: bgMap[st.color] || 'bg-blue-500/25', price: s.pricePerHour })
+                                cursor = s.endHour
+                              }
+                              if (cursor < totalHours) {
+                                segments.push({ pct: ((totalHours - cursor) / totalHours) * 100, label: '', color: 'bg-cm-surface-container-highest/20', price: 0 })
+                              }
+                              return segments.map((seg, i) => (
+                                <div key={i} className={`${seg.color} flex items-center justify-center`} style={{ width: `${seg.pct}%` }}>
+                                  {seg.label && (
+                                    <span className="text-[8px] font-bold text-cm-on-surface truncate px-0.5">{seg.label} S/{seg.price}</span>
+                                  )}
+                                </div>
+                              ))
+                            })()}
+                          </div>
+                          <div className="flex justify-between px-0.5 mb-2">
+                            {['00', '06', '12', '18', '24'].map(h => (
+                              <span key={h} className="text-[7px] text-cm-on-surface-variant/40 font-mono">{h}:00</span>
+                            ))}
+                          </div>
+
+                          {/* Detail Cards */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {schedule.sort((a, b) => a.startHour - b.startHour).map((slot, i) => {
+                              const style = getBlockStyle(slot.label)
+                              return (
+                                <div key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${style.bg} ${style.border}`}>
+                                  <div className={`w-2 h-8 rounded-full ${style.dot}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{slot.label}</p>
+                                    <p className="text-xs font-mono text-cm-on-surface font-semibold">{formatHour(slot.startHour)} — {formatHour(slot.endHour)}</p>
+                                  </div>
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${style.color}`}>S/ {slot.pricePerHour}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-xs text-cm-on-surface-variant">Sin tarifas por bloque configuradas. Se usa el precio base S/ {court.pricePerHour || 0}/hr.</p>
+                          <button
+                            onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number; pricingSchedule?: PricingScheduleItem[] })}
+                            className="mt-2 text-[10px] text-[#00ff41] font-semibold hover:underline"
+                          >
+                            Configurar tarifas
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Info */}
@@ -1818,8 +2092,8 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
         <div className="flex items-start gap-3">
           <span className="material-symbols-outlined text-[#00ff41] text-[20px] mt-0.5">info</span>
           <div className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] space-y-1">
-            <p><span className="font-semibold text-cm-on-surface">Sincronizar Canchas</span> actualiza los nombres, deportes, precios y horarios de todas las canchas en la base de datos para que coincidan con la configuración correcta del sistema.</p>
-            <p>Configuración: 4 canchas de Fútbol 7 (S/35 día, S/50 noche) + 2 canchas de Vóley A/B (S/30 día, S/45 noche).</p>
+            <p><span className="font-semibold text-cm-on-surface">Tarifas por bloques</span> — Define precios distintos para cada turno (mañana, tarde, noche). Al crear una reserva, el sistema calcula automáticamente el precio según el horario seleccionado.</p>
+            <p><span className="font-semibold text-cm-on-surface">Precio base</span> — Se usa como respaldo cuando no hay bloques configurados o cuando un horario no está cubierto por ningún bloque.</p>
           </div>
         </div>
       </div>
