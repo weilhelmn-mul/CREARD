@@ -203,3 +203,23 @@ Stage Summary:
 - Bug fix: createCourt() now persists pricing_schedule
 - UI improvements: real-time validation, better visual feedback
 - Deployed: https://creard.vercel.app
+
+---
+Task ID: 2
+Agent: main
+Task: Fix all 5 pending bugs (schedule view, stats revenue, pending payments)
+
+Work Log:
+- Investigated all 5 bugs via subagent
+- Bug 1 (getBookings dual query): Already fixed in prior session — no action needed
+- Bug 3 (recurring courtIds): Already fixed in prior session — no action needed
+- Bug 2 (schedule view): Fixed exact match `b.startTime === ts.value` to range match `ts.value >= b.startTime && ts.value < b.endTime`. Added visual distinction: start slot shows client name with left-rounded border, continuation slots show a bar indicator.
+- Bug 4 (stats revenue distribution): Per-court revenue now includes proportional `advance_amount / courtCount` for `reserved` status bookings
+- Bug 5 (reserved advance income): All 6 revenue calculations (today, week, month, total, revenueByMonth, dailyBookings) now sum `completed/fully_paid total_price` + `reserved advance_amount`
+- Bug 5 (pendingPayments): Fixed filter from stale `partially_paid || confirmed` to `reserved && remaining_amount > 0`
+- Build OK, pushed to GitHub, deployed to Vercel production
+
+Stage Summary:
+- 3 real bugs fixed (schedule view, stats revenue, pending payments)
+- 2 bugs confirmed already fixed (getBookings dual query, recurring courtIds)
+- Deployed: https://creard.vercel.app
