@@ -35,37 +35,54 @@ export async function GET() {
     const todayBookingsList = allBookings.filter((b) => b.date === todayStr);
     const todayBookings = todayBookingsList.length;
 
-    // Ingresos de hoy (reservas completadas/pagadas de hoy)
+    // Ingresos de hoy: completados (total) + reservados (adelanto)
     const todayCompleted = todayBookingsList.filter(
       (b) => b.status === 'completed' || b.status === 'fully_paid'
     );
-    const todayRevenue = todayCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const todayCompletedRevenue = todayCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const todayReserved = todayBookingsList.filter((b) => b.status === 'reserved');
+    const todayAdvances = todayReserved.reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+    const todayRevenue = todayCompletedRevenue + todayAdvances;
 
-    // Ingresos semanales (últimos 7 días)
+    // Ingresos semanales (últimos 7 días): completados + adelantos de reservados
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = getDateStr(weekAgo);
-    const weeklyBookings = allBookings.filter(
+    const weekCompleted = allBookings.filter(
       (b) => b.date >= weekAgoStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
     );
-    const weeklyRevenue = weeklyBookings.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const weekCompletedRevenue = weekCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const weekReserved = allBookings.filter(
+      (b) => b.date >= weekAgoStr && b.date <= todayStr && b.status === 'reserved'
+    );
+    const weekAdvances = weekReserved.reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+    const weeklyRevenue = weekCompletedRevenue + weekAdvances;
 
-    // Ingresos mensuales (mes actual)
+    // Ingresos mensuales (mes actual): completados + adelantos de reservados
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthStartStr = getDateStr(monthStart);
-    const monthlyBookings = allBookings.filter(
+    const monthCompleted = allBookings.filter(
       (b) => b.date >= monthStartStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
     );
-    const monthlyRevenue = monthlyBookings.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const monthCompletedRevenue = monthCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const monthReserved = allBookings.filter(
+      (b) => b.date >= monthStartStr && b.date <= todayStr && b.status === 'reserved'
+    );
+    const monthAdvances = monthReserved.reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+    const monthlyRevenue = monthCompletedRevenue + monthAdvances;
 
-    // Total ingresos (todos los completados/pagados)
-    const totalRevenue = allBookings
+    // Total ingresos: completados (total) + reservados (adelanto)
+    const allCompletedRevenue = allBookings
       .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
       .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+    const allReservedAdvances = allBookings
+      .filter((b) => b.status === 'reserved')
+      .reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+    const totalRevenue = allCompletedRevenue + allReservedAdvances;
 
-    // Pagos pendientes
+    // Pagos pendientes (saldo restante de reservas activas)
     const pendingPayments = allBookings
-      .filter((b) => b.status === 'partially_paid' || b.status === 'confirmed')
+      .filter((b) => b.status === 'reserved' && ((b.remaining_amount as number) || 0) > 0)
       .reduce((sum, b) => sum + ((b.remaining_amount as number) || 0), 0);
 
     // Bookings by sport — count ALL courts in each booking, not just primary
@@ -111,6 +128,10 @@ export async function GET() {
         courtBookingCounts[cid] = (courtBookingCounts[cid] || 0) + 1;
         if (b.status === 'completed' || b.status === 'fully_paid') {
           courtRevenue[cid] = (courtRevenue[cid] || 0) + priceShare;
+        } else if (b.status === 'reserved') {
+          // Count the advance amount, distributed proportionally
+          const advanceShare = (((b.advance_amount as number) || 0) / courtCount);
+          courtRevenue[cid] = (courtRevenue[cid] || 0) + advanceShare;
         }
       }
     }
@@ -135,12 +156,18 @@ export async function GET() {
       const monthStartStr = getDateStr(monthDate);
       const monthEndStr = getDateStr(monthEndDate);
 
-      const monthRevenue = allBookings
+      const monthCompletedRev = allBookings
         .filter(
           (b) => b.date >= monthStartStr && b.date <= monthEndStr &&
                  (b.status === 'completed' || b.status === 'fully_paid')
         )
         .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+      const monthReservedAdv = allBookings
+        .filter(
+          (b) => b.date >= monthStartStr && b.date <= monthEndStr && b.status === 'reserved'
+        )
+        .reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+      const monthRevenue = monthCompletedRev + monthReservedAdv;
 
       revenueByMonth.push({
         month: monthName.charAt(0).toUpperCase() + monthName.slice(1),
@@ -157,9 +184,13 @@ export async function GET() {
       const dateStr = getDateStr(dayDate);
       const dayBookings = allBookings.filter((b) => b.date === dateStr);
 
-      const dayRevenue = dayBookings
+      const dayCompletedRev = dayBookings
         .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
         .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
+      const dayReservedAdv = dayBookings
+        .filter((b) => b.status === 'reserved')
+        .reduce((sum, b) => sum + ((b.advance_amount as number) || 0), 0);
+      const dayRevenue = dayCompletedRev + dayReservedAdv;
 
       dailyBookings.push({
         day: dayName.charAt(0).toUpperCase() + dayName.slice(1),

@@ -5146,21 +5146,27 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex gap-1">
                           {timeSlots.map((ts) => {
-                            const booking = court.bookings.find((b) => b.startTime === ts.value)
+                            // Match any booking whose time range covers this slot (not just exact start)
+                            const booking = court.bookings.find((b) => ts.value >= b.startTime && ts.value < b.endTime)
+                            const isStart = booking?.startTime === ts.value
                             return (
                               <div
                                 key={ts.value}
                                 className={`flex-1 h-10 rounded-md flex items-center justify-center text-[10px] font-medium transition-all ${
                                   booking
-                                    ? 'bg-cm-primary/20 text-cm-primary border border-cm-primary/30'
+                                    ? isStart
+                                      ? 'bg-cm-primary/20 text-cm-primary border border-cm-primary/30 rounded-l-lg'
+                                      : 'bg-cm-primary/10 text-cm-primary/70 border border-cm-primary/15 border-l-0'
                                     : ts.disabled
                                     ? 'bg-cm-surface-container-highest/15 text-cm-on-surface-variant/15 border border-transparent'
                                     : 'bg-cm-surface-container-highest/30 text-cm-on-surface-variant/30 border border-transparent'
                                 }`}
                                 title={booking ? `${booking.user?.name || 'Cliente'} (${booking.startTime}-${booking.endTime})` : ts.label || 'Disponible'}
                               >
-                                {booking ? (
+                                {booking && isStart ? (
                                   <span className="truncate px-1">{(booking.user?.name || 'Cliente').split(' ')[0]}</span>
+                                ) : booking && !isStart ? (
+                                  <span className="opacity-60">▎</span>
                                 ) : (
                                   <span className="opacity-0 sm:opacity-100">{ts.value.slice(0, 2)}</span>
                                 )}
