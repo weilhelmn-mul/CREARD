@@ -11,6 +11,10 @@ import UsersTab from '@/components/admin/UsersTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
 import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
 import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Plus, UserPlus, Loader2, Check } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -2283,6 +2287,12 @@ export default function AdminDashboard() {
   const [startTimeDrop, setStartTimeDrop] = useState(false)
   const [endTimeDrop, setEndTimeDrop] = useState(false)
 
+  /* quick client creation from booking modal */
+  const [showNewClientDialog, setShowNewClientDialog] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '' })
+  const [newClientErrors, setNewClientErrors] = useState<Record<string, string>>({})
+  const [creatingClient, setCreatingClient] = useState(false)
+
   /* recurring booking */
   const [showRecurring, setShowRecurring] = useState(false)
   const [recurringConfig, setRecurringConfig] = useState({
@@ -2420,6 +2430,71 @@ export default function AdminDashboard() {
       toast({ title: 'Error de conexion', description: 'No se pudo cargar el formulario', variant: 'destructive' })
     }
   }, [])
+
+  /* ─── quick client creation from booking modal ─── */
+  const openNewClientDialog = useCallback((prefillName?: string) => {
+    setNewClientForm({ name: prefillName?.trim() || '', email: '', phone: '' })
+    setNewClientErrors({})
+    setShowNewClientDialog(true)
+    setClientDropdownOpen(false) // close the popover
+  }, [])
+
+  const handleQuickCreateClient = useCallback(async () => {
+    const errors: Record<string, string> = {}
+    if (!newClientForm.name.trim() || newClientForm.name.trim().length < 2) {
+      errors.name = 'Nombre requerido (min. 2 caracteres)'
+    }
+    if (!newClientForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClientForm.email.trim())) {
+      errors.email = 'Correo valido requerido'
+    }
+    if (Object.keys(errors).length > 0) {
+      setNewClientErrors(errors)
+      return
+    }
+
+    setCreatingClient(true)
+    try {
+      const headers = getAuthHeaders()
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          name: newClientForm.name.trim(),
+          email: newClientForm.email.trim(),
+          phone: newClientForm.phone.trim() || undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setNewClientErrors({ general: data.error || 'Error al crear cliente' })
+        return
+      }
+
+      // Auto-select the new (or existing) client in the booking form
+      if (data.user) {
+        handleBookingFormChange('userId', data.user.id)
+        // Add to local list so it appears immediately
+        setBookingUsers((prev) => {
+          const exists = prev.some((u) => u.id === data.user.id)
+          if (exists) return prev
+          return [...prev, { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone }]
+        })
+      }
+
+      setShowNewClientDialog(false)
+      toast({
+        title: data.alreadyExists ? 'Cliente encontrado' : 'Cliente creado',
+        description: data.message || `"${data.user?.name}" esta listo para la reserva.`,
+      })
+    } catch (err) {
+      console.error('[quickCreateClient] Exception:', err)
+      setNewClientErrors({ general: 'Error de conexion. Intenta de nuevo.' })
+    } finally {
+      setCreatingClient(false)
+    }
+  }, [newClientForm, handleBookingFormChange])
 
   /* ─── computed ─── */
   const today = todayStr()
@@ -4109,101 +4184,110 @@ export default function AdminDashboard() {
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
                 </div>
 
-                {/* Client - Custom searchable dropdown (native select clipped by modal overflow) */}
-                <div className="relative" ref={(el) => {
-                  if (!el) return
-                  const handler = (e: MouseEvent) => {
-                    if (!el.contains(e.target as Node)) setClientDropdownOpen(false)
-                  }
-                  // Cleanup previous
-                  el.querySelectorAll('[data-click-outside]').forEach(n => n.removeEventListener('click', handler as any))
-                  el.setAttribute('data-click-outside', '1')
-                  el.addEventListener('mousedown', handler as any, true)
-                }}>
+                {/* Client - Combobox with Popover+Command (portal renders outside modal overflow) */}
+                <div>
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cliente *</label>
-                  <button
-                    type="button"
-                    onClick={() => { setClientDropdownOpen(!clientDropdownOpen); setClientSearch('') }}
-                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
-                  >
-                    <span className={bookingForm.userId ? 'text-cm-on-surface' : 'text-cm-on-surface-variant/40'}>
-                      {(() => {
-                        const selected = bookingUsers.find(u => u.id === bookingForm.userId)
-                        return selected ? `${selected.name}${selected.email ? ` (${selected.email})` : ''}` : 'Selecciona un cliente'
-                      })()}
-                    </span>
-                    <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
-                  </button>
-
-                  {clientDropdownOpen && (
-                    <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden">
-                      <div className="p-2 border-b border-white/10">
-                        <div className="flex items-center gap-2 px-2">
+                  <Popover open={clientDropdownOpen} onOpenChange={setClientDropdownOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
+                      >
+                        <span className={bookingForm.userId ? 'text-cm-on-surface' : 'text-cm-on-surface-variant/40'}>
+                          {(() => {
+                            const selected = bookingUsers.find(u => u.id === bookingForm.userId)
+                            return selected ? `${selected.name}${selected.phone ? ` · ${selected.phone}` : ''}${selected.email ? ` (${selected.email})` : ''}` : 'Buscar o seleccionar cliente...'
+                          })()}
+                        </span>
+                        <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0 bg-cm-surface-container-highest border-white/15 rounded-xl shadow-2xl"
+                      align="start"
+                      sideOffset={4}
+                      onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
+                      <Command shouldFilter={false} className="bg-transparent">
+                        <div className="flex items-center gap-2 border-b border-white/10 px-3">
                           <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/50">search</span>
-                          <input
-                            type="text"
+                          <CommandInput
+                            placeholder="Buscar por nombre, telefono o email..."
                             value={clientSearch}
-                            onChange={(e) => setClientSearch(e.target.value)}
-                            placeholder="Buscar por nombre o email..."
-                            autoFocus
-                            className="w-full bg-transparent text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none font-[family-name:var(--font-inter)]"
+                            onValueChange={setClientSearch}
+                            className="h-9 bg-transparent border-0 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 font-[family-name:var(--font-inter)]"
                           />
                         </div>
-                      </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        {bookingUsers
-                          .filter(u => {
-                            if (!clientSearch) return true
-                            const q = clientSearch.toLowerCase()
-                            return u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q))
-                          })
-                          .map((u) => {
-                            const isSelected = u.id === bookingForm.userId
-                            return (
+                        <CommandList className="max-h-56">
+                          <CommandEmpty>
+                            <div className="px-2 py-3 text-center">
+                              <p className="text-xs text-cm-on-surface-variant/60 mb-2 font-[family-name:var(--font-inter)]">No se encontro el cliente</p>
                               <button
-                                key={u.id}
                                 type="button"
-                                onClick={() => {
-                                  handleBookingFormChange('userId', u.id)
-                                  setClientDropdownOpen(false)
-                                  setClientSearch('')
-                                }}
-                                className={`w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 transition-colors font-[family-name:var(--font-inter)] ${
-                                  isSelected ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                                }`}
+                                onClick={() => openNewClientDialog(clientSearch)}
+                                className="inline-flex items-center gap-1.5 text-xs text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
                               >
-                                <div className="w-7 h-7 rounded-full bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">
-                                    {u.name.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="truncate">{u.name}</p>
-                                  {u.email && <p className="text-[10px] text-cm-on-surface-variant truncate">{u.email}</p>}
-                                </div>
-                                {isSelected && (
-                                  <span className="material-symbols-outlined text-[16px] text-cm-primary">check</span>
-                                )}
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Crear "{clientSearch}" como nuevo cliente
                               </button>
-                            )
-                          })
-                        }
-                        {bookingUsers.length === 0 && (
-                          <div className="px-3 py-4 text-center text-xs text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">
-                            No hay clientes registrados
-                          </div>
-                        )}
-                        {bookingUsers.length > 0 && clientSearch && bookingUsers.filter(u => {
-                          const q = clientSearch.toLowerCase()
-                          return u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q))
-                        }).length === 0 && (
-                          <div className="px-3 py-4 text-center text-xs text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">
-                            Sin resultados para "{clientSearch}"
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                            </div>
+                          </CommandEmpty>
+                          <CommandGroup className="px-1 py-1">
+                            {bookingUsers
+                              .filter(u => {
+                                if (!clientSearch) return true
+                                const q = clientSearch.toLowerCase()
+                                return u.name.toLowerCase().includes(q)
+                                  || (u.email && u.email.toLowerCase().includes(q))
+                                  || (u.phone && u.phone.includes(q))
+                              })
+                              .map((u) => {
+                                const isSelected = u.id === bookingForm.userId
+                                return (
+                                  <CommandItem
+                                    key={u.id}
+                                    value={u.id}
+                                    onSelect={() => {
+                                      handleBookingFormChange('userId', u.id)
+                                      setClientDropdownOpen(false)
+                                      setClientSearch('')
+                                    }}
+                                    className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer font-[family-name:var(--font-inter)] text-sm ${
+                                      isSelected
+                                        ? 'bg-cm-primary/15 text-cm-primary'
+                                        : 'text-cm-on-surface data-[selected=true]:bg-cm-surface-container-highest/60'
+                                    }`}
+                                  >
+                                    <div className="w-7 h-7 rounded-full bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">
+                                        {u.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="truncate text-sm">{u.name}</p>
+                                      <p className="text-[10px] text-cm-on-surface-variant truncate">
+                                        {[u.phone, u.email].filter(Boolean).join(' · ') || 'Sin contacto'}
+                                      </p>
+                                    </div>
+                                    {isSelected && <Check className="h-4 w-4 text-cm-primary flex-shrink-0" />}
+                                  </CommandItem>
+                                )
+                              })}
+                          </CommandGroup>
+                          <CommandSeparator className="bg-white/10" />
+                          <CommandGroup className="px-1 py-1">
+                            <CommandItem
+                              onSelect={() => openNewClientDialog(clientSearch)}
+                              className="flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer text-cm-primary hover:text-cm-primary/80 font-[family-name:var(--font-inter)] text-sm font-semibold data-[selected=true]:bg-cm-primary/10"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>Crear nuevo cliente</span>
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   {formErrors.userId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.userId}</p>}
                 </div>
 
@@ -4754,6 +4838,98 @@ export default function AdminDashboard() {
             </motion.div>
           </motion.div>
         )}
+
+        {/* ─── Quick Client Creation Dialog (nested, portal-based so it renders above booking modal) ─── */}
+        <Dialog open={showNewClientDialog} onOpenChange={(open) => { if (!open) { setShowNewClientDialog(false); setNewClientErrors({}) } }}>
+          <DialogContent className="sm:max-w-md bg-cm-surface-container border-white/15 rounded-2xl p-6 shadow-2xl z-[100]">
+            <DialogHeader>
+              <DialogTitle className="text-cm-on-surface font-[family-name:var(--font-sora)] text-lg flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-cm-primary" />
+                Nuevo Cliente
+              </DialogTitle>
+              <DialogDescription className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                Crea un perfil rapido para este cliente. No se generan credenciales de acceso — el cliente podra reclamar su cuenta en el futuro.
+              </DialogDescription>
+            </DialogHeader>
+
+            {newClientErrors.general && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400 font-[family-name:var(--font-inter)]">
+                {newClientErrors.general}
+              </div>
+            )}
+
+            <div className="space-y-3 mt-2">
+              <div>
+                <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
+                  Nombre Completo *
+                </label>
+                <input
+                  type="text"
+                  value={newClientForm.name}
+                  onChange={(e) => { setNewClientForm(p => ({ ...p, name: e.target.value })); if (newClientErrors.name) setNewClientErrors(p => { const n = { ...p }; delete n.name; return n }) }}
+                  placeholder="Ej: Carlos Mendoza"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-email')?.focus() }}
+                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${newClientErrors.name ? 'border-red-400' : 'border-white/10'}`}
+                />
+                {newClientErrors.name && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{newClientErrors.name}</p>}
+              </div>
+
+              <div>
+                <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
+                  Telefono
+                </label>
+                <input
+                  type="tel"
+                  value={newClientForm.phone}
+                  onChange={(e) => setNewClientForm(p => ({ ...p, phone: e.target.value }))}
+                  placeholder="Ej: 987654321"
+                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-email')?.focus() }}
+                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
+                  Correo Electronico *
+                </label>
+                <input
+                  id="new-client-email"
+                  type="email"
+                  value={newClientForm.email}
+                  onChange={(e) => { setNewClientForm(p => ({ ...p, email: e.target.value })); if (newClientErrors.email) setNewClientErrors(p => { const n = { ...p }; delete n.email; return n }) }}
+                  placeholder="Ej: cliente@correo.com"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickCreateClient() } }}
+                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${newClientErrors.email ? 'border-red-400' : 'border-white/10'}`}
+                />
+                {newClientErrors.email && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{newClientErrors.email}</p>}
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4 gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowNewClientDialog(false); setNewClientErrors({}) }}
+                disabled={creatingClient}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-cm-on-surface-variant border border-white/15 bg-cm-surface-container-highest/40 hover:bg-cm-surface-container-highest/60 transition-colors font-[family-name:var(--font-inter)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickCreateClient}
+                disabled={creatingClient}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-cm-on-primary bg-cm-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 font-[family-name:var(--font-inter)] disabled:opacity-50"
+              >
+                {creatingClient ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Creando...</>
+                ) : (
+                  <><UserPlus className="h-4 w-4" /> Crear y Seleccionar</>
+                )}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ─── Advance Payment Modal ─── */}
         {showAdvanceModal && advanceTarget && (
