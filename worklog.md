@@ -180,3 +180,26 @@ Stage Summary:
 - Fixed 1 bug (incorrect type import in NotificationSettings.tsx)
 - Deployed successfully to https://creard.vercel.app
 - Module includes: 15s polling alarm system, visual row highlighting (amber/red), Web Audio API beeps, Google Chat webhook, WhatsApp Business API (admin + client reminders), settings panel with 3 sub-tabs
+
+---
+Task ID: 1
+Agent: main
+Task: Implement dynamic pricing by time blocks - fixes and UI improvements
+
+Work Log:
+- Analyzed existing codebase: PricingScheduleItem interface, CourtsTab UI, calculatePriceForTimeSlot in BookingForm + API
+- Found createCourt() in db.ts was NOT saving pricing_schedule field
+- Fixed db.ts: added `pricing_schedule: data.pricing_schedule || []` to createCourt()
+- Added overlap validation (getOverlapWarnings) that blocks saving when blocks overlap
+- Added zero-price warnings (getZeroPriceWarnings) shown in real-time during editing
+- Price input field turns red border/background when value is S/ 0
+- View mode: added coverage summary showing "Xh cubiertas de 24h" and "active/total blocks"
+- View mode: S/ 0 prices shown in red with "sin tarifa" label
+- Save feedback distinguishes active blocks vs all-zero scenario
+- Verified BookingForm and API bookings already calculate correctly with pricing_schedule
+- Build successful, pushed to GitHub, deployed to Vercel production
+
+Stage Summary:
+- Bug fix: createCourt() now persists pricing_schedule
+- UI improvements: real-time validation, better visual feedback
+- Deployed: https://creard.vercel.app
