@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import type { NotificationSettings } from './NotificationMonitor'
+import { playBeep } from './NotificationMonitor'
 
 const FALLBACK_SETTINGS: NotificationSettings = {
   enabled: true,
@@ -230,7 +231,11 @@ export default function NotificationSettingsPanel({ settings, onSettingsChange }
                     max="1"
                     step="0.05"
                     value={form.soundVolume}
-                    onChange={(e) => update('soundVolume', parseFloat(e.target.value))}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      update('soundVolume', v)
+                      playBeep(660, 150, v)
+                    }}
                     className="flex-1 accent-cm-primary"
                     disabled={!form.soundEnabled}
                   />

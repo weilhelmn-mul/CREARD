@@ -75,7 +75,7 @@ function timeToMinutes(time: string): number {
 }
 
 /** Play an alert beep using Web Audio API */
-function playBeep(frequency: number, durationMs: number, volume: number): Promise<void> {
+export function playBeep(frequency: number, durationMs: number, volume: number): Promise<void> {
   return new Promise((resolve) => {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
