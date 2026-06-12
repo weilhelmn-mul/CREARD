@@ -242,3 +242,19 @@ Stage Summary:
 - Payment functions now work (were crashing on ReferenceError)
 - Auth fallback no longer escalatable via headers
 - Deployed: https://creard.vercel.app
+
+---
+Task ID: 4
+Agent: main
+Task: Admin user creation + booking modal redesign
+
+Work Log:
+- Added POST /api/admin/users: creates users via Firebase Admin SDK (adminAuth.createUser), creates Firestore doc with uid as ID, sets custom claims. Handles email-exists (409), weak-password, invalid-email errors. Demo mode support via jsonCreateUser.
+- Added 'Nuevo Usuario' button + modal in UsersTab.tsx with fields: name, email, password, phone, role selector (user/admin/super_admin). Client-side validation before submit.
+- Booking modal expanded from max-w-lg (512px) to max-w-3xl (768px). Added md:grid-cols-2 CSS grid for 2-column layout on desktop (left: court+date+time, right: price+equipment+status).
+- Build OK, pushed, deployed to Vercel
+
+Stage Summary:
+- Admin can now create users without losing session (backend Firebase Admin SDK)
+- Booking modal is 50% wider with 2-column grid on desktop
+- Deployed: https://creard.vercel.app
