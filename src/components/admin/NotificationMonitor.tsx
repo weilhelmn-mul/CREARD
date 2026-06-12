@@ -78,7 +78,14 @@ function timeToMinutes(time: string): number {
 function playBeep(frequency: number, durationMs: number, volume: number): Promise<void> {
   return new Promise((resolve) => {
     try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const ctx = new AudioCtx()
+
+      // Resume AudioContext if suspended (browser autoplay policy)
+      if (ctx.state === 'suspended') {
+        ctx.resume()
+      }
+
       const oscillator = ctx.createOscillator()
       const gainNode = ctx.createGain()
 
@@ -87,11 +94,14 @@ function playBeep(frequency: number, durationMs: number, volume: number): Promis
 
       oscillator.type = 'sine'
       oscillator.frequency.value = frequency
-      gainNode.gain.value = volume
+
+      // Clamp volume to valid Web Audio range (0-1)
+      const safeVolume = Math.max(0, Math.min(1, volume))
 
       // Fade in/out for cleaner sound
       gainNode.gain.setValueAtTime(0, ctx.currentTime)
-      gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.05)
+      gainNode.gain.linearRampToValueAtTime(safeVolume, ctx.currentTime + 0.05)
+      gainNode.gain.setValueAtTime(safeVolume, ctx.currentTime + durationMs / 1000 - 0.08)
       gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + durationMs / 1000)
 
       oscillator.start(ctx.currentTime)
@@ -100,7 +110,7 @@ function playBeep(frequency: number, durationMs: number, volume: number): Promis
       setTimeout(() => {
         ctx.close()
         resolve()
-      }, durationMs + 100)
+      }, durationMs + 150)
     } catch {
       resolve()
     }

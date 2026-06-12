@@ -57,6 +57,9 @@ export interface User {
   updated_at: Date;
 }
 
+export type BookingStatus = 'pending' | 'reserved' | 'completed' | 'cancelled';
+export type SlotStatus = 'available' | 'reserved' | 'maintenance';
+
 export interface Booking {
   id: string;
   court_id: string;
@@ -74,8 +77,8 @@ export interface Booking {
   equipment_returned?: boolean;
   advance_amount: number;
   remaining_amount: number;
-  status: string;
-  slot_status: string;
+  status: BookingStatus;
+  slot_status: SlotStatus;
   payment_method: string | null;
   notes: string | null;
   recurring_group_id?: string;
@@ -358,7 +361,7 @@ export async function createBooking(data: Record<string, unknown>): Promise<stri
     advance_amount: data.advance_amount || 0,
     remaining_amount: data.remaining_amount || 0,
     status: data.status || 'pending',
-    slot_status: data.slot_status || 'available',
+    slot_status: data.slot_status || 'reserved',
     payment_method: data.payment_method || null,
     notes: data.notes || null,
     recurring_group_id: data.recurring_group_id || null,
@@ -383,7 +386,8 @@ export async function createPayment(
   data: Partial<Payment>
 ): Promise<string> {
   const now = Timestamp.now();
-  const docRef = await adminDb
+  const db = await getAdminDb();
+  const docRef = await db
     .collection('bookings')
     .doc(bookingId)
     .collection('payments')
@@ -402,7 +406,8 @@ export async function createPayment(
 }
 
 export async function getPayments(bookingId: string): Promise<Partial<Payment>[]> {
-  const snapshot = await adminDb
+  const db = await getAdminDb();
+  const snapshot = await db
     .collection('bookings')
     .doc(bookingId)
     .collection('payments')
@@ -426,7 +431,8 @@ export async function updatePaymentStatus(
   if (extra) {
     Object.assign(updateData, extra);
   }
-  await adminDb
+  const db = await getAdminDb();
+  await db
     .collection('bookings')
     .doc(bookingId)
     .collection('payments')
@@ -442,14 +448,15 @@ export async function findPaymentByExternalRef(
   externalRef: string
 ): Promise<{ bookingId: string; payment: Partial<Payment> } | null> {
   // Consultar las reservas más recientes (últimas 100)
-  const bookingsSnapshot = await adminDb
+  const db = await getAdminDb();
+  const bookingsSnapshot = await db
     .collection('bookings')
     .orderBy('created_at', 'desc')
     .limit(100)
     .get();
 
   for (const bookingDoc of bookingsSnapshot.docs) {
-    const paymentsSnapshot = await adminDb
+    const paymentsSnapshot = await db
       .collection('bookings')
       .doc(bookingDoc.id)
       .collection('payments')

@@ -226,9 +226,9 @@ export default function NotificationSettingsPanel({ settings, onSettingsChange }
                   </button>
                   <input
                     type="range"
-                    min="0.1"
+                    min="0.05"
                     max="1"
-                    step="0.1"
+                    step="0.05"
                     value={form.soundVolume}
                     onChange={(e) => update('soundVolume', parseFloat(e.target.value))}
                     className="flex-1 accent-cm-primary"

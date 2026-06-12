@@ -102,26 +102,39 @@ export async function requireAuth(
   }
 
   // --- Fallback: Legacy header-based auth ---
-  // Works in demo mode AND when Firebase Client SDK failed (no token available)
+  // Works in demo mode AND when Firebase Client SDK failed (no token available).
+  // SECURITY: x-user-role is NEVER trusted for admin/super_admin — those roles
+  // must come from a verified Firebase token or Firestore lookup.
   const userId = request.headers.get('x-user-id');
   const userEmail = request.headers.get('x-user-email');
-  const userRole = request.headers.get('x-user-role') as UserRole | null;
 
-  if (!userId || !userEmail || !userRole) {
+  if (!userId || !userEmail) {
     return NextResponse.json(
       { error: 'Autenticacion requerida.' },
       { status: 401 }
     );
   }
 
-  if (!['admin', 'super_admin'].includes(userRole)) {
+  // In fallback mode, always look up the real role from Firestore
+  let fallbackRole: UserRole = 'user';
+  try {
+    const dbModule = await import('@/lib/db');
+    const userData = await dbModule.getUserById(userId);
+    if (userData?.role === 'admin' || userData?.role === 'super_admin') {
+      fallbackRole = userData.role;
+    }
+  } catch {
+    // Firestore lookup failed — default to 'user' (secure default)
+  }
+
+  if (requiredRole && fallbackRole !== requiredRole && fallbackRole !== 'super_admin') {
     return NextResponse.json(
       { error: 'No tienes permisos de administrador.' },
       { status: 403 }
     );
   }
 
-  if (requiredRole === 'super_admin' && userRole !== 'super_admin') {
+  if (requiredRole === 'super_admin' && fallbackRole !== 'super_admin') {
     return NextResponse.json(
       { error: 'Esta accion requiere permisos de Super Administrador.' },
       { status: 403 }
@@ -129,7 +142,7 @@ export async function requireAuth(
   }
 
   return {
-    user: { id: userId, email: userEmail, name: userEmail.split('@')[0], role: userRole },
+    user: { id: userId, email: userEmail, name: userEmail.split('@')[0], role: fallbackRole },
   };
 }
 
@@ -204,10 +217,9 @@ export async function requireAnyAuth(
   }
 
   // --- Fallback: Legacy header-based auth ---
-  // Works in demo mode AND when Firebase Client SDK failed (no token available)
+  // SECURITY: x-user-role is NEVER trusted — role is looked up from Firestore.
   const userId = request.headers.get('x-user-id');
   const userEmail = request.headers.get('x-user-email');
-  const userRole = request.headers.get('x-user-role') as UserRole | null;
 
   if (!userId || !userEmail) {
     return NextResponse.json(
@@ -216,12 +228,24 @@ export async function requireAnyAuth(
     );
   }
 
+  // Always look up the real role from Firestore (never trust client-reported role)
+  let fallbackRole: UserRole = 'user';
+  try {
+    const dbModule = await import('@/lib/db');
+    const userData = await dbModule.getUserById(userId);
+    if (userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.role === 'user') {
+      fallbackRole = userData.role;
+    }
+  } catch {
+    // Firestore lookup failed — default to 'user' (secure default)
+  }
+
   return {
     user: {
       id: userId,
       email: userEmail,
       name: userEmail.split('@')[0],
-      role: (userRole || 'user') as UserRole,
+      role: fallbackRole,
     },
   };
 }
