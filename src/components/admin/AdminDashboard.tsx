@@ -1691,12 +1691,45 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
     }
   }
 
+  const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`
+
+  // Check for overlapping blocks
+  const getOverlapWarnings = (schedule: PricingScheduleItem[]): string[] => {
+    const warnings: string[] = []
+    const sorted = [...schedule]
+      .filter(s => s.startHour < s.endHour)
+      .sort((a, b) => a.startHour - b.startHour)
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (sorted[i].endHour > sorted[i + 1].startHour) {
+        warnings.push(
+          `"${sorted[i].label}" (${formatHour(sorted[i].startHour)}–${formatHour(sorted[i].endHour)}) se solapa con "${sorted[i + 1].label}" (${formatHour(sorted[i + 1].startHour)}–${formatHour(sorted[i + 1].endHour)})`
+        )
+      }
+    }
+    return warnings
+  }
+
+  const getZeroPriceWarnings = (schedule: PricingScheduleItem[]): string[] => {
+    return schedule
+      .filter(s => s.startHour < s.endHour && s.pricePerHour <= 0)
+      .map(s => `"${s.label}" (${formatHour(s.startHour)}–${formatHour(s.endHour)}) tiene precio S/ 0 — no generará cobro`)
+  }
+
   const handleSaveCourt = async () => {
     if (!editingCourt || !editName) return
-    // Validate schedule: no overlapping, positive prices
+
+    const overlaps = getOverlapWarnings(editSchedule)
+    if (overlaps.length > 0) {
+      toast({ title: 'Bloques solapados', description: overlaps[0], variant: 'destructive' })
+      return
+    }
+
     const validSchedule = editSchedule
-      .filter(s => s.startHour < s.endHour && s.pricePerHour > 0)
+      .filter(s => s.startHour < s.endHour)
       .sort((a, b) => a.startHour - b.startHour)
+
+    const zeroWarnings = getZeroPriceWarnings(validSchedule)
+
     setSaving(true)
     try {
       const res = await fetch('/api/admin/courts', {
@@ -1710,7 +1743,15 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
         }),
       })
       if (res.ok) {
-        toast({ title: 'Cancha actualizada', description: `"${editName}" guardada con ${validSchedule.length} bloques de tarifa.` })
+        const blockCount = validSchedule.filter(s => s.pricePerHour > 0).length
+        const msg = blockCount > 0
+          ? `"${editName}" guardada con ${blockCount} bloque${blockCount > 1 ? 's' : ''} de tarifa activos.`
+          : `"${editName}" guardada. Todos los bloques tienen precio S/ 0 — se usará el precio base.`
+        toast({
+          title: 'Cancha actualizada',
+          description: msg,
+          ...(zeroWarnings.length > 0 && { variant: 'destructive' }),
+        })
         setEditingCourt(null)
         onRefresh()
       } else {
@@ -1746,8 +1787,6 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
   const removeScheduleBlock = (idx: number) => {
     setEditSchedule(prev => prev.filter((_, i) => i !== idx))
   }
-
-  const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`
 
   const sportLabels: Record<string, string> = { futbol: 'Fútbol 7', voley: 'Vóley' }
   const sportColors: Record<string, string> = { futbol: 'bg-green-500/15 text-green-400 border-green-500/30', voley: 'bg-amber-500/15 text-amber-400 border-amber-500/30' }
@@ -1884,7 +1923,11 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                                   step="1"
                                   value={slot.pricePerHour}
                                   onChange={(e) => updateScheduleItem(idx, 'pricePerHour', parseFloat(e.target.value) || 0)}
-                                  className="w-20 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono font-semibold"
+                                  className={`w-20 px-2 py-1.5 border rounded-lg text-xs text-center focus:outline-none font-mono font-semibold transition-colors ${
+                                    slot.pricePerHour <= 0
+                                      ? 'bg-red-500/10 border-red-500/30 text-red-300 focus:border-red-500/50'
+                                      : 'bg-black/20 border-white/10 text-cm-on-surface focus:border-white/30'
+                                  }`}
                                 />
                                 <span className="text-cm-on-surface-variant text-[10px]">/hr</span>
                               </div>
@@ -1899,6 +1942,24 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                             </div>
                           )
                         })}
+                      </div>
+                    )}
+
+                    {/* Real-time Validation Warnings */}
+                    {editSchedule.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {getOverlapWarnings(editSchedule).map((w, i) => (
+                          <div key={`ov-${i}`} className="flex items-start gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
+                            <span className="material-symbols-outlined text-red-400 text-[14px] mt-0.5 shrink-0">warning</span>
+                            <p className="text-[11px] text-red-300 font-[family-name:var(--font-inter)]">{w}</p>
+                          </div>
+                        ))}
+                        {getZeroPriceWarnings(editSchedule).map((w, i) => (
+                          <div key={`zp-${i}`} className="flex items-start gap-1.5 px-3 py-2 bg-amber-500/10 border border-amber-500/25 rounded-lg">
+                            <span className="material-symbols-outlined text-amber-400 text-[14px] mt-0.5 shrink-0">info</span>
+                            <p className="text-[11px] text-amber-300 font-[family-name:var(--font-inter)]">{w}</p>
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -2015,6 +2076,22 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                     >
                       {schedule.length > 0 ? (
                         <div className="space-y-2">
+                          {/* Coverage summary */}
+                          {(() => {
+                            const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+                            const coveredHours = sorted.reduce((sum, s) => sum + Math.max(0, s.endHour - s.startHour), 0)
+                            const activeBlocks = sorted.filter(s => s.pricePerHour > 0).length
+                            return (
+                              <div className="flex items-center gap-3 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                  {coveredHours}h cubiertas de 24h
+                                </span>
+                                <span className="w-px h-3 bg-white/10" />
+                                <span>{activeBlocks}/{sorted.length} bloques con precio activo</span>
+                              </div>
+                            )
+                          })()}
                           {/* Timeline Bar */}
                           <div className="flex rounded-lg overflow-hidden h-7 border border-white/10 mb-1">
                             {(() => {
@@ -2061,7 +2138,10 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                                     <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{slot.label}</p>
                                     <p className="text-xs font-mono text-cm-on-surface font-semibold">{formatHour(slot.startHour)} — {formatHour(slot.endHour)}</p>
                                   </div>
-                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${style.color}`}>S/ {slot.pricePerHour}</span>
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${slot.pricePerHour > 0 ? style.color : 'text-red-400/70'}`}>
+                                  S/ {slot.pricePerHour}
+                                  {slot.pricePerHour <= 0 && <span className="text-[9px] font-normal ml-1 text-red-400/50">sin tarifa</span>}
+                                </span>
                                 </div>
                               )
                             })}

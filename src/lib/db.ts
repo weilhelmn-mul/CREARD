@@ -277,6 +277,7 @@ export async function createCourt(data: Partial<Court>): Promise<string> {
     branch_id: data.branch_id,
     images: data.images || [],
     price_per_hour: data.price_per_hour || 0,
+    pricing_schedule: data.pricing_schedule || [],
     is_active: data.is_active !== undefined ? data.is_active : true,
     amenities: data.amenities || [],
   });
