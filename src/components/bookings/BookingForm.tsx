@@ -811,11 +811,11 @@ export default function BookingForm() {
               {bookingDataList.length > 0 && bookingDataList[0].paymentMethod && (
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant">
-                    {bookingDataList[0].paymentMethod === 'cash'
+                    {(['cash','EFECTIVO']).includes(bookingDataList[0].paymentMethod)
                       ? 'payments'
-                      : bookingDataList[0].paymentMethod === 'transfer'
-                      ? 'account_balance'
-                      : 'phone_iphone'}
+                      : (['transfer','yape','YAPE','plin','PLIN']).includes(bookingDataList[0].paymentMethod)
+                      ? 'phone_iphone'
+                      : 'credit_card'}
                   </span>
                   <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                     Pagado con{' '}

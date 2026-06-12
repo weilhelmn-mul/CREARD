@@ -2277,7 +2277,7 @@ export default function AdminDashboard() {
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [bookingForm, setBookingForm] = useState({
     courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
-    totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '',
+    totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string; phone?: string | null }>>([])
   const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
@@ -2326,7 +2326,7 @@ export default function AdminDashboard() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
   const [advanceAmount, setAdvanceAmount] = useState('')
-  const [advanceMethod, setAdvanceMethod] = useState('cash')
+  const [advanceMethod, setAdvanceMethod] = useState('EFECTIVO')
   const [submittingAdvance, setSubmittingAdvance] = useState(false)
 
   /* notification alarm system */
@@ -2886,7 +2886,7 @@ export default function AdminDashboard() {
   const openAdvanceModal = (booking: Booking) => {
     setAdvanceTarget(booking)
     setAdvanceAmount(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
-    setAdvanceMethod('cash')
+    setAdvanceMethod('EFECTIVO')
     setShowAdvanceModal(true)
   }
 
@@ -4494,9 +4494,9 @@ export default function AdminDashboard() {
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { key: 'cash', label: 'Efectivo', icon: 'payments', color: 'text-green-400' },
-                      { key: 'yape', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
-                      { key: 'plin', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
+                      { key: 'EFECTIVO', label: 'Efectivo', icon: 'payments', color: 'text-green-400' },
+                      { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
+                      { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
                     ].map((pm) => (
                       <button
                         key={pm.key}
@@ -5046,9 +5046,9 @@ export default function AdminDashboard() {
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { key: 'cash', label: 'Efectivo', icon: 'payments' },
-                      { key: 'yape', label: 'Yape', icon: 'account_balance_wallet' },
-                      { key: 'plin', label: 'Plin', icon: 'account_balance_wallet' },
+                      { key: 'EFECTIVO', label: 'Efectivo', icon: 'payments' },
+                      { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet' },
+                      { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet' },
                     ].map((pm) => (
                       <button
                         key={pm.key}

@@ -347,11 +347,11 @@ export async function POST(request: NextRequest) {
         ? [courtId]
         : [];
 
-    // ── Validate payment method (restricted set) ──
-    const VALID_PAYMENT_METHODS = ['cash', 'yape', 'plin'];
+    // ── Validate payment method (restricted set, UPPERCASE) ──
+    const VALID_PAYMENT_METHODS = ['EFECTIVO', 'YAPE', 'PLIN'];
     const normalizedPaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod)
       ? paymentMethod
-      : 'cash';
+      : 'EFECTIVO';
 
     if (allCourtIds.length === 0 || !userId || !date || !startTime || !endTime) {
       return NextResponse.json(
@@ -567,7 +567,10 @@ export async function PUT(request: NextRequest) {
     if (slot_status) updateData.slot_status = slot_status;
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
-    if (reqPaymentMethod) updateData.payment_method = reqPaymentMethod;
+    if (reqPaymentMethod) {
+      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
+      updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+    }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
 
