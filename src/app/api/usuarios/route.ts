@@ -16,7 +16,28 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, phone } = body;
+    const { name, email, phone, role } = body;
+
+    // ── RBAC: Bloquear escalación de privilegios ──
+    const requestedRole = role?.toString().toLowerCase().trim();
+    const ALLOWED_FOR_ADMIN = ['user', 'admin'];
+    const isSuperAdmin = authResult.user.role === 'super_admin';
+
+    if (requestedRole && !isSuperAdmin && !ALLOWED_FOR_ADMIN.includes(requestedRole)) {
+      return NextResponse.json(
+        { error: 'No tienes permiso para crear usuarios con este rol' },
+        { status: 403 }
+      );
+    }
+    if (requestedRole === 'super_admin' && !isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Solo un Super Administrador puede crear cuentas de Super Admin' },
+        { status: 403 }
+      );
+    }
+
+    // Forzar rol 'user' para creación rápida de clientes (este endpoint es solo para clientes)
+    const effectiveRole = 'user';
 
     // Validaciones minimas
     if (!name || name.trim().length < 2) {
@@ -52,7 +73,7 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone?.trim() || null,
-        role: 'user',
+        role: effectiveRole,
         status: 'approved',
         is_active: true,
         registeredByAdmin: true,
@@ -67,7 +88,7 @@ export async function POST(request: NextRequest) {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             phone: phone?.trim() || null,
-            role: 'user',
+            role: effectiveRole,
             status: 'approved',
           },
           message: `Cliente "${name.trim()}" creado exitosamente`,
@@ -115,7 +136,7 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       email: emailLower,
       phone: phone?.trim() || null,
-      role: 'user',
+      role: effectiveRole,
       status: 'approved',
       is_active: true,
       registeredByAdmin: true,
@@ -136,7 +157,7 @@ export async function POST(request: NextRequest) {
           name: clientData.name,
           email: clientData.email,
           phone: clientData.phone,
-          role: clientData.role,
+          role: effectiveRole,
           status: clientData.status,
         },
         message: `Cliente "${clientData.name}" creado exitosamente`,
