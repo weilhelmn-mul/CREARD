@@ -223,3 +223,22 @@ Stage Summary:
 - 3 real bugs fixed (schedule view, stats revenue, pending payments)
 - 2 bugs confirmed already fixed (getBookings dual query, recurring courtIds)
 - Deployed: https://creard.vercel.app
+
+---
+Task ID: 3
+Agent: main
+Task: Fix 4 critical bugs + notification sound volume
+
+Work Log:
+- Fixed adminDb undefined: replaced all 5 occurrences in payment functions (createPayment, getPayments, updatePaymentStatus, findPaymentByExternalRef) with await getAdminDb()
+- Fixed slot_status default from 'available' to 'reserved' in createBooking()
+- Fixed auth security: requireAuth() and requireAnyAuth() fallback paths no longer read x-user-role from client headers. Now look up role from Firestore. Default to 'user' on failure.
+- Added BookingStatus and SlotStatus union types to replace plain string
+- Fixed notification sound: added ctx.resume() for browser autoplay policy, volume clamping, improved fade envelope (sustain before fade-out), slider steps from 10% to 5%
+- Build OK, pushed, deployed to Vercel
+
+Stage Summary:
+- 4 critical bugs fixed + sound improvement
+- Payment functions now work (were crashing on ReferenceError)
+- Auth fallback no longer escalatable via headers
+- Deployed: https://creard.vercel.app
