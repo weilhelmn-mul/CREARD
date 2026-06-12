@@ -4023,7 +4023,7 @@ export default function AdminDashboard() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-lg glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[90vh]"
+              className="w-full max-w-3xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[90vh]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-5 flex-shrink-0">
@@ -4043,9 +4043,12 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              <div className="overflow-auto flex-1 space-y-3">
+              <div className="overflow-auto flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ─── LEFT COLUMN: Court + Date + Time ─── */}
+
                 {/* Courts - Multi-select with checkboxes */}
-                <div>
+                <div className="md:col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Cancha(s) *</label>
                     <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
@@ -4287,6 +4290,8 @@ export default function AdminDashboard() {
                     {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
                   </div>
                 </div>
+
+                {/* ─── RIGHT COLUMN: Price + Equipment + Status ─── */}
 
                 {/* Price & Advance */}
                 <div className="grid grid-cols-2 gap-3">
@@ -4733,6 +4738,7 @@ export default function AdminDashboard() {
                   </AnimatePresence>
                 </div>
               </div>
+                </div>{/* end grid */}
 
               <button
                 onClick={showRecurring && recurringStep === 'preview' ? handleCreateRecurring : handleCreateBooking}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllUsers, getUserById, updateUser } from '@/lib/db';
+import { getAllUsers, getUserById, updateUser, createUser } from '@/lib/db';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
@@ -10,6 +10,149 @@ import {
   jsonCreateUser,
 } from '@/lib/json-storage';
 import { generateId } from '@/lib/json-storage';
+
+// ── POST /api/admin/users ──
+// Crear un nuevo usuario desde el panel de administración.
+// Usa Firebase Admin SDK (no afecta la sesión del admin).
+export async function POST(request: NextRequest) {
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
+  try {
+    const body = await request.json();
+    const { email, password, name, phone, role } = body;
+
+    // Validaciones
+    if (!email || !password || !name) {
+      return NextResponse.json(
+        { error: 'Email, contraseña y nombre son requeridos' },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: 'La contraseña debe tener al menos 6 caracteres' },
+        { status: 400 }
+      );
+    }
+
+    const validRoles = ['user', 'admin', 'super_admin'];
+    const userRole = validRoles.includes(role) ? role : 'user';
+
+    // Solo super_admin puede crear otros super_admin
+    if (userRole === 'super_admin' && authResult.user.role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Solo un Super Administrador puede crear cuentas de Super Admin' },
+        { status: 403 }
+      );
+    }
+
+    // ── DEMO MODE ──
+    if (!isFirebaseAvailable()) {
+      // Check if email already exists in demo
+      const allDemoUsers = await jsonGetAllUsers();
+      const existing = allDemoUsers.find((u: any) => u.email === email);
+      if (existing) {
+        return NextResponse.json(
+          { error: 'Este correo ya esta registrado' },
+          { status: 409 }
+        );
+      }
+
+      const demoId = generateId();
+      await jsonCreateUser({
+        id: demoId,
+        name,
+        email,
+        phone: phone || null,
+        role: userRole,
+        status: 'approved',
+        is_active: true,
+      });
+
+      console.log(`[USERS POST] Demo user created: ${email} (${userRole})`);
+      return NextResponse.json({
+        success: true,
+        uid: demoId,
+        message: `Usuario "${name}" creado exitosamente`,
+      }, { status: 201 });
+    }
+
+    // ── FIREBASE MODE ──
+    const adminAuth = getAdminAuth();
+
+    // 1. Crear en Firebase Auth (sin afectar sesión del admin)
+    let userRecord;
+    try {
+      userRecord = await adminAuth.createUser({
+        email,
+        password,
+        displayName: name,
+        ...(phone ? { phoneNumber: phone } : {}),
+      });
+    } catch (err: any) {
+      const code = err?.errorInfo?.code || err?.code || '';
+      if (code === 'auth/email-already-exists') {
+        return NextResponse.json(
+          { error: 'Este correo ya esta registrado en Firebase Auth' },
+          { status: 409 }
+        );
+      }
+      if (code === 'auth/invalid-email') {
+        return NextResponse.json(
+          { error: 'El formato del correo no es valido' },
+          { status: 400 }
+        );
+      }
+      if (code === 'auth/weak-password') {
+        return NextResponse.json(
+          { error: 'La contraseña es demasiado debil (minimo 6 caracteres)' },
+          { status: 400 }
+        );
+      }
+      console.error('[USERS POST] Firebase Auth createUser error:', code, err?.message);
+      return NextResponse.json(
+        { error: 'Error al crear usuario en Firebase Auth' },
+        { status: 500 }
+      );
+    }
+
+    // 2. Crear documento en Firestore (uid como ID)
+    await createUser({
+      id: userRecord.uid,
+      name,
+      email,
+      phone: phone || null,
+      role: userRole,
+      status: 'approved',
+      is_active: true,
+    });
+
+    // 3. Establecer custom claims para el rol
+    try {
+      await adminAuth.setCustomUserClaims(userRecord.uid, {
+        role: userRole,
+        status: 'approved',
+      });
+    } catch (err) {
+      console.warn(`[USERS POST] Could not set custom claims for ${userRecord.uid}:`, err);
+    }
+
+    console.log(`[USERS POST] User created: ${email} (${userRole}) by ${authResult.user.email}`);
+    return NextResponse.json({
+      success: true,
+      uid: userRecord.uid,
+      message: `Usuario "${name}" creado exitosamente`,
+    }, { status: 201 });
+  } catch (error: any) {
+    console.error('[USERS POST] Unexpected error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error al crear usuario' },
+      { status: 500 }
+    );
+  }
+}
 
 // ── GET /api/admin/users ──
 // Lista todos los usuarios con sus datos

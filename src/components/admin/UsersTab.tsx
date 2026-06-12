@@ -55,6 +55,9 @@ export default function UsersTab() {
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', phone: '', role: 'user' })
+  const [creating, setCreating] = useState(false)
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -98,6 +101,38 @@ export default function UsersTab() {
       showToast('Error de conexion', 'error')
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const handleCreateUser = async () => {
+    const { name, email, password, phone, role } = createForm
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      showToast('Nombre, correo y contraseña son requeridos', 'error')
+      return
+    }
+    if (password.length < 6) {
+      showToast('La contraseña debe tener al menos 6 caracteres', 'error')
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await authFetch('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, phone: phone.trim() || null, role }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error || 'Error al crear usuario', 'error')
+        return
+      }
+      showToast(data.message || 'Usuario creado')
+      setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' })
+      setShowCreateForm(false)
+      fetchUsers()
+    } catch {
+      showToast('Error de conexion', 'error')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -165,10 +200,19 @@ export default function UsersTab() {
             )}
           </p>
         </div>
-        <button onClick={fetchUsers} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/10 transition-all text-sm font-[family-name:var(--font-inter)]">
-          <span className="material-symbols-outlined text-[18px]">refresh</span>
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' }); setShowCreateForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#00ff41]/10 text-[#00ff41] hover:bg-[#00ff41]/20 border border-[#00ff41]/30 transition-all text-sm font-semibold font-[family-name:var(--font-sora)]"
+          >
+            <span className="material-symbols-outlined text-[18px]">person_add</span>
+            Nuevo Usuario
+          </button>
+          <button onClick={fetchUsers} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/10 transition-all text-sm font-[family-name:var(--font-inter)]">
+            <span className="material-symbols-outlined text-[18px]">refresh</span>
+            Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -325,6 +369,126 @@ export default function UsersTab() {
           })
         )}
       </div>
+
+      {/* Create User Modal */}
+      <AnimatePresence>
+        {showCreateForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => !creating && setShowCreateForm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#00ff41]/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[#00ff41] text-[18px]">person_add</span>
+                  </div>
+                  <h3 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Nuevo Usuario</h3>
+                </div>
+                <button onClick={() => setShowCreateForm(false)} className="p-1 rounded-lg hover:bg-white/10 text-cm-on-surface-variant">
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Nombre Completo *</label>
+                  <input
+                    type="text"
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm(p => ({ ...p, name: e.target.value }))}
+                    placeholder="Juan Perez"
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Correo Electronico *</label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
+                    placeholder="juan@ejemplo.com"
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Contraseña Inicial *</label>
+                  <input
+                    type="password"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Minimo 6 caracteres"
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Telefono (opcional)</label>
+                  <input
+                    type="tel"
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))}
+                    placeholder="+51 999 888 777"
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Rol</label>
+                  <div className="flex gap-2">
+                    {(['user', 'admin', 'super_admin'] as const).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setCreateForm(p => ({ ...p, role: r }))}
+                        className={`flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all font-[family-name:var(--font-inter)] ${
+                          createForm.role === r
+                            ? roleConfig[r].color + ' border'
+                            : 'bg-white/5 text-cm-on-surface-variant hover:bg-white/10 border border-transparent'
+                        }`}
+                      >
+                        {roleConfig[r].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end mt-5">
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  disabled={creating}
+                  className="px-4 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg transition-all font-[family-name:var(--font-inter)]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateUser}
+                  disabled={creating || !createForm.name.trim() || !createForm.email.trim() || !createForm.password.trim()}
+                  className="px-5 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1.5 transition-all font-[family-name:var(--font-sora)]"
+                >
+                  {creating ? (
+                    <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-[14px]">check</span>
+                  )}
+                  Crear Usuario
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* User Detail Modal */}
       <AnimatePresence>
