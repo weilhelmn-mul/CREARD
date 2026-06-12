@@ -4200,7 +4200,17 @@ export default function AdminDashboard() {
 
                 {/* Client - Combobox with Popover+Command (portal renders outside modal overflow) */}
                 <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cliente *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Cliente *</label>
+                    <button
+                      type="button"
+                      onClick={openNewClientDialog}
+                      className="inline-flex items-center gap-1 text-[11px] text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Nuevo usuario
+                    </button>
+                  </div>
                   <Popover open={clientDropdownOpen} onOpenChange={setClientDropdownOpen}>
                     <PopoverTrigger asChild>
                       <button
