@@ -2277,7 +2277,7 @@ export default function AdminDashboard() {
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [bookingForm, setBookingForm] = useState({
     courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
-    totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '',
+    totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string; phone?: string | null }>>([])
   const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
@@ -2326,7 +2326,7 @@ export default function AdminDashboard() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
   const [advanceAmount, setAdvanceAmount] = useState('')
-  const [advanceMethod, setAdvanceMethod] = useState('yape')
+  const [advanceMethod, setAdvanceMethod] = useState('cash')
   const [submittingAdvance, setSubmittingAdvance] = useState(false)
 
   /* notification alarm system */
@@ -2673,7 +2673,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '' })
         setFormErrors({})
         setSelectedEquipItems([])
         setShowEquipPanel(false)
@@ -2808,7 +2808,7 @@ export default function AdminDashboard() {
           description: `${created} reservas recurrentes creadas exitosamente${data.conflictCount > 0 ? ` (${data.conflictCount} conflictos omitidos)` : ''}`,
         })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'yape', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '' })
         setFormErrors({})
         setShowRecurring(false)
         setRecurringStep('config')
@@ -2886,7 +2886,7 @@ export default function AdminDashboard() {
   const openAdvanceModal = (booking: Booking) => {
     setAdvanceTarget(booking)
     setAdvanceAmount(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
-    setAdvanceMethod('yape')
+    setAdvanceMethod('cash')
     setShowAdvanceModal(true)
   }
 
@@ -4098,7 +4098,7 @@ export default function AdminDashboard() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-3xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[90vh]"
+              className="w-[92vw] max-w-6xl lg:max-w-7xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[92vh]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-5 flex-shrink-0">
@@ -4118,66 +4118,80 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              <div className="overflow-auto flex-1">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="overflow-y-auto flex-1 pr-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* ─── LEFT COLUMN: Court + Date + Time ─── */}
 
-                {/* Courts - Multi-select with checkboxes */}
-                <div className="md:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
+                {/* Courts - Fixed grid cards (no scrollbar) */}
+                <div className="lg:col-span-3">
+                  <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Cancha(s) *</label>
                     <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                       {bookingForm.courtIds.length} seleccionada{bookingForm.courtIds.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <div className="max-h-36 overflow-y-auto bg-cm-surface-container-highest/40 border border-white/10 rounded-xl p-2 space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full">
                     {bookingCourtDetails.map((c) => {
                       const isSelected = bookingForm.courtIds.includes(c.id)
                       const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
-                      const priceLabel = hasSchedule
+                      const scheduleSummary = hasSchedule
+                        ? c.pricingSchedule.map((s) => `${formatHour(s.startHour)}-${formatHour(s.endHour)}`).join(' · ')
+                        : 'Todo el día'
+                      const priceSummary = hasSchedule
                         ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
                         : `S/ ${c.pricePerHour}/h`
                       return (
-                        <label
+                        <button
                           key={c.id}
-                          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all ${
-                            isSelected ? 'bg-cm-primary/10 border border-cm-primary/30' : 'hover:bg-cm-surface-container-highest/60'
+                          type="button"
+                          onClick={() => {
+                            setBookingForm((prev) => {
+                              const newIds = isSelected
+                                ? prev.courtIds.filter((id) => id !== c.id)
+                                : [...prev.courtIds, c.id]
+                              const updated = {
+                                ...prev,
+                                courtIds: newIds,
+                                courtId: newIds[0] || '',
+                              }
+                              if (newIds.length > 0 && updated.startTime && updated.endTime) {
+                                const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+                                updated.totalPrice = String(price)
+                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+                                  updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+                                }
+                              } else {
+                                updated.totalPrice = ''
+                                updated.advanceAmount = ''
+                              }
+                              return updated
+                            })
+                          }}
+                          className={`relative border-2 rounded-xl p-4 flex flex-col justify-between text-left transition-all ${
+                            isSelected
+                              ? 'border-cm-primary/60 bg-cm-primary/8 shadow-lg shadow-cm-primary/5'
+                              : 'border-white/10 bg-cm-surface-container-highest/30 hover:border-white/25 hover:bg-cm-surface-container-highest/50'
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              setBookingForm((prev) => {
-                                const newIds = isSelected
-                                  ? prev.courtIds.filter((id) => id !== c.id)
-                                  : [...prev.courtIds, c.id]
-                                const updated = {
-                                  ...prev,
-                                  courtIds: newIds,
-                                  courtId: newIds[0] || '',
-                                }
-                                // Auto-recalculate price for all selected courts
-                                if (newIds.length > 0 && updated.startTime && updated.endTime) {
-                                  const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
-                                  updated.totalPrice = String(price)
-                                  if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
-                                    updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-                                  }
-                                } else {
-                                  updated.totalPrice = ''
-                                  updated.advanceAmount = ''
-                                }
-                                return updated
-                              })
-                            }}
-                            className="w-4 h-4 rounded border-white/20 text-cm-primary focus:ring-cm-primary/40 bg-transparent"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-cm-on-surface truncate font-[family-name:var(--font-inter)]">{c.name}</p>
-                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{c.sport} · {priceLabel}</p>
+                          {isSelected && (
+                            <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-cm-primary flex items-center justify-center">
+                              <span className="material-symbols-outlined text-white text-[14px]">check</span>
+                            </div>
+                          )}
+                          <div className="pr-6">
+                            <p className={`text-sm font-semibold truncate font-[family-name:var(--font-sora)] ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>{c.name}</p>
+                            <p className="text-[11px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)] capitalize">{c.sport}</p>
                           </div>
-                        </label>
+                          <div className="mt-3 space-y-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[13px] text-cm-on-surface-variant/60">schedule</span>
+                              <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{scheduleSummary}</p>
+                            </div>
+                            <div className="border-t border-white/5 pt-1.5 text-right">
+                              <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>{priceSummary}</span>
+                            </div>
+                          </div>
+                        </button>
                       )
                     })}
                   </div>
@@ -4480,12 +4494,9 @@ export default function AdminDashboard() {
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
+                      { key: 'cash', label: 'Efectivo', icon: 'payments', color: 'text-green-400' },
                       { key: 'yape', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
                       { key: 'plin', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
-                      { key: 'cash', label: 'Efectivo', icon: 'payments', color: 'text-green-400' },
-                      { key: 'transfer', label: 'Transfer.', icon: 'account_balance', color: 'text-blue-400' },
-                      { key: 'culqi', label: 'Culqi', icon: 'credit_card', color: 'text-amber-400' },
-                      { key: 'card', label: 'Tarjeta', icon: 'credit_card', color: 'text-orange-400' },
                     ].map((pm) => (
                       <button
                         key={pm.key}
@@ -5035,12 +5046,9 @@ export default function AdminDashboard() {
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
+                      { key: 'cash', label: 'Efectivo', icon: 'payments' },
                       { key: 'yape', label: 'Yape', icon: 'account_balance_wallet' },
                       { key: 'plin', label: 'Plin', icon: 'account_balance_wallet' },
-                      { key: 'cash', label: 'Efectivo', icon: 'payments' },
-                      { key: 'transfer', label: 'Transfer.', icon: 'account_balance' },
-                      { key: 'culqi', label: 'Culqi', icon: 'credit_card' },
-                      { key: 'card', label: 'Tarjeta', icon: 'credit_card' },
                     ].map((pm) => (
                       <button
                         key={pm.key}

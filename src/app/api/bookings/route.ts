@@ -347,6 +347,12 @@ export async function POST(request: NextRequest) {
         ? [courtId]
         : [];
 
+    // ── Validate payment method (restricted set) ──
+    const VALID_PAYMENT_METHODS = ['cash', 'yape', 'plin'];
+    const normalizedPaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod)
+      ? paymentMethod
+      : 'cash';
+
     if (allCourtIds.length === 0 || !userId || !date || !startTime || !endTime) {
       return NextResponse.json(
         { error: 'Faltan campos requeridos: courtId/courtIds, userId, date, startTime, endTime' },
@@ -476,7 +482,7 @@ export async function POST(request: NextRequest) {
       remaining_amount: rem,
       status: bookingStatus,
       slot_status: 'available',
-      payment_method: paymentMethod || null,
+      payment_method: normalizedPaymentMethod || null,
       notes: notes || null,
     });
 
