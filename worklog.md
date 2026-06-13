@@ -258,3 +258,26 @@ Stage Summary:
 - Admin can now create users without losing session (backend Firebase Admin SDK)
 - Booking modal is 50% wider with 2-column grid on desktop
 - Deployed: https://creard.vercel.app
+---
+Task ID: 1
+Agent: main
+Task: Analizar y reparar pestaña Nueva Reserva + deploy
+
+Work Log:
+- Analicé las 5,180 líneas de AdminDashboard.tsx enfocado en la sección Nueva Reserva
+- Leí la API POST /api/bookings y GET /api/admin/users
+- Identifiqué 5 bugs que impedían el correcto funcionamiento
+- Apliqué todas las correcciones
+- Build exitoso sin errores en src/
+- Git push a GitHub
+- Deploy a Vercel (creard) exitoso
+
+Stage Summary:
+- Bugs corregidos:
+  1. paymentMethod reset: "cash" → "EFECTIVO" (2 ocurrencias en handleCreateBooking y handleCreateRecurring)
+  2. remainingAmount: eliminado fallback 50% que sobreescribía el adelanto ingresado
+  3. endTime dropdown: ahora usa timeSlots (06:00-23:00) y deshabilita horas <= startTime
+  4. openBookingForm: ahora resetea formulario a valores limpios cada vez
+  5. Equipment price effect: usa calculateMultiCourtPrice() para respetar pricing schedules
+- Deploy: https://creard.vercel.app (build 3dbmuEAnLxZnnwfXYmmVPJN7CHPF)
+- Commit: ad74f5a "fix: funcionalidad completa de Nueva Reserva"
