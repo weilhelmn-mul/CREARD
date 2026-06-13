@@ -2444,8 +2444,11 @@ export default function AdminDashboard() {
     if (!newClientForm.name.trim() || newClientForm.name.trim().length < 2) {
       errors.name = 'Nombre requerido (min. 2 caracteres)'
     }
-    if (!newClientForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClientForm.email.trim())) {
-      errors.email = 'Correo valido requerido'
+    if (!newClientForm.phone.trim() || newClientForm.phone.trim().length < 6) {
+      errors.phone = 'Telefono requerido (min. 6 digitos)'
+    }
+    if (newClientForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClientForm.email.trim())) {
+      errors.email = 'Formato de correo invalido'
     }
     if (Object.keys(errors).length > 0) {
       setNewClientErrors(errors)
@@ -2460,8 +2463,8 @@ export default function AdminDashboard() {
         headers,
         body: JSON.stringify({
           name: newClientForm.name.trim(),
-          email: newClientForm.email.trim(),
-          phone: newClientForm.phone.trim() || undefined,
+          phone: newClientForm.phone.trim(),
+          email: newClientForm.email.trim() || undefined,
         }),
       })
 
@@ -4890,7 +4893,7 @@ export default function AdminDashboard() {
                   onChange={(e) => { setNewClientForm(p => ({ ...p, name: e.target.value })); if (newClientErrors.name) setNewClientErrors(p => { const n = { ...p }; delete n.name; return n }) }}
                   placeholder="Ej: Carlos Mendoza"
                   autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-email')?.focus() }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-phone')?.focus() }}
                   className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${newClientErrors.name ? 'border-red-400' : 'border-white/10'}`}
                 />
                 {newClientErrors.name && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{newClientErrors.name}</p>}
@@ -4898,21 +4901,23 @@ export default function AdminDashboard() {
 
               <div>
                 <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
-                  Telefono
+                  Telefono / Celular *
                 </label>
                 <input
                   type="tel"
+                  id="new-client-phone"
                   value={newClientForm.phone}
-                  onChange={(e) => setNewClientForm(p => ({ ...p, phone: e.target.value }))}
+                  onChange={(e) => { setNewClientForm(p => ({ ...p, phone: e.target.value })); if (newClientErrors.phone) setNewClientErrors(p => { const n = { ...p }; delete n.phone; return n }) }}
                   placeholder="Ej: 987654321"
                   onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-email')?.focus() }}
-                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${newClientErrors.phone ? 'border-red-400' : 'border-white/10'}`}
                 />
+                {newClientErrors.phone && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{newClientErrors.phone}</p>}
               </div>
 
               <div>
                 <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
-                  Correo Electronico *
+                  Correo Electronico (opcional)
                 </label>
                 <input
                   id="new-client-email"

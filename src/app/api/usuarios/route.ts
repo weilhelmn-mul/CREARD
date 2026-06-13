@@ -47,22 +47,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!phone || phone.trim().length < 6) {
       return NextResponse.json(
-        { error: 'Un correo valido es requerido' },
+        { error: 'El telefono es requerido (minimo 6 digitos)' },
         { status: 400 }
       );
     }
 
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { error: 'El formato del correo no es valido' },
+        { status: 400 }
+      );
+    }
+
+    const emailLower = email ? email.trim().toLowerCase() : null;
+
     // ── DEMO MODE ──
     if (!isFirebaseAvailable()) {
       const allDemoUsers = await jsonGetAllUsers();
-      const existing = allDemoUsers.find(
-        (u: any) => u.email && u.email.toLowerCase() === email.toLowerCase()
-      );
+      // Check uniqueness by phone first, then email
+      const existing = allDemoUsers.find((u: any) => {
+        if (u.phone && u.phone === phone.trim()) return true;
+        if (emailLower && u.email && u.email.toLowerCase() === emailLower) return true;
+        return false;
+      });
       if (existing) {
         return NextResponse.json(
-          { error: 'Este correo ya esta registrado' },
+          { error: 'Ya existe un cliente con este telefono o correo' },
           { status: 409 }
         );
       }
@@ -71,8 +83,8 @@ export async function POST(request: NextRequest) {
       await jsonCreateUser({
         id: demoId,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone?.trim() || null,
+        email: emailLower,
+        phone: phone.trim(),
         role: effectiveRole,
         status: 'approved',
         is_active: true,
@@ -86,8 +98,8 @@ export async function POST(request: NextRequest) {
           user: {
             id: demoId,
             name: name.trim(),
-            email: email.trim().toLowerCase(),
-            phone: phone?.trim() || null,
+            email: emailLower,
+            phone: phone.trim(),
             role: effectiveRole,
             status: 'approved',
           },
@@ -101,13 +113,23 @@ export async function POST(request: NextRequest) {
     const db = await getAdminDb();
     const usersRef = db.collection('users');
 
-    // Check email uniqueness in Firestore
-    const emailLower = email.trim().toLowerCase();
-    const existingDocs = await usersRef.where('email', '==', emailLower).limit(1).get();
-    if (!existingDocs.empty) {
-      const existingId = existingDocs.docs[0].id;
-      // Return the existing user so the frontend can auto-select it
-      const existingData = existingDocs.docs[0].data();
+    // Check uniqueness: phone first, then email
+    let existingId: string | null = null;
+    let existingData: Record<string, unknown> | null = null;
+
+    const phoneDocs = await usersRef.where('phone', '==', phone.trim()).limit(1).get();
+    if (!phoneDocs.empty) {
+      existingId = phoneDocs.docs[0].id;
+      existingData = phoneDocs.docs[0].data();
+    } else if (emailLower) {
+      const emailDocs = await usersRef.where('email', '==', emailLower).limit(1).get();
+      if (!emailDocs.empty) {
+        existingId = emailDocs.docs[0].id;
+        existingData = emailDocs.docs[0].data();
+      }
+    }
+
+    if (existingId && existingData) {
       return NextResponse.json(
         {
           success: true,
@@ -115,13 +137,13 @@ export async function POST(request: NextRequest) {
           alreadyExists: true,
           user: {
             id: existingId,
-            name: existingData.name || emailLower,
-            email: existingData.email || emailLower,
-            phone: existingData.phone || null,
-            role: existingData.role || 'user',
-            status: existingData.status || 'approved',
+            name: (existingData.name as string) || phone.trim(),
+            email: (existingData.email as string) || emailLower,
+            phone: (existingData.phone as string) || phone.trim(),
+            role: (existingData.role as string) || 'user',
+            status: (existingData.status as string) || 'approved',
           },
-          message: `Ya existe un cliente con este correo. Se selecciono automaticamente.`,
+          message: 'Ya existe un cliente con este telefono o correo. Se selecciono automaticamente.',
         },
         { status: 200 }
       );
@@ -135,7 +157,7 @@ export async function POST(request: NextRequest) {
       id: docId,
       name: name.trim(),
       email: emailLower,
-      phone: phone?.trim() || null,
+      phone: phone.trim(),
       role: effectiveRole,
       status: 'approved',
       is_active: true,
