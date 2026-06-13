@@ -249,7 +249,7 @@ export default function HeroSection() {
             {/* Dots */}
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
               {activeBanners.map((_, idx) => (
-                <button
+                <button type="button"
                   key={idx}
                   onClick={() => { setCurrentBanner(idx) }}
                   className={`w-2 h-2 rounded-full transition-all ${
@@ -324,7 +324,7 @@ export default function HeroSection() {
             {/* Date Chips */}
             <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar px-1">
               {dateChips.map((chip, idx) => (
-                <button
+                <button type="button"
                   key={idx}
                   onClick={() => setSelectedDateIdx(idx)}
                   className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[64px] ${
@@ -358,7 +358,7 @@ export default function HeroSection() {
                 </select>
               </div>
 
-              <button
+              <button type="button"
                 onClick={handleSearch}
                 className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.97]"
               >
@@ -476,7 +476,7 @@ export default function HeroSection() {
               {editForm.backgroundImage ? (
                 <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
                   <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
-                  <button
+                  <button type="button"
                     type="button"
                     onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
                     className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
@@ -514,7 +514,7 @@ export default function HeroSection() {
               {editForm.secondaryImage ? (
                 <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
                   <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
-                  <button
+                  <button type="button"
                     type="button"
                     onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
                     className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
@@ -557,7 +557,7 @@ export default function HeroSection() {
             <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
               Estadísticas
             </label>
-            <button
+            <button type="button"
               type="button"
               onClick={addStat}
               className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
@@ -582,7 +582,7 @@ export default function HeroSection() {
                   placeholder="0"
                   className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                 />
-                <button
+                <button type="button"
                   type="button"
                   onClick={() => removeStat(idx)}
                   className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"

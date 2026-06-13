@@ -212,7 +212,7 @@ export default function AuthView() {
         >
           <div className="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl">
             {/* Back button */}
-            <button onClick={goBack}
+            <button type="button" onClick={goBack}
               className="absolute -top-12 left-0 flex items-center gap-1.5 text-cm-on-surface-variant hover:text-cm-primary transition-colors font-[family-name:var(--font-inter)] text-sm">
               <span className="material-symbols-outlined text-[20px]">arrow_back</span>
               Volver
@@ -327,7 +327,7 @@ export default function AuthView() {
               <span className="text-xs text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">o</span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
-            <button onClick={switchMode}
+            <button type="button" onClick={switchMode}
               className="w-full py-3 rounded-xl border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all duration-200 text-sm font-[family-name:var(--font-inter)] font-medium">
               {isLogin ? (<><span>No tienes cuenta? </span><span className="text-cm-primary font-semibold">Registrate</span></>)
                 : (<><span>Ya tienes cuenta? </span><span className="text-cm-primary font-semibold">Inicia sesion</span></>)}

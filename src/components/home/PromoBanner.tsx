@@ -233,7 +233,7 @@ export default function PromoBanner() {
                 transition={{ duration: 0.6, delay: 1.1 }}
                 className="text-center mt-8"
               >
-                <button
+                <button type="button"
                   onClick={() => setView('search')}
                   className="inline-flex items-center gap-2 px-7 py-3.5 bg-cm-primary text-cm-on-primary font-bold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent active:scale-[0.97] font-[family-name:var(--font-sora)] text-sm md:text-base"
                 >

@@ -634,7 +634,7 @@ function ContentTab() {
               Administra todo el contenido de la página de inicio
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setShowPreview(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cm-primary/10 text-cm-primary border border-cm-primary/20 text-xs font-bold hover:bg-cm-primary/20 transition-all"
           >
@@ -651,7 +651,7 @@ function ContentTab() {
             { key: 'banners' as const, label: 'Banners Hero', icon: 'view_carousel' },
             { key: 'noticias' as const, label: 'Noticias', icon: 'newspaper' },
           ]).map((tab) => (
-            <button
+            <button type="button"
               key={tab.key}
               onClick={() => setActiveSubTab(tab.key)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -680,7 +680,7 @@ function ContentTab() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Orden de secciones</h3>
-              <button
+              <button type="button"
                 onClick={addCustomSection}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all"
               >
@@ -751,7 +751,7 @@ function ContentTab() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Promociones activas</h3>
-              <button onClick={addPromotion} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+              <button type="button" onClick={addPromotion} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
                 <span className="material-symbols-outlined text-[14px]">add</span>
                 Nueva promoción
               </button>
@@ -779,13 +779,13 @@ function ContentTab() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => togglePromoActive(promo.id)} className={`p-1.5 rounded-lg transition-colors ${promo.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                      <button type="button" onClick={() => togglePromoActive(promo.id)} className={`p-1.5 rounded-lg transition-colors ${promo.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
                         <span className="material-symbols-outlined text-[16px]">{promo.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
-                      <button onClick={() => { setEditingPromo(promo); setPromoForm({ ...promo }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                      <button type="button" onClick={() => { setEditingPromo(promo); setPromoForm({ ...promo }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                       </button>
-                      <button onClick={() => deletePromo(promo.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                      <button type="button" onClick={() => deletePromo(promo.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
@@ -801,7 +801,7 @@ function ContentTab() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Banners del carrusel Hero</h3>
-              <button onClick={addHeroBanner} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+              <button type="button" onClick={addHeroBanner} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
                 <span className="material-symbols-outlined text-[14px]">add</span>
                 Nuevo banner
               </button>
@@ -828,13 +828,13 @@ function ContentTab() {
                       {banner.subtitle && <span className="text-cm-on-surface-variant text-[10px] truncate block">{banner.subtitle}</span>}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => toggleBannerActive(banner.id)} className={`p-1.5 rounded-lg transition-colors ${banner.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                      <button type="button" onClick={() => toggleBannerActive(banner.id)} className={`p-1.5 rounded-lg transition-colors ${banner.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
                         <span className="material-symbols-outlined text-[16px]">{banner.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
-                      <button onClick={() => { setEditingBanner(banner); setBannerForm({ ...banner }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                      <button type="button" onClick={() => { setEditingBanner(banner); setBannerForm({ ...banner }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                       </button>
-                      <button onClick={() => deleteBanner(banner.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                      <button type="button" onClick={() => deleteBanner(banner.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
@@ -850,7 +850,7 @@ function ContentTab() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Noticias y Anuncios</h3>
-              <button onClick={addNews} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+              <button type="button" onClick={addNews} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
                 <span className="material-symbols-outlined text-[14px]">add</span>
                 Nueva noticia
               </button>
@@ -885,16 +885,16 @@ function ContentTab() {
                       <p className="text-cm-on-surface-variant text-xs mt-0.5 line-clamp-2">{newsItem.content}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button onClick={() => toggleNewsPinned(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.pinned ? 'text-cm-primary' : 'text-cm-on-surface-variant/40 hover:text-cm-primary/60'}`} title={newsItem.pinned ? 'Desfijar' : 'Fijar'}>
+                      <button type="button" onClick={() => toggleNewsPinned(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.pinned ? 'text-cm-primary' : 'text-cm-on-surface-variant/40 hover:text-cm-primary/60'}`} title={newsItem.pinned ? 'Desfijar' : 'Fijar'}>
                         <span className="material-symbols-outlined text-[16px]">push_pin</span>
                       </button>
-                      <button onClick={() => toggleNewsActive(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+                      <button type="button" onClick={() => toggleNewsActive(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
                         <span className="material-symbols-outlined text-[16px]">{newsItem.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
-                      <button onClick={() => { setEditingNews(newsItem); setNewsForm({ ...newsItem }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+                      <button type="button" onClick={() => { setEditingNews(newsItem); setNewsForm({ ...newsItem }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                       </button>
-                      <button onClick={() => deleteNews(newsItem.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                      <button type="button" onClick={() => deleteNews(newsItem.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
@@ -1332,7 +1332,7 @@ function ContentTab() {
                     const v = k.startsWith('custom_') ? customSections.find((s) => s.id === k.replace('custom_', ''))?.visible ?? true : (visibility[k as keyof typeof visibility] ?? true)
                     return v
                   }).length} secciones visibles</span>
-                  <button onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                  <button type="button" onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                     <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                   </button>
                 </div>
@@ -1818,7 +1818,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
             {allCourts.length} canchas registradas · Configura tarifas por bloques horarios
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={handleMigrate}
           disabled={migrating}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#00ff41]/10 text-[#00ff41] text-sm font-semibold rounded-xl border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all disabled:opacity-50 font-[family-name:var(--font-sora)]"
@@ -1872,7 +1872,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                         </h4>
                         <p className="text-[10px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)]">Define precios diferentes según el turno. Las reservas calcularán automáticamente.</p>
                       </div>
-                      <button
+                      <button type="button"
                         type="button"
                         onClick={addScheduleBlock}
                         className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-[#00ff41] bg-[#00ff41]/10 border border-[#00ff41]/30 rounded-lg hover:bg-[#00ff41]/20 transition-all"
@@ -1941,7 +1941,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                                 <span className="text-cm-on-surface-variant text-[10px]">/hr</span>
                               </div>
                               {/* Remove */}
-                              <button
+                              <button type="button"
                                 type="button"
                                 onClick={() => removeScheduleBlock(idx)}
                                 className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
@@ -2019,13 +2019,13 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
 
                   {/* Actions */}
                   <div className="flex gap-2 justify-end pt-1">
-                    <button
+                    <button type="button"
                       onClick={() => setEditingCourt(null)}
                       className="px-4 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg transition-all font-[family-name:var(--font-inter)]"
                     >
                       Cancelar
                     </button>
-                    <button
+                    <button type="button"
                       onClick={handleSaveCourt}
                       disabled={saving}
                       className="px-5 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1.5 transition-all font-[family-name:var(--font-sora)]"
@@ -2059,14 +2059,14 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                     </div>
                     <div className="flex items-center gap-1">
                       {/* Toggle schedule view */}
-                      <button
+                      <button type="button"
                         onClick={() => setShowSchedule(showSchedule === court.id ? null : court.id)}
                         className={`p-2 rounded-lg transition-all ${showSchedule === court.id ? 'bg-[#00ff41]/10 text-[#00ff41]' : 'hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface'}`}
                         title="Ver tarifas"
                       >
                         <span className="material-symbols-outlined text-[18px]">schedule</span>
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number; pricingSchedule?: PricingScheduleItem[] })}
                         className="p-2 rounded-lg hover:bg-cm-surface-container-highest text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
                         title="Editar"
@@ -2159,7 +2159,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                       ) : (
                         <div className="text-center py-4">
                           <p className="text-xs text-cm-on-surface-variant">Sin tarifas por bloque configuradas. Se usa el precio base S/ {court.pricePerHour || 0}/hr.</p>
-                          <button
+                          <button type="button"
                             onClick={() => startEdit(court as { id: string; name: string; pricePerHour: number; pricingSchedule?: PricingScheduleItem[] })}
                             className="mt-2 text-[10px] text-[#00ff41] font-semibold hover:underline"
                           >
@@ -2226,7 +2226,7 @@ function LiveClock({ alarmsCount, settings }: { alarmsCount: number; settings: N
         )}
       </div>
       {alarmsCount > 0 && (
-        <button
+        <button type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-all animate-pulse"
         >
@@ -3178,7 +3178,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
+          <button type="button"
             onClick={() => setView('profile')}
             className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
           >
@@ -3235,7 +3235,7 @@ export default function AdminDashboard() {
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar">
           {adminTabs.map((tab) => (
-            <button
+            <button type="button"
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
@@ -3273,7 +3273,7 @@ export default function AdminDashboard() {
                       className="w-full pl-9 pr-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                     />
                     {searchQuery && (
-                      <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors">
+                      <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors">
                         <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">close</span>
                       </button>
                     )}
@@ -3295,19 +3295,19 @@ export default function AdminDashboard() {
 
                     {/* View mode toggle */}
                     <div className="flex bg-cm-surface-container-highest/60 rounded-lg p-0.5">
-                      <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Tabla">
+                      <button type="button" onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Tabla">
                         <span className="material-symbols-outlined text-[18px]">table_list</span>
                       </button>
-                      <button onClick={() => setViewMode('gallery')} className={`p-1.5 rounded-md transition-all ${viewMode === 'gallery' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Galería">
+                      <button type="button" onClick={() => setViewMode('gallery')} className={`p-1.5 rounded-md transition-all ${viewMode === 'gallery' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Galería">
                         <span className="material-symbols-outlined text-[18px]">grid_view</span>
                       </button>
-                      <button onClick={() => setViewMode('compact')} className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Compacto">
+                      <button type="button" onClick={() => setViewMode('compact')} className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Compacto">
                         <span className="material-symbols-outlined text-[18px]">view_agenda</span>
                       </button>
                     </div>
 
                     {/* Filter toggle */}
-                    <button
+                    <button type="button"
                       onClick={() => setShowFilters(!showFilters)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${showFilters || activeFilterCount > 0 ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
                     >
@@ -3355,7 +3355,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       {activeFilterCount > 0 && (
-                        <button onClick={clearAllFilters} className="mt-2 text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)] hover:underline flex items-center gap-1">
+                        <button type="button" onClick={clearAllFilters} className="mt-2 text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)] hover:underline flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">filter_list_off</span>
                           Limpiar todos los filtros
                         </button>
@@ -3370,25 +3370,25 @@ export default function AdminDashboard() {
                     {dateFrom && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
                         Desde: {fmtDate(dateFrom)}
-                        <button onClick={() => setDateFrom('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                        <button type="button" onClick={() => setDateFrom('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
                       </span>
                     )}
                     {dateTo && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
                         Hasta: {fmtDate(dateTo)}
-                        <button onClick={() => setDateTo('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                        <button type="button" onClick={() => setDateTo('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
                       </span>
                     )}
                     {courtFilter !== 'all' && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
                         {uniqueCourts.find(c => c.id === courtFilter)?.name || courtFilter}
-                        <button onClick={() => setCourtFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                        <button type="button" onClick={() => setCourtFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
                       </span>
                     )}
                     {sportFilter !== 'all' && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)] capitalize">
                         {sportFilter}
-                        <button onClick={() => setSportFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+                        <button type="button" onClick={() => setSportFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
                       </span>
                     )}
                   </div>
@@ -3397,14 +3397,14 @@ export default function AdminDashboard() {
 
               {/* Status filter */}
               <div className="flex flex-wrap gap-2 mb-4">
-                <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
+                <button type="button" onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
                   Todos ({bookings.length})
                 </button>
                 {Object.entries(statusConfig).map(([key, val]) => {
                   const count = bookings.filter((b) => b.status === key).length
                   if (count === 0) return null
                   return (
-                    <button key={key} onClick={() => setStatusFilter(key)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === key ? `${val.color} border-current/30` : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
+                    <button type="button" key={key} onClick={() => setStatusFilter(key)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === key ? `${val.color} border-current/30` : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${val.dot}`} />
                       {val.label} ({count})
                     </button>
@@ -3418,21 +3418,21 @@ export default function AdminDashboard() {
                   Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <button type="button"
                     onClick={() => setShowPastBookings(!showPastBookings)}
                     className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all ${showPastBookings ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
                   >
                     <span className="material-symbols-outlined text-[18px]">{showPastBookings ? 'history_toggle_off' : 'history'}</span>
                     {showPastBookings ? 'Ocultar pasadas' : 'Ver pasadas'}
                   </button>
-                  <button
+                  <button type="button"
                     onClick={openBookingForm}
                     className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
                   >
                     <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
                     Nueva Reserva
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => setShowSchedule(true)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
                   >
@@ -3485,7 +3485,7 @@ export default function AdminDashboard() {
                               <span className="material-symbols-outlined text-[14px]">calendar_today</span>
                               {fmtDateFull(b.date)}
                               {b.recurringGroupId && (
-                                <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
                                   <span className="material-symbols-outlined text-[13px]">repeat</span>
                                 </button>
                               )}
@@ -3541,7 +3541,7 @@ export default function AdminDashboard() {
                           {/* Status dropdown + Advance */}
                           <div className="flex items-center gap-2">
                             {b.recurringGroupId && (
-                              <button
+                              <button type="button"
                                 onClick={() => openSeriesModal(b.recurringGroupId!)}
                                 className="p-1.5 rounded-lg bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-colors flex-shrink-0"
                                 title="Ver serie recurrente"
@@ -3559,7 +3559,7 @@ export default function AdminDashboard() {
                               <option value="cancelled">Cancelado</option>
                             </select>
                             {b.remainingAmount > 0 && (
-                              <button
+                              <button type="button"
                                 onClick={() => openAdvanceModal(b)}
                                 className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
                                 title="Registrar pago"
@@ -3596,7 +3596,7 @@ export default function AdminDashboard() {
                               <div className="flex items-center gap-1">
                                 <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
                                 {b.recurringGroupId && (
-                                  <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
                                     <span className="material-symbols-outlined text-[13px]">repeat</span>
                                   </button>
                                 )}
@@ -3621,7 +3621,7 @@ export default function AdminDashboard() {
                           {/* Status + Price + Action */}
                           <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
                             {b.recurringGroupId && (
-                              <button
+                              <button type="button"
                                 onClick={() => openSeriesModal(b.recurringGroupId!)}
                                 className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
                                 title="Ver serie recurrente"
@@ -3635,7 +3635,7 @@ export default function AdminDashboard() {
                             </span>
                             <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
                             {b.remainingAmount > 0 && (
-                              <button
+                              <button type="button"
                                 onClick={() => openAdvanceModal(b)}
                                 className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
                                 title="Registrar pago"
@@ -3791,7 +3791,7 @@ export default function AdminDashboard() {
                   <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Registro de Gastos</h2>
                   <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{expenses.length} gastos · Total {fmtCurrency(totalExpenses)}</p>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => setShowExpenseForm(true)}
                   className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
                 >
@@ -3824,7 +3824,7 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between mb-5">
                         <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Agregar Gasto</h3>
                         {!submittingExpense && (
-                          <button onClick={() => setShowExpenseForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                          <button type="button" onClick={() => setShowExpenseForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                             <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                           </button>
                         )}
@@ -3866,7 +3866,7 @@ export default function AdminDashboard() {
                           <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Categoría *</label>
                           <div className="grid grid-cols-3 gap-2">
                             {Object.entries(expenseCategories).map(([key, cat]) => (
-                              <button
+                              <button type="button"
                                 key={key}
                                 onClick={() => setExpForm((f) => ({ ...f, category: key }))}
                                 className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
@@ -3893,7 +3893,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                      <button
+                      <button type="button"
                         onClick={handleAddExpense}
                         disabled={submittingExpense}
                         className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -3979,7 +3979,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {!submittingBooking && (
-                  <button onClick={() => setShowBookingForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                  <button type="button" onClick={() => setShowBookingForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                     <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                   </button>
                 )}
@@ -4012,7 +4012,7 @@ export default function AdminDashboard() {
                         ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
                         : `S/ ${c.pricePerHour}/h`
                       return (
-                        <button
+                        <button type="button"
                           key={c.id}
                           type="button"
                           onClick={() => {
@@ -4086,7 +4086,7 @@ export default function AdminDashboard() {
                         <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
                           Hora inicio *
                         </label>
-                        <button
+                        <button type="button"
                           type="button"
                           onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
@@ -4097,7 +4097,7 @@ export default function AdminDashboard() {
                         {startTimeDrop && (
                           <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
                             {timeSlots.map((ts) => (
-                              <button
+                              <button type="button"
                                 key={ts.value}
                                 type="button"
                                 disabled={ts.disabled}
@@ -4118,7 +4118,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="relative">
                         <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
-                        <button
+                        <button type="button"
                           type="button"
                           onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
@@ -4129,7 +4129,7 @@ export default function AdminDashboard() {
                         {endTimeDrop && (
                           <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
                             {timeSlots.map((ts) => (
-                              <button
+                              <button type="button"
                                 key={`end-${ts.value}`}
                                 type="button"
                                 disabled={ts.disabled || ts.value <= bookingForm.startTime}
@@ -4206,7 +4206,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Cliente *</label>
-                    <button
+                    <button type="button"
                       type="button"
                       onClick={openNewClientDialog}
                       className="inline-flex items-center gap-1 text-[11px] text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
@@ -4217,7 +4217,7 @@ export default function AdminDashboard() {
                   </div>
                   <Popover open={clientDropdownOpen} onOpenChange={setClientDropdownOpen}>
                     <PopoverTrigger asChild>
-                      <button
+                      <button type="button"
                         type="button"
                         className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
                       >
@@ -4250,7 +4250,7 @@ export default function AdminDashboard() {
                           <CommandEmpty>
                             <div className="px-2 py-3 text-center">
                               <p className="text-xs text-cm-on-surface-variant/60 mb-2 font-[family-name:var(--font-inter)]">No se encontro el cliente</p>
-                              <button
+                              <button type="button"
                                 type="button"
                                 onClick={() => openNewClientDialog(clientSearch)}
                                 className="inline-flex items-center gap-1.5 text-xs text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
@@ -4332,7 +4332,7 @@ export default function AdminDashboard() {
                       { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
                       { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
                     ].map((pm) => (
-                      <button
+                      <button type="button"
                         key={pm.key}
                         type="button"
                         onClick={() => handleBookingFormChange('paymentMethod', pm.key)}
@@ -4403,7 +4403,7 @@ export default function AdminDashboard() {
                 <div className="lg:col-span-2 border-t border-white/5" />
 
                 <div className="lg:col-span-2">
-                  <button
+                  <button type="button"
                     type="button"
                     onClick={() => setShowEquipPanel(!showEquipPanel)}
                     className="flex items-center gap-2.5 w-full text-left"
@@ -4437,16 +4437,16 @@ export default function AdminDashboard() {
                                 </div>
                                 {selected ? (
                                   <div className="flex items-center gap-1">
-                                    <button onClick={() => updateEquipQty(eq.id, selected.quantity - 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-red-500/20">-</button>
+                                    <button type="button" onClick={() => updateEquipQty(eq.id, selected.quantity - 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-red-500/20">-</button>
                                     <span className="w-6 text-center text-xs font-bold text-cm-on-surface">{selected.quantity}</span>
-                                    <button onClick={() => updateEquipQty(eq.id, selected.quantity + 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-green-500/20">+</button>
+                                    <button type="button" onClick={() => updateEquipQty(eq.id, selected.quantity + 1, eq.stock)} className="w-6 h-6 rounded bg-cm-surface-container-highest/60 text-cm-on-surface text-xs flex items-center justify-center hover:bg-green-500/20">+</button>
                                     <span className="text-[10px] text-blue-400 font-semibold w-14 text-right">{fmtCurrency(selected.subtotal)}</span>
-                                    <button onClick={() => removeEquipmentFromForm(eq.id)} className="p-1 text-red-400 hover:bg-red-400/10 rounded">
+                                    <button type="button" onClick={() => removeEquipmentFromForm(eq.id)} className="p-1 text-red-400 hover:bg-red-400/10 rounded">
                                       <span className="material-symbols-outlined text-[14px]">close</span>
                                     </button>
                                   </div>
                                 ) : (
-                                  <button
+                                  <button type="button"
                                     onClick={() => addEquipmentToForm(eq)}
                                     disabled={eq.stock <= 0}
                                     className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
@@ -4472,7 +4472,7 @@ export default function AdminDashboard() {
                 <div className="lg:col-span-2 border-t border-white/5" />
 
                 <div className="lg:col-span-2">
-                  <button
+                  <button type="button"
                     type="button"
                     onClick={() => { setShowRecurring(!showRecurring); setRecurringStep('config'); setRecurringPreview(null) }}
                     className="flex items-center gap-2.5 w-full text-left"
@@ -4507,7 +4507,7 @@ export default function AdminDashboard() {
                                   { key: 'biweekly' as const, label: 'Quincenal' },
                                   { key: 'custom' as const, label: 'Personalizada' },
                                 ]).map((f) => (
-                                  <button
+                                  <button type="button"
                                     key={f.key}
                                     type="button"
                                     onClick={() => setRecurringConfig((p) => ({ ...p, frequency: f.key }))}
@@ -4532,7 +4532,7 @@ export default function AdminDashboard() {
                                     const dayNum = idx === 6 ? 0 : idx + 1 // Mon=1, Tue=2, ... Sun=0
                                     const isSelected = recurringConfig.daysOfWeek.includes(dayNum)
                                     return (
-                                      <button
+                                      <button type="button"
                                         key={day}
                                         type="button"
                                         onClick={() => {
@@ -4559,7 +4559,7 @@ export default function AdminDashboard() {
                             <div>
                               <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Condición de fin</label>
                               <div className="grid grid-cols-2 gap-2 mb-2">
-                                <button
+                                <button type="button"
                                   type="button"
                                   onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'date' }))}
                                   className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
@@ -4570,7 +4570,7 @@ export default function AdminDashboard() {
                                 >
                                   Por fecha final
                                 </button>
-                                <button
+                                <button type="button"
                                   type="button"
                                   onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'count' }))}
                                   className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
@@ -4606,7 +4606,7 @@ export default function AdminDashboard() {
                             </div>
 
                             {/* Preview button */}
-                            <button
+                            <button type="button"
                               type="button"
                               onClick={handlePreviewRecurring}
                               disabled={previewLoading}
@@ -4647,14 +4647,14 @@ export default function AdminDashboard() {
 
                                 {/* Action buttons */}
                                 <div className="flex gap-2">
-                                  <button
+                                  <button type="button"
                                     type="button"
                                     onClick={() => { setRecurringStep('config'); setRecurringPreview(null) }}
                                     className="flex-1 py-2.5 bg-cm-surface-container-highest/40 text-cm-on-surface-variant rounded-xl text-xs font-semibold hover:bg-cm-surface-container-highest/60 transition-all"
                                   >
                                     Volver
                                   </button>
-                                  <button
+                                  <button type="button"
                                     type="button"
                                     onClick={handleCreateRecurring}
                                     disabled={creatingRecurring || recurringPreviewSummary.availableCount === 0}
@@ -4702,7 +4702,7 @@ export default function AdminDashboard() {
                       </>
                     )}
                   </div>
-                  <button
+                  <button type="button"
                     onClick={showRecurring && recurringStep === 'preview' ? handleCreateRecurring : handleCreateBooking}
                     disabled={submittingBooking || creatingRecurring}
                     className="px-8 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -4789,7 +4789,7 @@ export default function AdminDashboard() {
             </div>
 
             <DialogFooter className="mt-4 gap-2">
-              <button
+              <button type="button"
                 type="button"
                 onClick={() => { setShowNewClientDialog(false); setNewClientErrors({}) }}
                 disabled={creatingClient}
@@ -4797,7 +4797,7 @@ export default function AdminDashboard() {
               >
                 Cancelar
               </button>
-              <button
+              <button type="button"
                 type="button"
                 onClick={handleQuickCreateClient}
                 disabled={creatingClient}
@@ -4845,7 +4845,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {!submittingAdvance && (
-                  <button onClick={() => setShowAdvanceModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                  <button type="button" onClick={() => setShowAdvanceModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                     <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                   </button>
                 )}
@@ -4904,7 +4904,7 @@ export default function AdminDashboard() {
                     placeholder="0.00"
                   />
                   {advanceTarget.remainingAmount > 0 && (
-                    <button
+                    <button type="button"
                       onClick={() => setAdvanceAmount(String(advanceTarget.remainingAmount))}
                       className="text-[10px] text-amber-400 font-semibold mt-1 hover:underline font-[family-name:var(--font-inter)]"
                     >
@@ -4921,7 +4921,7 @@ export default function AdminDashboard() {
                       { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet' },
                       { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet' },
                     ].map((pm) => (
-                      <button
+                      <button type="button"
                         key={pm.key}
                         type="button"
                         onClick={() => setAdvanceMethod(pm.key)}
@@ -4939,7 +4939,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <button
+              <button type="button"
                 onClick={handleSubmitAdvance}
                 disabled={submittingAdvance || !advanceAmount || parseFloat(advanceAmount) <= 0}
                 className={`w-full mt-5 py-3 text-white rounded-xl font-semibold font-[family-name:var(--font-sora)] transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
@@ -4984,7 +4984,7 @@ export default function AdminDashboard() {
                   </div>
                   <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Equipamiento</h3>
                 </div>
-                <button onClick={() => setShowEquipDetail(null)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                <button type="button" onClick={() => setShowEquipDetail(null)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                   <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                 </button>
               </div>
@@ -5015,7 +5015,7 @@ export default function AdminDashboard() {
                     <span className="material-symbols-outlined text-[18px] text-amber-400">inventory_2</span>
                     <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Entregado</span>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentDelivered', !showEquipDetail.equipmentDelivered)}
                     className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentDelivered ? 'bg-amber-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
                   >
@@ -5027,7 +5027,7 @@ export default function AdminDashboard() {
                     <span className="material-symbols-outlined text-[18px] text-green-400">done_all</span>
                     <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Devuelto</span>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentReturned', !showEquipDetail.equipmentReturned)}
                     className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentReturned ? 'bg-green-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
                   >
@@ -5070,7 +5070,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   {seriesBookings.some((b) => b.status !== 'cancelled') && (
-                    <button
+                    <button type="button"
                       onClick={() => handleCancelSeries(seriesGroupId)}
                       disabled={cancellingSeries}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all disabled:opacity-50"
@@ -5080,7 +5080,7 @@ export default function AdminDashboard() {
                     </button>
                   )}
                   {!cancellingSeries && (
-                    <button onClick={() => setShowSeriesModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <button type="button" onClick={() => setShowSeriesModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                       <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                     </button>
                   )}
@@ -5127,7 +5127,7 @@ export default function AdminDashboard() {
             >
               <div className="flex items-center justify-between mb-4 flex-shrink-0">
                 <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Horarios del Día</h3>
-                <button onClick={() => setShowSchedule(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                <button type="button" onClick={() => setShowSchedule(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
                   <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
                 </button>
               </div>

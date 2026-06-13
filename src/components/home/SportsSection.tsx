@@ -292,7 +292,7 @@ export default function SportsSection() {
                   <label className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
                     Precios por turno
                   </label>
-                  <button
+                  <button type="button"
                     type="button"
                     onClick={() => {
                       const details = [...(sport.pricingDetails || []), { label: 'Nuevo', timeRange: '', price: 0 }]
@@ -349,7 +349,7 @@ export default function SportsSection() {
                           className="w-14 px-2 py-1 bg-transparent border border-white/10 rounded text-[10px] text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40"
                         />
                       </div>
-                      <button
+                      <button type="button"
                         type="button"
                         onClick={() => {
                           const details = (sport.pricingDetails || []).filter((_: PricingDetail, i: number) => i !== pi)

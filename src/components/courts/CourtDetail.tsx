@@ -375,8 +375,8 @@ export default function CourtDetail() {
     return map
   }, [isAdmin, bookings, selectedDate])
 
-  /* ──── Helpers for user role ──── */
-  const bookedSlotHours = useMemo(() => {
+  /* ──── Helpers for user role (plain functions — avoids Turbopack useMemo dependency array corruption) ──── */
+  const getBookedSlotHours = (): Set<number> => {
     if (isAdmin) return new Set<number>() // admin uses adminSlotMap
     const hours = new Set<number>()
     bookings.forEach((b) => {
@@ -387,9 +387,9 @@ export default function CourtDetail() {
       }
     })
     return hours
-  }, [bookings, isAdmin])
+  }
 
-  const pastHours = useMemo(() => {
+  const getPastHours = (): Set<number> => {
     const todayFlag = isToday(selectedDate)
     if (!todayFlag) return new Set<number>()
     // Admin/super_admin: NO time restrictions — no hours are blocked
@@ -398,7 +398,7 @@ export default function CourtDetail() {
     const hours = new Set<number>()
     for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
     return hours
-  }, [selectedDate, isAdmin])
+  }
 
   /* ──── Handlers ──── */
   const handleSelectDate = useCallback((date: Date) => {
@@ -424,7 +424,9 @@ export default function CourtDetail() {
       }
 
       // Guest or regular user
-      if (bookedSlotHours.has(hour) || pastHours.has(hour)) return
+      const bk = getBookedSlotHours()
+      const ph = getPastHours()
+      if (bk.has(hour) || ph.has(hour)) return
 
       if (isGuest) {
         setView('login')
@@ -433,7 +435,7 @@ export default function CourtDetail() {
 
       setSelectedTime(slot)
     },
-    [isAdmin, adminSlotMap, bookedSlotHours, pastHours, isGuest, setView]
+    [isAdmin, adminSlotMap, isGuest, setView, bookings, selectedDate]
   )
 
   const handleReservar = useCallback(() => {
@@ -488,8 +490,8 @@ export default function CourtDetail() {
     }
 
     // Guest / User role
-    const isBooked = bookedSlotHours.has(hour)
-    const isPast = pastHours.has(hour)
+    const isBooked = getBookedSlotHours().has(hour)
+    const isPast = getPastHours().has(hour)
     const isSelected = selectedTime === slot
 
     // For today's past/soon slots, show "30 min" label
@@ -559,7 +561,7 @@ export default function CourtDetail() {
           <div className="absolute inset-0 bg-gradient-to-t from-cm-background via-cm-background/30 to-transparent" />
 
           {/* Back Button */}
-          <button
+          <button type="button"
             onClick={() => setView('search')}
             className="absolute top-4 left-4 z-10 p-2 rounded-full bg-cm-surface/80 backdrop-blur-sm border border-white/10 text-cm-on-surface hover:bg-cm-surface-container transition-colors"
           >
@@ -604,7 +606,7 @@ export default function CourtDetail() {
         {images.length > 1 && (
           <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar">
             {images.map((img, idx) => (
-              <button
+              <button type="button"
                 key={idx}
                 onClick={() => setActiveImageIdx(idx)}
                 className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all duration-200 ${
@@ -760,7 +762,7 @@ export default function CourtDetail() {
               const isSelected = dateStr === formatDateISO(selectedDate)
               const todayFlag = isToday(date)
               return (
-                <button
+                <button type="button"
                   key={dateStr}
                   onClick={() => handleSelectDate(date)}
                   className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl min-w-[68px] transition-all duration-200 flex-shrink-0 ${
@@ -860,11 +862,11 @@ export default function CourtDetail() {
                   const info = adminSlotMap.get(hour)
                   return info?.status === 'past'
                 }
-                return bookedSlotHours.has(hour) || pastHours.has(hour)
+                return getBookedSlotHours().has(hour) || getPastHours().has(hour)
               })()
 
               return (
-                <button
+                <button type="button"
                   key={slot}
                   disabled={disabled}
                   onClick={() => handleSelectSlot(slot)}
@@ -897,7 +899,7 @@ export default function CourtDetail() {
                   S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
                 </p>
               </div>
-              <button
+              <button type="button"
                 onClick={handleReservar}
                 className="px-6 py-3 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
               >
@@ -925,7 +927,7 @@ export default function CourtDetail() {
                     {selectedCourtIds.length} cancha{selectedCourtIds.length > 1 ? 's' : ''} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
                   </span>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => removeSelectedCourtId(selectedCourtId!)}
                   className="text-xs text-cm-on-surface-variant hover:text-red-400 transition-colors font-[family-name:var(--font-inter)] flex items-center gap-1"
                 >
@@ -954,7 +956,7 @@ export default function CourtDetail() {
                     {selectedTime} - {endTimeStr}
                   </p>
                 </div>
-                <button
+                <button type="button"
                   onClick={handleGoToBooking}
                   className="px-6 py-3 bg-[#00ff41] text-[#003907] font-bold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
                 >
@@ -982,7 +984,7 @@ export default function CourtDetail() {
                   {selectedTime} - {endTimeStr} · S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
                 </p>
               </div>
-              <button
+              <button type="button"
                 onClick={handleReservar}
                 className="px-6 py-3 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
               >
@@ -1016,7 +1018,7 @@ export default function CourtDetail() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close */}
-              <button
+              <button type="button"
                 onClick={handleClosePopup}
                 className="absolute top-3 right-3 p-1.5 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
               >

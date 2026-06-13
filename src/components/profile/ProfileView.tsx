@@ -79,7 +79,7 @@ export default function ProfileView() {
           <p className="text-cm-on-surface-variant text-sm mb-6 font-[family-name:var(--font-inter)]">
             Accede a tu cuenta para ver tus reservas y historial
           </p>
-          <button
+          <button type="button"
             onClick={() => setView('login')}
             className="px-6 py-3 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all glow-accent font-[family-name:var(--font-sora)]"
           >
@@ -128,7 +128,7 @@ export default function ProfileView() {
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-white/5">
-            <button
+            <button type="button"
               onClick={handleLogout}
               className="flex items-center gap-2 text-red-400 text-sm hover:text-red-300 transition-colors font-[family-name:var(--font-inter)]"
             >
@@ -185,7 +185,7 @@ export default function ProfileView() {
             <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">
               Reservas Recientes
             </h2>
-            <button
+            <button type="button"
               onClick={() => setView('bookings')}
               className="text-cm-primary text-xs font-semibold hover:underline"
             >
@@ -276,7 +276,7 @@ export default function ProfileView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
           >
-            <button
+            <button type="button"
               onClick={() => setView('admin')}
               className="w-full glass-card rounded-2xl p-4 flex items-center gap-3 hover:border-cm-primary/30 transition-all group"
             >

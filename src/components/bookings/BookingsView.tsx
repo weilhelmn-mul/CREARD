@@ -227,7 +227,7 @@ export default function BookingsView() {
               Gestiona tus reservas de canchas
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setView('search')}
             className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
           >
@@ -239,7 +239,7 @@ export default function BookingsView() {
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6">
           {tabs.map((tab) => (
-            <button
+            <button type="button"
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
@@ -283,7 +283,7 @@ export default function BookingsView() {
             <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] text-base">
               No tienes reservas {activeTab === 'upcoming' ? 'próximas' : activeTab === 'completed' ? 'completadas' : 'canceladas'}
             </p>
-            <button
+            <button type="button"
               onClick={() => setView('search')}
               className="mt-4 text-cm-primary text-sm font-semibold hover:underline"
             >
@@ -447,7 +447,7 @@ export default function BookingsView() {
                             {/* Actions */}
                             <div className="flex gap-2 pt-1">
                               {booking.status === 'reserved' && booking.remainingAmount > 0 && (
-                                <button
+                                <button type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setPayModal(booking)
@@ -459,7 +459,7 @@ export default function BookingsView() {
                                 </button>
                               )}
                               {booking.status === 'reserved' && (
-                                <button
+                                <button type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleCancel(booking.id)
@@ -507,7 +507,7 @@ export default function BookingsView() {
                   Pagar Restante
                 </h3>
                 {!paying && (
-                  <button
+                  <button type="button"
                     onClick={() => setPayModal(null)}
                     className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"
                   >
@@ -534,7 +534,7 @@ export default function BookingsView() {
 
               {/* Tabs: Online / Manual */}
               <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-4">
-                <button
+                <button type="button"
                   onClick={() => setPayModalTab('online')}
                   className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
                     payModalTab === 'online'
@@ -545,7 +545,7 @@ export default function BookingsView() {
                   <span className="material-symbols-outlined text-[16px]">lock</span>
                   En Linea
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setPayModalTab('manual')}
                   className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
                     payModalTab === 'manual'
@@ -590,7 +590,7 @@ export default function BookingsView() {
                       { key: 'cash', label: 'Efectivo', icon: 'payments' },
                       { key: 'transfer', label: 'Transferencia', icon: 'account_balance' },
                     ].map((m) => (
-                      <button
+                      <button type="button"
                         key={m.key}
                         onClick={() => setPayMethod(m.key)}
                         className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
@@ -609,7 +609,7 @@ export default function BookingsView() {
 
               {/* Confirm button (only for manual) */}
               {payModalTab === 'manual' && (
-                <button
+                <button type="button"
                   onClick={handlePayRemaining}
                   disabled={paying}
                   className="w-full py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"

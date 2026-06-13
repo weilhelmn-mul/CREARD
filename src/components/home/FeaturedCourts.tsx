@@ -167,7 +167,7 @@ export default function FeaturedCourts() {
               {fcSettings?.subtitle || 'Elige tu espacio ideal y reserva al instante'}
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setView('search')}
             className="hidden sm:flex items-center gap-1 text-cm-primary text-sm font-semibold hover:text-glow transition-all group"
           >
@@ -279,7 +279,7 @@ export default function FeaturedCourts() {
                         </div>
                       )}
                     </div>
-                    <button
+                    <button type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleReserve(court.id)
@@ -302,7 +302,7 @@ export default function FeaturedCourts() {
           transition={{ duration: 0.5, delay: 0.6 }}
           className="mt-6 flex justify-center sm:hidden"
         >
-          <button
+          <button type="button"
             onClick={() => setView('search')}
             className="flex items-center gap-2 px-6 py-3 rounded-xl border border-cm-primary/30 text-cm-primary text-sm font-semibold hover:bg-cm-primary/5 transition-all"
           >

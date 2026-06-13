@@ -168,7 +168,7 @@ function CTASection({ section }: { section: CustomSection }) {
                 <Image src={section.image} alt={section.title} fill className="object-cover" unoptimized />
               </div>
             )}
-            <button
+            <button type="button"
               onClick={() => {
                 if (section.link) {
                   window.open(section.link, '_blank')

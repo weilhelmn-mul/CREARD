@@ -379,7 +379,7 @@ export default function BookingForm() {
         >
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <button
+            <button type="button"
               onClick={handleBack}
               className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
             >
@@ -452,7 +452,7 @@ export default function BookingForm() {
         >
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
-            <button
+            <button type="button"
               onClick={handleBack}
               className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
             >
@@ -835,14 +835,14 @@ export default function BookingForm() {
             transition={{ delay: 0.5 }}
             className="w-full space-y-3"
           >
-            <button
+            <button type="button"
               onClick={handleBack}
               className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2"
             >
               <span className="material-symbols-outlined text-[20px]">bookmark</span>
               Ver Mis Reservas
             </button>
-            <button
+            <button type="button"
               onClick={() => {
                 setSelectedCourt(null)
                 setSelectedDate(null)
@@ -879,7 +879,7 @@ export default function BookingForm() {
                 </p>
               </div>
             </div>
-            <button
+            <button type="button"
               disabled={submitting}
               onClick={handleSubmit}
               className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2"

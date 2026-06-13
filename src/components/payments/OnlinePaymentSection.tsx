@@ -88,7 +88,7 @@ export default function OnlinePaymentSection({
       {/* Tabs: Online / Manual */}
       {showManualOptions && (
         <div className="flex rounded-xl bg-white/5 border border-white/10 p-1">
-          <button
+          <button type="button"
             onClick={() => setActiveTab('online')}
             className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all duration-200 font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5
               ${activeTab === 'online'
@@ -99,7 +99,7 @@ export default function OnlinePaymentSection({
             <span className="material-symbols-outlined text-[16px]">lock</span>
             En Linea
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('manual')}
             className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all duration-200 font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5
               ${activeTab === 'manual'

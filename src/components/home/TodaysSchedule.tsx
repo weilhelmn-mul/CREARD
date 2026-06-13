@@ -148,7 +148,7 @@ export default function TodaysSchedule() {
             <p className="text-cm-on-surface-variant text-sm mb-5 font-[family-name:var(--font-inter)]">
               Se el primero en reservar tu cancha
             </p>
-            <button
+            <button type="button"
               onClick={() => setView('search')}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-all glow-accent font-[family-name:var(--font-sora)]"
             >

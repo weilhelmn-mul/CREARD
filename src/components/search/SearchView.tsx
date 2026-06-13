@@ -111,7 +111,7 @@ export default function SearchView() {
         {/* Sport Tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 mb-4">
           {sportTabs.map((tab) => (
-            <button
+            <button type="button"
               key={tab.value}
               onClick={() => handleSportChange(tab.value)}
               className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
@@ -242,7 +242,7 @@ export default function SearchView() {
                       S/. {court.pricePerHour}
                       <span className="text-xs text-cm-on-surface-variant font-normal">/hr</span>
                     </span>
-                    <button
+                    <button type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedCourt(court.id)
