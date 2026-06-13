@@ -15,6 +15,10 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, UserPlus, Loader2, Check } from 'lucide-react'
+import BookingsTable from './tables/BookingsTable'
+import ExpensesTable from './tables/ExpensesTable'
+import RecurringPreviewTable from './tables/RecurringPreviewTable'
+import SeriesBookingsTable from './tables/SeriesBookingsTable'
 import {
   DndContext,
   closestCenter,
@@ -32,11 +36,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-
-/* Workaround: Turbopack minifies <thead> as variable 'th' in very large files,
-   causing "Cannot access 'th' before initialization". Wrap in a tiny component. */
-const THead = ({ children, className }: { children: React.ReactNode; className?: string }) =>
-  <thead className={className}>{children}</thead>
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -3430,139 +3429,16 @@ export default function AdminDashboard() {
                 </div>
               ) : viewMode === 'table' ? (
                 /* ─── TABLE MODE ─── */
-                <div className="glass-card rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <THead>
-                        <tr className="border-b border-white/5">
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
-                          <th className="text-center px-2 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]" title="Equipamiento alquilado">Equip.</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden md:table-cell">Cliente</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
-                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Adelanto</th>
-                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Restante</th>
-                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
-                          <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
-                        </tr>
-                      </THead>
-                      <tbody>
-                        {filteredBookings.map((b) => {
-                          const st = statusConfig[b.status] || statusConfig.reserved
-                          const alertLv = getAlertLevel(b.id)
-                          const rowClass = alertLv === 'expired'
-                            ? 'bg-red-500/10 border-l-2 border-l-red-500 animate-pulse'
-                            : alertLv === 'warning'
-                            ? 'bg-amber-500/10 border-l-2 border-l-amber-500'
-                            : 'border-b border-white/[0.03] hover:bg-white/[0.02]'
-                          return (
-                            <tr key={b.id} className={`${rowClass} transition-colors`}>
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
-                                <div className="flex items-center gap-1.5">
-                                  {fmtDate(b.date)}
-                                  {b.recurringGroupId && (
-                                    <button onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
-                                      <span className="material-symbols-outlined text-[14px]">repeat</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
-                                <div className="flex items-center gap-2">
-                                  {b.startTime}-{b.endTime}
-                                  {alertLv === 'warning' && (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold animate-pulse">
-                                      <span className="material-symbols-outlined text-[10px]">timer</span>
-                                    </span>
-                                  )}
-                                  {alertLv === 'expired' && (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-bold animate-pulse">
-                                      <span className="material-symbols-outlined text-[10px]">timer_off</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
-                                  {b.courtIds && b.courtIds.length > 1
-                                    ? <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`}</span>
-                                    : <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{b.court?.name || 'N/A'}</span>
-                                  }
-                                </div>
-                              </td>
-                              <td className="px-2 py-3 text-center">
-                                {b.equipmentItems && b.equipmentItems.length > 0 ? (
-                                  <button
-                                    onClick={() => setShowEquipDetail(b)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all"
-                                    title={b.equipmentItems.map(e => `${e.name} x${e.quantity}`).join(', ')}
-                                    style={{
-                                      backgroundColor: b.equipmentReturned ? 'rgba(34,197,94,0.15)' : b.equipmentDelivered ? 'rgba(234,179,8,0.15)' : 'rgba(59,130,246,0.15)',
-                                      color: b.equipmentReturned ? '#4ade80' : b.equipmentDelivered ? '#facc15' : '#60a5fa',
-                                    }}
-                                  >
-                                    <span className="material-symbols-outlined text-[14px]">sports_tennis</span>
-                                    {b.equipmentItems.reduce((s, e) => s + e.quantity, 0)}
-                                  </button>
-                                ) : (
-                                  <span className="text-cm-on-surface-variant/30 text-xs">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 hidden md:table-cell">
-                                <div>
-                                  <p className="text-cm-on-surface font-[family-name:var(--font-sora)] text-xs">{b.user?.name || 'Sin nombre'}</p>
-                                  <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">{b.user?.email || ''}</p>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                                  {st.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-cm-on-surface font-[family-name:var(--font-inter)] hidden sm:table-cell">{fmtCurrency(b.advanceAmount)}</td>
-                              <td className={`px-4 py-3 text-right font-[family-name:var(--font-inter)] hidden sm:table-cell ${b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(b.remainingAmount)}</td>
-                              <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(b.totalPrice)}</td>
-                              <td className="px-4 py-3 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  {b.recurringGroupId && (
-                                    <button
-                                      onClick={() => openSeriesModal(b.recurringGroupId!)}
-                                      className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
-                                      title="Ver serie recurrente"
-                                    >
-                                      <span className="material-symbols-outlined text-[16px]">repeat</span>
-                                    </button>
-                                  )}
-                                  {b.remainingAmount > 0 && (
-                                    <button
-                                      onClick={() => openAdvanceModal(b)}
-                                      className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                                      title={parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto'}
-                                    >
-                                      <span className="material-symbols-outlined text-[16px]">payments</span>
-                                    </button>
-                                  )}
-                                  <select
-                                    value={b.status}
-                                    onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
-                                    className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                                  >
-                                    <option value="reserved">Reservado</option>
-                                    <option value="completed">Completo</option>
-                                    <option value="cancelled">Cancelado</option>
-                                  </select>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <BookingsTable
+                  bookings={filteredBookings}
+                  getAlertLevel={getAlertLevel}
+                  openSeriesModal={openSeriesModal}
+                  openAdvanceModal={openAdvanceModal}
+                  handleUpdateStatus={handleUpdateStatus}
+                  onShowEquipDetail={setShowEquipDetail}
+                  advanceAmount={advanceAmount}
+                  advanceTarget={advanceTarget}
+                />
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -3904,45 +3780,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Expense list */}
-              <div className="glass-card rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <THead>
-                      <tr className="border-b border-white/5">
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Descripción</th>
-                        <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Categoría</th>
-                        <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Monto</th>
-                      </tr>
-                    </THead>
-                    <tbody>
-                      {expenses.length === 0 ? (
-                        <tr><td colSpan={4} className="text-center py-12 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay gastos registrados</td></tr>
-                      ) : (
-                        expenses.map((e) => {
-                          const cat = expenseCategories[e.category] || expenseCategories.otros
-                          return (
-                            <tr key={e.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDateFull(e.created_at || e.date)}</td>
-                              <td className="px-4 py-3">
-                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{e.description}</p>
-                                {e.notes && <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)] mt-0.5">{e.notes}</p>}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cm-surface-container-highest/60 ${cat.color}`}>
-                                  <span className="material-symbols-outlined text-[12px]">{cat.icon}</span>
-                                  {cat.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-red-400 font-bold font-[family-name:var(--font-sora)]">-{fmtCurrency(e.amount)}</td>
-                            </tr>
-                          )
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <ExpensesTable expenses={expenses} />
 
               {/* Add expense modal */}
               <AnimatePresence>
@@ -4782,39 +4620,7 @@ export default function AdminDashboard() {
                                 </div>
 
                                 {/* Dates table */}
-                                <div className="max-h-60 overflow-y-auto rounded-xl border border-white/10">
-                                  <table className="w-full text-xs">
-                                    <THead className="sticky top-0 bg-cm-surface-container-highest/80 backdrop-blur-sm">
-                                      <tr className="border-b border-white/5">
-                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
-                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Día</th>
-                                        <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estado</th>
-                                        <th className="text-right px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Precio</th>
-                                      </tr>
-                                    </THead>
-                                    <tbody>
-                                      {recurringPreview.map((item, i) => (
-                                        <tr key={i} className={`border-b border-white/[0.03] ${!item.available ? 'opacity-50' : ''}`}>
-                                          <td className="px-3 py-2 text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(item.date)}</td>
-                                          <td className="px-3 py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{item.dayName}</td>
-                                          <td className="px-3 py-2">
-                                            {item.available ? (
-                                              <span className="inline-flex items-center gap-1 text-green-400">
-                                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                                <span className="font-[family-name:var(--font-inter)]">Disponible</span>
-                                              </span>
-                                            ) : (
-                                              <span className="text-red-400 font-[family-name:var(--font-inter)]">
-                                                Ocupado {item.conflict ? `(${item.conflict.startTime}-${item.conflict.endTime}, ${item.conflict.userName})` : ''}
-                                              </span>
-                                            )}
-                                          </td>
-                                          <td className="px-3 py-2 text-right text-cm-on-surface font-[family-name:var(--font-sora)]">{fmtCurrency(item.price)}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                <RecurringPreviewTable preview={recurringPreview} />
 
                                 {/* Action buttons */}
                                 <div className="flex gap-2">
@@ -5259,57 +5065,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="overflow-auto flex-1">
-                <div className="glass-card rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <THead>
-                        <tr className="border-b border-white/5">
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Cancha</th>
-                          <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
-                          <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
-                          <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
-                        </tr>
-                      </THead>
-                      <tbody>
-                        {seriesBookings.sort((a, b) => a.date.localeCompare(b.date)).map((sb) => {
-                          const st = statusConfig[sb.status] || statusConfig.reserved
-                          return (
-                            <tr key={sb.id} className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors ${sb.status === 'cancelled' ? 'opacity-40' : ''}`}>
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDate(sb.date)}</td>
-                              <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{sb.startTime}-{sb.endTime}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[sb.court?.sport || ''] || 'sports'}</span>
-                                  <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] text-xs">{sb.courtIds && sb.courtIds.length > 1 ? `${sb.courtIds.length} canchas` : (sb.court?.name || 'N/A')}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                                  {st.label}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(sb.totalPrice)}</td>
-                              <td className="px-4 py-3 text-center">
-                                {sb.status !== 'cancelled' && (
-                                  <button
-                                    onClick={() => handleCancelSingleFromSeries(sb.id)}
-                                    className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                                    title="Cancelar esta fecha"
-                                  >
-                                    <span className="material-symbols-outlined text-[16px]">event_busy</span>
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <SeriesBookingsTable bookings={seriesBookings} onCancelSingle={handleCancelSingleFromSeries} />
               </div>
 
               {/* Summary */}
