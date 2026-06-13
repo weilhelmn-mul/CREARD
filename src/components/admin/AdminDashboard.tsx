@@ -33,6 +33,11 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+/* Workaround: Turbopack minifies <thead> as variable 'th' in very large files,
+   causing "Cannot access 'th' before initialization". Wrap in a tiny component. */
+const THead = ({ children, className }: { children: React.ReactNode; className?: string }) =>
+  <thead className={className}>{children}</thead>
+
 /* ═══════════════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════════════ */
@@ -3428,7 +3433,7 @@ export default function AdminDashboard() {
                 <div className="glass-card rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead>
+                      <THead>
                         <tr className="border-b border-white/5">
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
@@ -3441,7 +3446,7 @@ export default function AdminDashboard() {
                           <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
                           <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
                         </tr>
-                      </thead>
+                      </THead>
                       <tbody>
                         {filteredBookings.map((b) => {
                           const st = statusConfig[b.status] || statusConfig.reserved
@@ -3902,14 +3907,14 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
+                    <THead>
                       <tr className="border-b border-white/5">
                         <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
                         <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Descripción</th>
                         <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Categoría</th>
                         <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Monto</th>
                       </tr>
-                    </thead>
+                    </THead>
                     <tbody>
                       {expenses.length === 0 ? (
                         <tr><td colSpan={4} className="text-center py-12 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay gastos registrados</td></tr>
@@ -4779,14 +4784,14 @@ export default function AdminDashboard() {
                                 {/* Dates table */}
                                 <div className="max-h-60 overflow-y-auto rounded-xl border border-white/10">
                                   <table className="w-full text-xs">
-                                    <thead className="sticky top-0 bg-cm-surface-container-highest/80 backdrop-blur-sm">
+                                    <THead className="sticky top-0 bg-cm-surface-container-highest/80 backdrop-blur-sm">
                                       <tr className="border-b border-white/5">
                                         <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
                                         <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Día</th>
                                         <th className="text-left px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estado</th>
                                         <th className="text-right px-3 py-2 text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Precio</th>
                                       </tr>
-                                    </thead>
+                                    </THead>
                                     <tbody>
                                       {recurringPreview.map((item, i) => (
                                         <tr key={i} className={`border-b border-white/[0.03] ${!item.available ? 'opacity-50' : ''}`}>
@@ -5257,7 +5262,7 @@ export default function AdminDashboard() {
                 <div className="glass-card rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead>
+                      <THead>
                         <tr className="border-b border-white/5">
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Fecha</th>
                           <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Hora</th>
@@ -5266,7 +5271,7 @@ export default function AdminDashboard() {
                           <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
                           <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
                         </tr>
-                      </thead>
+                      </THead>
                       <tbody>
                         {seriesBookings.sort((a, b) => a.date.localeCompare(b.date)).map((sb) => {
                           const st = statusConfig[sb.status] || statusConfig.reserved
