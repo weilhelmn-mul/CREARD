@@ -2436,6 +2436,78 @@ export default function AdminDashboard() {
     }
   }, [])
 
+  /* ─── booking form helpers (declared BEFORE any useCallback that references them,
+       to avoid Turbopack minification reordering bug) ─── */
+  const calculateHours = (start: string, end: string): number => {
+    const [sh, sm] = start.split(':').map(Number)
+    const [eh, em] = end.split(':').map(Number)
+    const diff = (eh * 60 + em) - (sh * 60 + sm)
+    return Math.max(diff / 60, 0.5)
+  }
+
+  const calculatePriceForTimeSlot = (schedule: PricingScheduleItem[], startTime: string, endTime: string): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } => {
+    const [startH, startM] = startTime.split(':').map(Number)
+    const [endH, endM] = endTime.split(':').map(Number)
+    const startDecimal = startH + startM / 60
+    const endDecimal = endH + endM / 60
+
+    if (schedule.length === 0) return { total: 0, breakdown: [] }
+
+    const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+    let total = 0
+    let cursor = startDecimal
+    const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
+
+    for (const slot of sorted) {
+      if (cursor >= slot.endHour) continue
+      const overlapStart = Math.max(cursor, slot.startHour)
+      const overlapEnd = Math.min(endDecimal, slot.endHour)
+      if (overlapEnd > overlapStart) {
+        const hours = overlapEnd - overlapStart
+        const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
+        breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
+        total += subtotal
+        cursor = overlapEnd
+      }
+    }
+    return { total: Math.round(total * 100) / 100, breakdown }
+  }
+
+  /** Calculate total price for ALL selected courts combined */
+  const calculateMultiCourtPrice = (courtIds: string[], startTime: string, endTime: string): number => {
+    let total = 0
+    for (const cId of courtIds) {
+      const court = bookingCourtDetails.find((c) => c.id === cId)
+      if (!court) continue
+      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+        const { total: slotTotal } = calculatePriceForTimeSlot(court.pricingSchedule, startTime, endTime)
+        total += slotTotal > 0 ? slotTotal : court.pricePerHour * calculateHours(startTime, endTime)
+      } else {
+        total += court.pricePerHour * calculateHours(startTime, endTime)
+      }
+    }
+    return Math.round(total * 100) / 100
+  }
+
+  const handleBookingFormChange = (field: string, value: string) => {
+    setBookingForm((prev) => {
+      const updated = { ...prev, [field]: value }
+      // Auto-calculate price when courts or times change — sum ALL selected courts
+      if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
+        const ids = updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : [])
+        if (ids.length > 0 && updated.startTime && updated.endTime) {
+          const price = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+          updated.totalPrice = String(price)
+          if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+          }
+        }
+      }
+      return updated
+    })
+    if (formErrors[field]) setFormErrors((prev) => { const next = { ...prev }; delete next[field]; return next })
+  }
+
   /* ─── quick client creation from booking modal ─── */
   const openNewClientDialog = useCallback((prefillName?: string) => {
     setNewClientForm({ name: prefillName?.trim() || '', email: '', phone: '' })
@@ -2515,77 +2587,7 @@ export default function AdminDashboard() {
   const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
   const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
 
-  /* ─── booking form handlers ─── */
-  const calculatePriceForTimeSlot = (schedule: PricingScheduleItem[], startTime: string, endTime: string): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } => {
-    const [startH, startM] = startTime.split(':').map(Number)
-    const [endH, endM] = endTime.split(':').map(Number)
-    const startDecimal = startH + startM / 60
-    const endDecimal = endH + endM / 60
-
-    if (schedule.length === 0) return { total: 0, breakdown: [] }
-
-    const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
-    let total = 0
-    let cursor = startDecimal
-    const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
-
-    for (const slot of sorted) {
-      if (cursor >= slot.endHour) continue
-      const overlapStart = Math.max(cursor, slot.startHour)
-      const overlapEnd = Math.min(endDecimal, slot.endHour)
-      if (overlapEnd > overlapStart) {
-        const hours = overlapEnd - overlapStart
-        const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
-        breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
-        total += subtotal
-        cursor = overlapEnd
-      }
-    }
-    return { total: Math.round(total * 100) / 100, breakdown }
-  }
-
-  /** Calculate total price for ALL selected courts combined */
-  const calculateMultiCourtPrice = (courtIds: string[], startTime: string, endTime: string): number => {
-    let total = 0
-    for (const cId of courtIds) {
-      const court = bookingCourtDetails.find((c) => c.id === cId)
-      if (!court) continue
-      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
-        const { total: slotTotal } = calculatePriceForTimeSlot(court.pricingSchedule, startTime, endTime)
-        total += slotTotal > 0 ? slotTotal : court.pricePerHour * calculateHours(startTime, endTime)
-      } else {
-        total += court.pricePerHour * calculateHours(startTime, endTime)
-      }
-    }
-    return Math.round(total * 100) / 100
-  }
-
-  const handleBookingFormChange = (field: string, value: string) => {
-    setBookingForm((prev) => {
-      const updated = { ...prev, [field]: value }
-      // Auto-calculate price when courts or times change — sum ALL selected courts
-      if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
-        const ids = updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : [])
-        if (ids.length > 0 && updated.startTime && updated.endTime) {
-          const price = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
-          updated.totalPrice = String(price)
-          if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
-            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-          }
-        }
-      }
-      return updated
-    })
-    if (formErrors[field]) setFormErrors((prev) => { const next = { ...prev }; delete next[field]; return next })
-  }
-
-  const calculateHours = (start: string, end: string): number => {
-    const [sh, sm] = start.split(':').map(Number)
-    const [eh, em] = end.split(':').map(Number)
-    const diff = (eh * 60 + em) - (sh * 60 + sm)
-    return Math.max(diff / 60, 0.5)
-  }
-
+  /* ─── booking form validation ─── */
   const validateBookingForm = (): boolean => {
     const errors: Record<string, string> = {}
     if (bookingForm.courtIds.length === 0) errors.courtId = 'Selecciona al menos una cancha'
