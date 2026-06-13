@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+  "installCommand": "npm install",
+  "outputDirectory": ".next/standalone"
+}
