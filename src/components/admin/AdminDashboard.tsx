@@ -2637,18 +2637,16 @@ export default function AdminDashboard() {
     })
   }, [])
 
-  // Effect: whenever selectedEquipItems changes, update totalPrice
+  // Effect: whenever selectedEquipItems changes, update totalPrice (court price + equipment)
   useEffect(() => {
-    // Find current court-only price by looking at court details
-    const courtPrice = bookingCourtDetails.reduce((sum, c) => {
-      const idx = bookingForm.courtIds.indexOf(c.id)
-      if (idx === -1 && bookingForm.courtId !== c.id) return sum
-      const hrs = calculateHours(bookingForm.startTime, bookingForm.endTime)
-      return sum + c.pricePerHour * hrs
-    }, 0)
+    if (bookingForm.courtIds.length === 0 && !bookingForm.courtId) return
+    if (!bookingForm.startTime || !bookingForm.endTime) return
+    // Use the same calculation as handleBookingFormChange — respects pricing schedules
+    const ids = bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId]
+    const courtPrice = calculateMultiCourtPrice(ids, bookingForm.startTime, bookingForm.endTime)
     const newTotal = courtPrice + equipmentFormTotal
     if (courtPrice > 0 && newTotal > 0) {
-      setBookingForm(prev => ({ ...prev, totalPrice: String(newTotal) }))
+      setBookingForm(prev => ({ ...prev, totalPrice: String(Math.round(newTotal * 100) / 100) }))
     }
   }, [selectedEquipItems, bookingForm.courtIds, bookingForm.courtId, bookingForm.startTime, bookingForm.endTime])
 
@@ -2664,7 +2662,7 @@ export default function AdminDashboard() {
         endTime: bookingForm.endTime,
         totalPrice: parseFloat(bookingForm.totalPrice),
         advanceAmount: parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5,
-        remainingAmount: parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5),
+        remainingAmount: parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || 0),
         status: bookingForm.status,
         paymentMethod: bookingForm.paymentMethod,
         notes: bookingForm.notes || null,
@@ -2683,7 +2681,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
         setFormErrors({})
         setSelectedEquipItems([])
         setShowEquipPanel(false)
@@ -2700,6 +2698,11 @@ export default function AdminDashboard() {
   }
 
   const openBookingForm = () => {
+    // Reset form to clean defaults
+    setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
+    setFormErrors({})
+    setSelectedEquipItems([])
+    setShowEquipPanel(false)
     loadBookingFormData()
     setShowBookingForm(true)
     setClientDropdownOpen(false)
@@ -2818,7 +2821,7 @@ export default function AdminDashboard() {
           description: `${created} reservas recurrentes creadas exitosamente${data.conflictCount > 0 ? ` (${data.conflictCount} conflictos omitidos)` : ''}`,
         })
         setShowBookingForm(false)
-        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'cash', notes: '' })
+        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
         setFormErrors({})
         setShowRecurring(false)
         setRecurringStep('config')
@@ -4109,23 +4112,23 @@ export default function AdminDashboard() {
                         </button>
                         {endTimeDrop && (
                           <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
-                            {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
-                              const val = `${String(h).padStart(2, '0')}:00`
-                              return (
-                                <button
-                                  key={h}
-                                  type="button"
-                                  onClick={() => { handleBookingFormChange('endTime', val); setEndTimeDrop(false) }}
-                                  className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
-                                    bookingForm.endTime === val
+                            {timeSlots.map((ts) => (
+                              <button
+                                key={`end-${ts.value}`}
+                                type="button"
+                                disabled={ts.disabled || ts.value <= bookingForm.startTime}
+                                onClick={() => { handleBookingFormChange('endTime', ts.value); setEndTimeDrop(false) }}
+                                className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
+                                  ts.disabled || ts.value <= bookingForm.startTime
+                                    ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
+                                    : bookingForm.endTime === ts.value
                                       ? 'bg-cm-primary/15 text-cm-primary'
                                       : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                                  }`}
-                                >
-                                  {val}
-                                </button>
-                              )
-                            })}
+                                }`}
+                              >
+                                {ts.value}
+                              </button>
+                            ))}
                           </div>
                         )}
                         {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
