@@ -281,3 +281,26 @@ Stage Summary:
   5. Equipment price effect: usa calculateMultiCourtPrice() para respetar pricing schedules
 - Deploy: https://creard.vercel.app (build 3dbmuEAnLxZnnwfXYmmVPJN7CHPF)
 - Commit: ad74f5a "fix: funcionalidad completa de Nueva Reserva"
+---
+Task ID: 2
+Agent: main
+Task: Analisis profundo y reparacion completa de Nueva Reserva + deploy
+
+Work Log:
+- Analisis exhaustivo de 5,180+ lineas de AdminDashboard.tsx
+- Analisis completo de API routes (bookings, recurring, usuarios)
+- Encontrados 10 bugs (1 CRITICAL, 1 HIGH, 3 MEDIUM, 5 LOW)
+- Corregidos 6 bugs (todos CRITICAL, HIGH y MEDIUM + 2 LOW)
+- Build exitoso sin errores
+- Push a GitHub
+- Deploy a Vercel production exitoso
+
+Stage Summary:
+- CRITICAL fix: equipment subtotal siempre 0 en servidor (snake_case mismatch unitPrice vs unit_price)
+- HIGH fix: equipment items ahora se incluyen en reservas recurrentes (frontend + API)
+- MEDIUM fix: error de cancha se limpia inmediatamente al seleccionar
+- MEDIUM fix: validacion adelanto > total con mensaje de error visual
+- LOW fix: non-null assertion reemplazado por ?? 0
+- LOW fix: reset completo de estado en reservas recurrentes exitosas
+- Deploy: https://creard.vercel.app (build 9kXnFC17qNZNGJNWBoe729zNkt4z)
+- Commit: a5b7c24
