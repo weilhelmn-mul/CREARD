@@ -4122,11 +4122,15 @@ export default function AdminDashboard() {
               </div>
 
               <div className="overflow-y-auto flex-1 pr-1">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* ─── LEFT COLUMN: Court + Date + Time ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-5">
 
-                {/* Courts - Fixed grid cards (no scrollbar) */}
-                <div className="lg:col-span-3">
+                {/* ═══ SECTION 1 — Cancha y Horario ═══ */}
+                <div className="lg:col-span-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-6 h-6 rounded-lg bg-cm-primary/15 text-cm-primary text-[11px] font-bold flex items-center justify-center font-[family-name:var(--font-sora)]">1</span>
+                    <h4 className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cancha y Horario</h4>
+                  </div>
+
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Cancha(s) *</label>
                     <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
@@ -4199,10 +4203,142 @@ export default function AdminDashboard() {
                     })}
                   </div>
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                    <div>
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Fecha *</label>
+                      <input
+                        type="date"
+                        value={bookingForm.date}
+                        onChange={(e) => handleBookingFormChange('date', e.target.value)}
+                        min={todayStr()}
+                        className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.date ? 'border-red-400' : 'border-white/10'}`}
+                      />
+                      {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="relative">
+                        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
+                          Hora inicio *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
+                          className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
+                        >
+                          <span className="text-cm-on-surface">{bookingForm.startTime}</span>
+                          <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                        </button>
+                        {startTimeDrop && (
+                          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
+                            {timeSlots.map((ts) => (
+                              <button
+                                key={ts.value}
+                                type="button"
+                                disabled={ts.disabled}
+                                onClick={() => { handleBookingFormChange('startTime', ts.value); setStartTimeDrop(false) }}
+                                className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
+                                  ts.disabled
+                                    ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
+                                    : bookingForm.startTime === ts.value
+                                      ? 'bg-cm-primary/15 text-cm-primary'
+                                      : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
+                                }`}
+                              >
+                                {ts.value}{ts.label ? ` (${ts.label})` : ''}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
+                        <button
+                          type="button"
+                          onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
+                          className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
+                        >
+                          <span className="text-cm-on-surface">{bookingForm.endTime}</span>
+                          <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
+                        </button>
+                        {endTimeDrop && (
+                          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
+                            {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
+                              const val = `${String(h).padStart(2, '0')}:00`
+                              return (
+                                <button
+                                  key={h}
+                                  type="button"
+                                  onClick={() => { handleBookingFormChange('endTime', val); setEndTimeDrop(false) }}
+                                  className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
+                                    bookingForm.endTime === val
+                                      ? 'bg-cm-primary/15 text-cm-primary'
+                                      : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
+                                  }`}
+                                >
+                                  {val}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {bookingForm.totalPrice && (bookingForm.courtIds.length > 1 || (bookingCourtDetails.find((c) => c.id === bookingForm.courtId)?.pricingSchedule?.length > 0 && bookingForm.startTime && bookingForm.endTime)) && (
+                    <div className="mt-3 p-2.5 rounded-lg bg-cm-surface-container-highest/30 space-y-1">
+                    {bookingForm.courtIds.length > 1 && bookingForm.startTime && bookingForm.endTime && (
+                      <>
+                        <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por cancha:</p>
+                        {bookingForm.courtIds.map((cId) => {
+                          const court = bookingCourtDetails.find((c) => c.id === cId)
+                          if (!court) return null
+                          const courtPrice = calculateMultiCourtPrice([cId], bookingForm.startTime, bookingForm.endTime)
+                          return (
+                            <div key={cId} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                              <span className="text-cm-on-surface-variant truncate mr-2">{court.name}</span>
+                              <span className="text-cm-on-surface whitespace-nowrap">S/ {courtPrice.toFixed(2)}</span>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+                    {/* Time-slot breakdown for single court */}
+                    {(() => {
+                      if (bookingForm.courtIds.length > 1) return null
+                      const court = bookingCourtDetails.find((c) => c.id === bookingForm.courtId)
+                      if (court && court.pricingSchedule && court.pricingSchedule.length > 0 && bookingForm.startTime && bookingForm.endTime) {
+                        const { breakdown } = calculatePriceForTimeSlot(court.pricingSchedule, bookingForm.startTime, bookingForm.endTime)
+                        if (breakdown.length > 0) {
+                          return (
+                            <>
+                              <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por horario:</p>
+                              {breakdown.map((b, i) => (
+                                <div key={i} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
+                                  <span className="text-cm-on-surface-variant">{b.label} ({b.hours}h × S/ {b.pricePerHour})</span>
+                                  <span className="text-cm-on-surface">S/ {b.subtotal.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </>
+                          )
+                        }
+                      }
+                      return null
+                    })()}
+                    </div>
+                  )}
                 </div>
 
-                {/* Client - Combobox with Popover+Command (portal renders outside modal overflow) */}
+                <div className="lg:col-span-2 border-t border-white/5" />
+
+                {/* ═══ SECTION 2 — Cliente ═══ */}
                 <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-6 h-6 rounded-lg bg-cm-primary/15 text-cm-primary text-[11px] font-bold flex items-center justify-center font-[family-name:var(--font-sora)]">2</span>
+                    <h4 className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cliente</h4>
+                  </div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Cliente *</label>
                     <button
@@ -4318,192 +4454,12 @@ export default function AdminDashboard() {
                   {formErrors.userId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.userId}</p>}
                 </div>
 
-                {/* Date */}
+                {/* ═══ SECTION 3 — Pago ═══ */}
                 <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Fecha *</label>
-                  <input
-                    type="date"
-                    value={bookingForm.date}
-                    onChange={(e) => handleBookingFormChange('date', e.target.value)}
-                    min={todayStr()}
-                    className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.date ? 'border-red-400' : 'border-white/10'}`}
-                  />
-                  {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
-                </div>
-
-                {/* Time - Custom dropdowns (native select clipped by modal overflow) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="relative">
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
-                      Hora inicio *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
-                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
-                    >
-                      <span className="text-cm-on-surface">{bookingForm.startTime}</span>
-                      <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
-                    </button>
-                    {startTimeDrop && (
-                      <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
-                        {timeSlots.map((ts) => (
-                          <button
-                            key={ts.value}
-                            type="button"
-                            disabled={ts.disabled}
-                            onClick={() => { handleBookingFormChange('startTime', ts.value); setStartTimeDrop(false) }}
-                            className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
-                              ts.disabled
-                                ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
-                                : bookingForm.startTime === ts.value
-                                  ? 'bg-cm-primary/15 text-cm-primary'
-                                  : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                            }`}
-                          >
-                            {ts.value}{ts.label ? ` (${ts.label})` : ''}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-6 h-6 rounded-lg bg-cm-primary/15 text-cm-primary text-[11px] font-bold flex items-center justify-center font-[family-name:var(--font-sora)]">3</span>
+                    <h4 className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pago</h4>
                   </div>
-                  <div className="relative">
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
-                    <button
-                      type="button"
-                      onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
-                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
-                    >
-                      <span className="text-cm-on-surface">{bookingForm.endTime}</span>
-                      <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
-                    </button>
-                    {endTimeDrop && (
-                      <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
-                        {Array.from({ length: 18 }, (_, i) => i + 7).map((h) => {
-                          const val = `${String(h).padStart(2, '0')}:00`
-                          return (
-                            <button
-                              key={h}
-                              type="button"
-                              onClick={() => { handleBookingFormChange('endTime', val); setEndTimeDrop(false) }}
-                              className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
-                                bookingForm.endTime === val
-                                  ? 'bg-cm-primary/15 text-cm-primary'
-                                  : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                              }`}
-                            >
-                              {val}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                    {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
-                  </div>
-                </div>
-
-                {/* ─── RIGHT COLUMN: Price + Equipment + Status ─── */}
-
-                {/* Price & Advance */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio total (S/) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={bookingForm.totalPrice}
-                      onChange={(e) => handleBookingFormChange('totalPrice', e.target.value)}
-                      placeholder="0.00"
-                      className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.totalPrice ? 'border-red-400' : 'border-white/10'}`}
-                    />
-                    {formErrors.totalPrice && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.totalPrice}</p>}
-                  </div>
-                  <div>
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Adelanto (S/)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={bookingForm.advanceAmount}
-                      onChange={(e) => handleBookingFormChange('advanceAmount', e.target.value)}
-                      placeholder="50%"
-                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                    />
-                  </div>
-                </div>
-
-                {/* Price preview */}
-                {bookingForm.totalPrice && (
-                  <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1">
-                    {/* Per-court breakdown */}
-                    {bookingForm.courtIds.length > 1 && bookingForm.startTime && bookingForm.endTime && (
-                      <>
-                        <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por cancha:</p>
-                        {bookingForm.courtIds.map((cId) => {
-                          const court = bookingCourtDetails.find((c) => c.id === cId)
-                          if (!court) return null
-                          const courtPrice = calculateMultiCourtPrice([cId], bookingForm.startTime, bookingForm.endTime)
-                          return (
-                            <div key={cId} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
-                              <span className="text-cm-on-surface-variant truncate mr-2">{court.name}</span>
-                              <span className="text-cm-on-surface whitespace-nowrap">S/ {courtPrice.toFixed(2)}</span>
-                            </div>
-                          )
-                        })}
-                      </>
-                    )}
-                    {/* Time-slot breakdown for single court */}
-                    {(() => {
-                      if (bookingForm.courtIds.length > 1) return null
-                      const court = bookingCourtDetails.find((c) => c.id === bookingForm.courtId)
-                      if (court && court.pricingSchedule && court.pricingSchedule.length > 0 && bookingForm.startTime && bookingForm.endTime) {
-                        const { breakdown } = calculatePriceForTimeSlot(court.pricingSchedule, bookingForm.startTime, bookingForm.endTime)
-                        if (breakdown.length > 0) {
-                          return (
-                            <>
-                              <p className="text-[10px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1">Desglose por horario:</p>
-                              {breakdown.map((b, i) => (
-                                <div key={i} className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
-                                  <span className="text-cm-on-surface-variant">{b.label} ({b.hours}h × S/ {b.pricePerHour})</span>
-                                  <span className="text-cm-on-surface">S/ {b.subtotal.toFixed(2)}</span>
-                                </div>
-                              ))}
-                            </>
-                          )
-                        }
-                      }
-                      return null
-                    })()}
-                    <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
-                      <span className="text-cm-on-surface-variant">Adelanto</span>
-                      <span className="text-cm-on-surface">{fmtCurrency(parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-[family-name:var(--font-inter)]">
-                      <span className="text-cm-on-surface-variant">Restante</span>
-                      <span className="text-orange-400">{fmtCurrency(parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5))}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-[family-name:var(--font-sora)] pt-1 border-t border-white/5">
-                      <span className="text-cm-on-surface font-medium">Total</span>
-                      <span className="text-cm-primary font-bold">{fmtCurrency(parseFloat(bookingForm.totalPrice))}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Status */}
-                <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Estado inicial</label>
-                  <select
-                    value={bookingForm.status}
-                    onChange={(e) => handleBookingFormChange('status', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                  >
-                    <option value="reserved">Reservado</option>
-                    <option value="completed">Completo</option>
-                    <option value="cancelled">Cancelado</option>
-                  </select>
-                </div>
-
-                {/* Payment method */}
-                <div>
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
@@ -4526,10 +4482,61 @@ export default function AdminDashboard() {
                       </button>
                     ))}
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio total (S/) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={bookingForm.totalPrice}
+                        onChange={(e) => handleBookingFormChange('totalPrice', e.target.value)}
+                        placeholder="0.00"
+                        className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${formErrors.totalPrice ? 'border-red-400' : 'border-white/10'}`}
+                      />
+                      {formErrors.totalPrice && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.totalPrice}</p>}
+                    </div>
+                    <div>
+                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Adelanto (S/)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={bookingForm.advanceAmount}
+                        onChange={(e) => handleBookingFormChange('advanceAmount', e.target.value)}
+                        placeholder="50%"
+                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Estado inicial</label>
+                  <select
+                    value={bookingForm.status}
+                    onChange={(e) => handleBookingFormChange('status', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                  >
+                    <option value="reserved">Reservado</option>
+                    <option value="completed">Completo</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
                 </div>
 
-                {/* ═══ Equipment Selection ═══ */}
-                <div className="border-t border-white/5 pt-3">
+                <div className="lg:col-span-2 border-t border-white/5" />
+
+                <div className="lg:col-span-2">
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Notas</label>
+                  <textarea
+                    value={bookingForm.notes}
+                    onChange={(e) => handleBookingFormChange('notes', e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 resize-none font-[family-name:var(--font-inter)]"
+                    placeholder="Notas opcionales..."
+                  />
+                </div>
+
+                <div className="lg:col-span-2 border-t border-white/5" />
+
+                <div className="lg:col-span-2">
                   <button
                     type="button"
                     onClick={() => setShowEquipPanel(!showEquipPanel)}
@@ -4596,20 +4603,9 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                {/* Notes */}
-                <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Notas</label>
-                  <textarea
-                    value={bookingForm.notes}
-                    onChange={(e) => handleBookingFormChange('notes', e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 resize-none font-[family-name:var(--font-inter)]"
-                    placeholder="Notas opcionales..."
-                  />
-                </div>
+                <div className="lg:col-span-2 border-t border-white/5" />
 
-                {/* ═══ Recurring Booking Toggle ═══ */}
-                <div className="border-t border-white/5 pt-3">
+                <div className="lg:col-span-2">
                   <button
                     type="button"
                     onClick={() => { setShowRecurring(!showRecurring); setRecurringStep('config'); setRecurringPreview(null) }}
@@ -4845,20 +4841,46 @@ export default function AdminDashboard() {
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
-                </div>{/* end grid */}
 
-              <button
-                onClick={showRecurring && recurringStep === 'preview' ? handleCreateRecurring : handleCreateBooking}
-                disabled={submittingBooking || creatingRecurring}
-                className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2 flex-shrink-0"
-              >
-                {(submittingBooking || creatingRecurring) ? (
-                  <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando reserva...</>
-                ) : (
-                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> {showRecurring ? 'Crear Reserva Individual' : 'Crear Reserva'}</>
-                )}
-              </button>
+                </div>{/* end grid */}
+              </div>
+
+              {/* ─── Sticky Footer with Price Summary ─── */}
+              <div className="flex-shrink-0 border-t border-white/10 mt-4 pt-4 bg-cm-surface-container/80 backdrop-blur-sm -mx-6 -mb-6 px-6 pb-6 rounded-b-2xl">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    {bookingForm.totalPrice && (
+                      <>
+                        <div className="text-center">
+                          <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Total</p>
+                          <p className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{fmtCurrency(parseFloat(bookingForm.totalPrice))}</p>
+                        </div>
+                        <div className="w-px h-8 bg-white/10" />
+                        <div className="text-center">
+                          <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto</p>
+                          <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{fmtCurrency(parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5)}</p>
+                        </div>
+                        <div className="w-px h-8 bg-white/10" />
+                        <div className="text-center">
+                          <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante</p>
+                          <p className="text-sm font-semibold text-orange-400 font-[family-name:var(--font-sora)]">{fmtCurrency(parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5))}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={showRecurring && recurringStep === 'preview' ? handleCreateRecurring : handleCreateBooking}
+                    disabled={submittingBooking || creatingRecurring}
+                    className="px-8 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {(submittingBooking || creatingRecurring) ? (
+                      <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando...</>
+                    ) : (
+                      <><span className="material-symbols-outlined text-[20px]">check_circle</span> Crear Reserva</>
+                    )}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}
