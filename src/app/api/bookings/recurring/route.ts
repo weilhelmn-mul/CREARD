@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
       startDate, frequency, daysOfWeek,
       endDate, count, totalPrice, advanceAmount,
       status, paymentMethod, notes, dryRun,
+      equipmentItems,
     } = body;
 
     // Resolve all court IDs (support both single courtId and multi-court courtIds)
@@ -155,7 +156,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Price per booking
-    const price = parseFloat(totalPrice) || 0;
+    const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
+    let equipmentSubtotal = 0;
+    for (const eq of eqItems) {
+      equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
+    }
+    const courtPrice = parseFloat(totalPrice) || 0;
+    const price = courtPrice + equipmentSubtotal;
     const adv = parseFloat(advanceAmount) || price * 0.5;
 
     // Check each date for conflicts (no time restrictions — admin-only endpoint)
@@ -244,6 +251,9 @@ export async function POST(request: NextRequest) {
         start_time: startTime,
         end_time: endTime,
         total_price: price,
+        court_subtotal: courtPrice,
+        equipment_subtotal: equipmentSubtotal,
+        equipment_items: eqItems,
         advance_amount: adv,
         remaining_amount: price - adv,
         status: bookingStatus,

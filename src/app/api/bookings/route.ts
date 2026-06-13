@@ -458,7 +458,7 @@ export async function POST(request: NextRequest) {
     const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
     let equipmentSubtotal = 0;
     for (const eq of eqItems) {
-      equipmentSubtotal += (eq.quantity || 0) * (eq.unitPrice || 0);
+      equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
     }
     const price = courtPriceTotal + equipmentSubtotal;
 

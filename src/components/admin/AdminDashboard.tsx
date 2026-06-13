@@ -2597,6 +2597,7 @@ export default function AdminDashboard() {
     if (!bookingForm.endTime) errors.endTime = 'Hora de fin requerida'
     if (bookingForm.startTime >= bookingForm.endTime) errors.endTime = 'La hora de fin debe ser posterior'
     if (!bookingForm.totalPrice || parseFloat(bookingForm.totalPrice) <= 0) errors.totalPrice = 'El precio debe ser mayor a 0'
+    if (bookingForm.advanceAmount && parseFloat(bookingForm.advanceAmount) > parseFloat(bookingForm.totalPrice)) errors.advanceAmount = 'El adelanto no puede superar el total'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -2745,6 +2746,12 @@ export default function AdminDashboard() {
         status: bookingForm.status,
         paymentMethod: bookingForm.paymentMethod,
         notes: bookingForm.notes || null,
+        equipmentItems: selectedEquipItems.length > 0 ? selectedEquipItems.map(i => ({
+          equipment_id: i.equipmentId,
+          name: i.name,
+          quantity: i.quantity,
+          unit_price: i.unitPrice,
+        })) : undefined,
         dryRun: true,
       }
       if (recurringConfig.frequency === 'custom') {
@@ -2797,6 +2804,12 @@ export default function AdminDashboard() {
         status: bookingForm.status,
         paymentMethod: bookingForm.paymentMethod,
         notes: bookingForm.notes || null,
+        equipmentItems: selectedEquipItems.length > 0 ? selectedEquipItems.map(i => ({
+          equipment_id: i.equipmentId,
+          name: i.name,
+          quantity: i.quantity,
+          unit_price: i.unitPrice,
+        })) : undefined,
         dryRun: false,
       }
       if (recurringConfig.frequency === 'custom') {
@@ -2823,6 +2836,8 @@ export default function AdminDashboard() {
         setShowBookingForm(false)
         setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
         setFormErrors({})
+        setSelectedEquipItems([])
+        setShowEquipPanel(false)
         setShowRecurring(false)
         setRecurringStep('config')
         setRecurringPreview(null)
@@ -4022,6 +4037,7 @@ export default function AdminDashboard() {
                               }
                               return updated
                             })
+                            if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
                           }}
                           className={`relative border-2 rounded-xl p-4 flex flex-col justify-between text-left transition-all ${
                             isSelected
@@ -4355,6 +4371,7 @@ export default function AdminDashboard() {
                         placeholder="50%"
                         className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                       />
+                      {formErrors.advanceAmount && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.advanceAmount}</p>}
                     </div>
                   </div>
 
@@ -4856,7 +4873,7 @@ export default function AdminDashboard() {
                   <span className="text-cm-on-surface-variant">Restante</span>
                   <span className="text-orange-400 font-semibold">{fmtCurrency(advanceTarget.remainingAmount)}</span>
                 </div>
-                {(advanceTarget.courtSubtotal !== undefined && advanceTarget.equipmentSubtotal! > 0) && (
+                {(advanceTarget.courtSubtotal !== undefined && (advanceTarget.equipmentSubtotal ?? 0) > 0) && (
                   <>
                     <div className="flex justify-between text-[10px] font-[family-name:var(--font-inter)] pt-1 border-t border-white/5">
                       <span className="text-cm-on-surface-variant">Subtotal Cancha</span>
