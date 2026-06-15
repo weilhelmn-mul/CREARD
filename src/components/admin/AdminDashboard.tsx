@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
@@ -2285,7 +2285,6 @@ export default function AdminDashboard() {
     totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '',
   })
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string; phone?: string | null }>>([])
-  const [bookingCourtDetails, setBookingCourtDetails] = useState<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>([])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
@@ -2399,40 +2398,37 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  /* fetch users & court details for booking form */
+  /* Derive booking court list from allCourts — deduplicated by id */
+  const bookingCourtDetails = useMemo(() => {
+    const seen = new Set<string>()
+    return allCourts.reduce<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>((acc, c) => {
+      if (seen.has(c.id)) return acc
+      seen.add(c.id)
+      acc.push({
+        id: c.id,
+        name: c.name,
+        sport: c.sport || '',
+        pricePerHour: c.pricePerHour || 0,
+        pricingSchedule: Array.isArray((c as Record<string, unknown>).pricingSchedule) ? (c as Record<string, unknown>).pricingSchedule as PricingScheduleItem[] : [],
+      })
+      return acc
+    }, [])
+  }, [allCourts])
+
+  /* fetch users for booking form (courts come from allCourts, deduplicated) */
   const loadBookingFormData = useCallback(async () => {
     try {
       const headers = getAuthHeaders()
-      const [usersRes, courtsRes] = await Promise.all([
-        fetch('/api/admin/users', { headers }),
-        fetch('/api/courts', { headers }),
-      ])
+      const usersRes = await fetch('/api/admin/users', { headers })
       if (usersRes.ok) {
         const data = await usersRes.json()
         const users = Array.isArray(data) ? data : []
         setBookingUsers(users)
-        if (users.length === 0) {
-          console.warn('[loadBookingFormData] No users returned from API')
-        }
       } else {
-        const err = await usersRes.json().catch(() => ({}))
-        console.error('[loadBookingFormData] Users API error:', usersRes.status, err)
         toast({ title: 'Error cargando clientes', description: 'No se pudieron obtener los usuarios', variant: 'destructive' })
-      }
-      if (courtsRes.ok) {
-        const data = await courtsRes.json()
-        const courtsList = Array.isArray(data) ? data : []
-        setBookingCourtDetails(courtsList.map((c: Record<string, unknown>) => ({
-          id: c.id as string,
-          name: c.name as string,
-          sport: (c.sport as string) || '',
-          pricePerHour: (c.pricePerHour as number) || 0,
-          pricingSchedule: Array.isArray(c.pricingSchedule) ? c.pricingSchedule as PricingScheduleItem[] : [],
-        })))
       }
     } catch (err) {
       console.error('[loadBookingFormData] Exception:', err)
-      toast({ title: 'Error de conexion', description: 'No se pudo cargar el formulario', variant: 'destructive' })
     }
   }, [])
 
@@ -4006,30 +4002,33 @@ export default function AdminDashboard() {
                     const futbolCourts = bookingCourtDetails.filter(c => c.sport === 'futbol')
                     const voleyCourts = bookingCourtDetails.filter(c => c.sport === 'voley')
                     const otherCourts = bookingCourtDetails.filter(c => c.sport !== 'futbol' && c.sport !== 'voley')
-                    const groups: Array<{ label: string; icon: string; color: string; border: string; bg: string; dot: string; courts: typeof bookingCourtDetails }> = [
-                      ...(futbolCourts.length > 0 ? [{ label: 'Fútbol', icon: 'sports_soccer', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/5', dot: 'bg-emerald-400', courts: futbolCourts }] : []),
-                      ...(voleyCourts.length > 0 ? [{ label: 'Vóley', icon: 'sports_volleyball', color: 'text-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/5', dot: 'bg-amber-400', courts: voleyCourts }] : []),
-                      ...(otherCourts.length > 0 ? [{ label: 'Otras', icon: 'sports', color: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/5', dot: 'bg-blue-400', courts: otherCourts }] : []),
+                    const sportMeta: Record<string, { label: string; icon: string; accent: string; ring: string; bgLight: string; bgCard: string; bgCardSel: string; borderCard: string }> = {
+                      futbol: { label: 'Fútbol', icon: 'sports_soccer', accent: 'text-emerald-400', ring: 'ring-emerald-400/30', bgLight: 'bg-emerald-500/[0.07]', bgCard: 'bg-white/[0.03]', bgCardSel: 'bg-emerald-500/[0.08]', borderCard: 'border-emerald-500/25' },
+                      voley:  { label: 'Vóley',  icon: 'sports_volleyball', accent: 'text-amber-400', ring: 'ring-amber-400/30', bgLight: 'bg-amber-500/[0.07]', bgCard: 'bg-white/[0.03]', bgCardSel: 'bg-amber-500/[0.08]', borderCard: 'border-amber-500/25' },
+                      other:  { label: 'Otras',  icon: 'sports', accent: 'text-sky-400', ring: 'ring-sky-400/30', bgLight: 'bg-sky-500/[0.07]', bgCard: 'bg-white/[0.03]', bgCardSel: 'bg-sky-500/[0.08]', borderCard: 'border-sky-500/25' },
+                    }
+                    const groups = [
+                      ...(futbolCourts.length > 0 ? [{ key: 'futbol', ...sportMeta.futbol, courts: futbolCourts }] : []),
+                      ...(voleyCourts.length > 0 ? [{ key: 'voley', ...sportMeta.voley, courts: voleyCourts }] : []),
+                      ...(otherCourts.length > 0 ? [{ key: 'other', ...sportMeta.other, courts: otherCourts }] : []),
                     ]
 
                     return groups.map(group => (
-                      <div key={group.label} className="mb-3 last:mb-0">
-                        <div className={`flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg ${group.bg} ${group.border} border`}>
-                          <span className={`material-symbols-outlined text-[16px] ${group.color}`}>{group.icon}</span>
-                          <span className={`text-[11px] font-bold font-[family-name:var(--font-sora)] ${group.color} uppercase tracking-wider`}>{group.label}</span>
-                          <span className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)] ml-auto">{group.courts.length} cancha{group.courts.length !== 1 ? 's' : ''}</span>
+                      <div key={group.key} className="mb-4 last:mb-0">
+                        {/* Group header */}
+                        <div className={`flex items-center gap-2.5 mb-2.5`}>
+                          <div className={`w-7 h-7 rounded-lg ${group.bgLight} flex items-center justify-center`}>
+                            <span className={`material-symbols-outlined text-[16px] ${group.accent}`}>{group.icon}</span>
+                          </div>
+                          <span className={`text-[11px] font-bold font-[family-name:var(--font-sora)] ${group.accent} tracking-wide uppercase`}>{group.label}</span>
+                          <div className="flex-1 h-px bg-white/[0.06] ml-1" />
+                          <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)] tabular-nums">{group.courts.length}</span>
                         </div>
-                        <div className={`grid gap-2.5 ${group.courts.length <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                        {/* Court cards grid — 4 cols for big groups, 3 otherwise */}
+                        <div className={`grid gap-2 ${group.courts.length >= 4 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
                           {group.courts.map((c, idx) => {
                             const isSelected = bookingForm.courtIds.includes(c.id)
-                            const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
-                            const scheduleSummary = hasSchedule
-                              ? c.pricingSchedule.map((s) => `${fmtHour(s.startHour)}-${fmtHour(s.endHour)}`).join(' · ')
-                              : 'Todo el día'
-                            const priceSummary = hasSchedule
-                              ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
-                              : `S/ ${c.pricePerHour}/h`
-                            const courtNumber = c.name.replace(/[^0-9]/g, '') || String(idx + 1)
+                            const courtLabel = c.name.replace(/^(Cancha\s*)/i, '').trim() || c.name
                             return (
                               <button type="button"
                                 key={c.id}
@@ -4057,41 +4056,34 @@ export default function AdminDashboard() {
                                   })
                                   if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
                                 }}
-                                className={`relative border-2 rounded-2xl p-4 text-left transition-all duration-200 group ${
+                                className={`relative rounded-xl p-3 text-left transition-all duration-200 border ${
                                   isSelected
-                                    ? `${group.border} ${group.bg} shadow-lg`
-                                    : 'border-white/[0.06] bg-cm-surface-container-highest/20 hover:border-white/20 hover:bg-cm-surface-container-highest/40'
+                                    ? `${group.borderCard} ${group.bgCardSel} ring-1 ${group.ring} shadow-md shadow-black/10`
+                                    : `${group.bgCard} border-white/[0.05] hover:border-white/[0.15] hover:bg-white/[0.05]`
                                 }`}
                               >
+                                {/* Check badge */}
                                 {isSelected && (
-                                  <div className={`absolute top-3 right-3 w-6 h-6 rounded-full ${group.dot} flex items-center justify-center shadow-md`}>
-                                    <span className="material-symbols-outlined text-white text-[15px]">check</span>
+                                  <div className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full ${group.accent.replace('text-', 'bg-')} flex items-center justify-center ring-2 ring-cm-surface-container`}>
+                                    <span className="material-symbols-outlined text-white text-[12px]">check</span>
                                   </div>
                                 )}
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                                    isSelected
-                                      ? `${group.bg} ${group.border} border`
-                                      : 'bg-white/[0.04]'
+                                {/* Court number + name */}
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                    isSelected ? group.bgLight : 'bg-white/[0.04]'
                                   }`}>
-                                    <span className={`text-lg font-black font-[family-name:var(--font-sora)] ${isSelected ? group.color : 'text-cm-on-surface-variant/50'}`}>
-                                      {courtNumber}
+                                    <span className={`text-base font-extrabold font-[family-name:var(--font-sora)] leading-none ${isSelected ? group.accent : 'text-cm-on-surface-variant/40'}`}>
+                                      {idx + 1}
                                     </span>
                                   </div>
-                                  <div className="flex-1 min-w-0 pr-7">
-                                    <p className={`text-sm font-semibold truncate font-[family-name:var(--font-sora)] transition-colors ${isSelected ? group.color : 'text-cm-on-surface'}`}>
-                                      {c.name}
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-[13px] font-semibold truncate font-[family-name:var(--font-sora)] transition-colors ${isSelected ? group.accent : 'text-cm-on-surface'}`}>
+                                      {courtLabel}
                                     </p>
-                                    <div className="flex items-center gap-1.5 mt-1">
-                                      <span className="material-symbols-outlined text-[11px] text-cm-on-surface-variant/40">schedule</span>
-                                      <p className="text-[10px] text-cm-on-surface-variant/60 truncate font-[family-name:var(--font-inter)]">{scheduleSummary}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-3 pt-2.5 border-t border-white/[0.05]">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">Tarifa</span>
-                                    <span className={`text-sm font-bold font-[family-name:var(--font-sora)] transition-colors ${isSelected ? group.color : 'text-cm-on-surface'}`}>{priceSummary}</span>
+                                    <p className="text-[10px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] mt-0.5">
+                                      S/ {c.pricePerHour}/h
+                                    </p>
                                   </div>
                                 </div>
                               </button>
