@@ -3995,78 +3995,112 @@ export default function AdminDashboard() {
                     <h4 className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cancha y Horario</h4>
                   </div>
 
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Cancha(s) *</label>
-                    <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Selecciona cancha(s) *</label>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cm-primary/10 text-cm-primary font-semibold font-[family-name:var(--font-inter)]">
                       {bookingForm.courtIds.length} seleccionada{bookingForm.courtIds.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full">
-                    {bookingCourtDetails.map((c) => {
-                      const isSelected = bookingForm.courtIds.includes(c.id)
-                      const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
-                      const scheduleSummary = hasSchedule
-                        ? c.pricingSchedule.map((s) => `${fmtHour(s.startHour)}-${fmtHour(s.endHour)}`).join(' · ')
-                        : 'Todo el día'
-                      const priceSummary = hasSchedule
-                        ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
-                        : `S/ ${c.pricePerHour}/h`
-                      return (
-                        <button type="button"
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setBookingForm((prev) => {
-                              const newIds = isSelected
-                                ? prev.courtIds.filter((id) => id !== c.id)
-                                : [...prev.courtIds, c.id]
-                              const updated = {
-                                ...prev,
-                                courtIds: newIds,
-                                courtId: newIds[0] || '',
-                              }
-                              if (newIds.length > 0 && updated.startTime && updated.endTime) {
-                                const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
-                                updated.totalPrice = String(price)
-                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
-                                  updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-                                }
-                              } else {
-                                updated.totalPrice = ''
-                                updated.advanceAmount = ''
-                              }
-                              return updated
-                            })
-                            if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
-                          }}
-                          className={`relative border-2 rounded-xl p-4 flex flex-col justify-between text-left transition-all ${
-                            isSelected
-                              ? 'border-cm-primary/60 bg-cm-primary/8 shadow-lg shadow-cm-primary/5'
-                              : 'border-white/10 bg-cm-surface-container-highest/30 hover:border-white/25 hover:bg-cm-surface-container-highest/50'
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-cm-primary flex items-center justify-center">
-                              <span className="material-symbols-outlined text-white text-[14px]">check</span>
-                            </div>
-                          )}
-                          <div className="pr-6">
-                            <p className={`text-sm font-semibold truncate font-[family-name:var(--font-sora)] ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>{c.name}</p>
-                            <p className="text-[11px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)] capitalize">{c.sport}</p>
-                          </div>
-                          <div className="mt-3 space-y-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[13px] text-cm-on-surface-variant/60">schedule</span>
-                              <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{scheduleSummary}</p>
-                            </div>
-                            <div className="border-t border-white/5 pt-1.5 text-right">
-                              <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>{priceSummary}</span>
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
+
+                  {(() => {
+                    const futbolCourts = bookingCourtDetails.filter(c => c.sport === 'futbol')
+                    const voleyCourts = bookingCourtDetails.filter(c => c.sport === 'voley')
+                    const otherCourts = bookingCourtDetails.filter(c => c.sport !== 'futbol' && c.sport !== 'voley')
+                    const groups: Array<{ label: string; icon: string; color: string; border: string; bg: string; dot: string; courts: typeof bookingCourtDetails }> = [
+                      ...(futbolCourts.length > 0 ? [{ label: 'Fútbol', icon: 'sports_soccer', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/5', dot: 'bg-emerald-400', courts: futbolCourts }] : []),
+                      ...(voleyCourts.length > 0 ? [{ label: 'Vóley', icon: 'sports_volleyball', color: 'text-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/5', dot: 'bg-amber-400', courts: voleyCourts }] : []),
+                      ...(otherCourts.length > 0 ? [{ label: 'Otras', icon: 'sports', color: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/5', dot: 'bg-blue-400', courts: otherCourts }] : []),
+                    ]
+
+                    return groups.map(group => (
+                      <div key={group.label} className="mb-3 last:mb-0">
+                        <div className={`flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg ${group.bg} ${group.border} border`}>
+                          <span className={`material-symbols-outlined text-[16px] ${group.color}`}>{group.icon}</span>
+                          <span className={`text-[11px] font-bold font-[family-name:var(--font-sora)] ${group.color} uppercase tracking-wider`}>{group.label}</span>
+                          <span className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)] ml-auto">{group.courts.length} cancha{group.courts.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className={`grid gap-2.5 ${group.courts.length <= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                          {group.courts.map((c, idx) => {
+                            const isSelected = bookingForm.courtIds.includes(c.id)
+                            const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
+                            const scheduleSummary = hasSchedule
+                              ? c.pricingSchedule.map((s) => `${fmtHour(s.startHour)}-${fmtHour(s.endHour)}`).join(' · ')
+                              : 'Todo el día'
+                            const priceSummary = hasSchedule
+                              ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
+                              : `S/ ${c.pricePerHour}/h`
+                            const courtNumber = c.name.replace(/[^0-9]/g, '') || String(idx + 1)
+                            return (
+                              <button type="button"
+                                key={c.id}
+                                onClick={() => {
+                                  setBookingForm((prev) => {
+                                    const newIds = isSelected
+                                      ? prev.courtIds.filter((id) => id !== c.id)
+                                      : [...prev.courtIds, c.id]
+                                    const updated = {
+                                      ...prev,
+                                      courtIds: newIds,
+                                      courtId: newIds[0] || '',
+                                    }
+                                    if (newIds.length > 0 && updated.startTime && updated.endTime) {
+                                      const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+                                      updated.totalPrice = String(price)
+                                      if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+                                        updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+                                      }
+                                    } else {
+                                      updated.totalPrice = ''
+                                      updated.advanceAmount = ''
+                                    }
+                                    return updated
+                                  })
+                                  if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
+                                }}
+                                className={`relative border-2 rounded-2xl p-4 text-left transition-all duration-200 group ${
+                                  isSelected
+                                    ? `${group.border} ${group.bg} shadow-lg`
+                                    : 'border-white/[0.06] bg-cm-surface-container-highest/20 hover:border-white/20 hover:bg-cm-surface-container-highest/40'
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className={`absolute top-3 right-3 w-6 h-6 rounded-full ${group.dot} flex items-center justify-center shadow-md`}>
+                                    <span className="material-symbols-outlined text-white text-[15px]">check</span>
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                                    isSelected
+                                      ? `${group.bg} ${group.border} border`
+                                      : 'bg-white/[0.04]'
+                                  }`}>
+                                    <span className={`text-lg font-black font-[family-name:var(--font-sora)] ${isSelected ? group.color : 'text-cm-on-surface-variant/50'}`}>
+                                      {courtNumber}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1 min-w-0 pr-7">
+                                    <p className={`text-sm font-semibold truncate font-[family-name:var(--font-sora)] transition-colors ${isSelected ? group.color : 'text-cm-on-surface'}`}>
+                                      {c.name}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <span className="material-symbols-outlined text-[11px] text-cm-on-surface-variant/40">schedule</span>
+                                      <p className="text-[10px] text-cm-on-surface-variant/60 truncate font-[family-name:var(--font-inter)]">{scheduleSummary}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-2.5 border-t border-white/[0.05]">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)]">Tarifa</span>
+                                    <span className={`text-sm font-bold font-[family-name:var(--font-sora)] transition-colors ${isSelected ? group.color : 'text-cm-on-surface'}`}>{priceSummary}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
