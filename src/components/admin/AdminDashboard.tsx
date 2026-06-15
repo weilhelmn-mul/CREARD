@@ -154,6 +154,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
 
 /* ─── helpers ─── */
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+const fmtHour = (h: number) => `${String(h).padStart(2, '0')}:00`
 const fmtDate = (d: string) => {
   const date = new Date(d + 'T00:00:00')
   return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })
@@ -1700,7 +1701,6 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
     }
   }
 
-  const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`
 
   // Check for overlapping blocks
   const getOverlapWarnings = (schedule: PricingScheduleItem[]): string[] => {
@@ -1711,7 +1711,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
     for (let i = 0; i < sorted.length - 1; i++) {
       if (sorted[i].endHour > sorted[i + 1].startHour) {
         warnings.push(
-          `"${sorted[i].label}" (${formatHour(sorted[i].startHour)}–${formatHour(sorted[i].endHour)}) se solapa con "${sorted[i + 1].label}" (${formatHour(sorted[i + 1].startHour)}–${formatHour(sorted[i + 1].endHour)})`
+          `"${sorted[i].label}" (${fmtHour(sorted[i].startHour)}–${fmtHour(sorted[i].endHour)}) se solapa con "${sorted[i + 1].label}" (${fmtHour(sorted[i + 1].startHour)}–${fmtHour(sorted[i + 1].endHour)})`
         )
       }
     }
@@ -1721,7 +1721,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
   const getZeroPriceWarnings = (schedule: PricingScheduleItem[]): string[] => {
     return schedule
       .filter(s => s.startHour < s.endHour && s.pricePerHour <= 0)
-      .map(s => `"${s.label}" (${formatHour(s.startHour)}–${formatHour(s.endHour)}) tiene precio S/ 0 — no generará cobro`)
+      .map(s => `"${s.label}" (${fmtHour(s.startHour)}–${fmtHour(s.endHour)}) tiene precio S/ 0 — no generará cobro`)
   }
 
   const handleSaveCourt = async () => {
@@ -2145,7 +2145,7 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                                   <div className={`w-2 h-8 rounded-full ${style.dot}`} />
                                   <div className="flex-1 min-w-0">
                                     <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{slot.label}</p>
-                                    <p className="text-xs font-mono text-cm-on-surface font-semibold">{formatHour(slot.startHour)} — {formatHour(slot.endHour)}</p>
+                                    <p className="text-xs font-mono text-cm-on-surface font-semibold">{fmtHour(slot.startHour)} — {fmtHour(slot.endHour)}</p>
                                   </div>
                                   <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${slot.pricePerHour > 0 ? style.color : 'text-red-400/70'}`}>
                                   S/ {slot.pricePerHour}
@@ -4006,7 +4006,7 @@ export default function AdminDashboard() {
                       const isSelected = bookingForm.courtIds.includes(c.id)
                       const hasSchedule = c.pricingSchedule && c.pricingSchedule.length > 0
                       const scheduleSummary = hasSchedule
-                        ? c.pricingSchedule.map((s) => `${formatHour(s.startHour)}-${formatHour(s.endHour)}`).join(' · ')
+                        ? c.pricingSchedule.map((s) => `${fmtHour(s.startHour)}-${fmtHour(s.endHour)}`).join(' · ')
                         : 'Todo el día'
                       const priceSummary = hasSchedule
                         ? c.pricingSchedule.map((s) => `S/${s.pricePerHour}`).join(' / ')
