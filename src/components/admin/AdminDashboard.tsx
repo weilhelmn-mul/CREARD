@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner, type NewsItem } from '@/context/SiteSettingsContext'
 import { getAuthHeaders } from '@/lib/auth-helpers'
+import { cachedFetch, cachedFetchFresh, invalidateCache, invalidateAllCaches } from '@/lib/cache'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
@@ -2351,23 +2352,36 @@ export default function AdminDashboard() {
     })()
   }, [])
 
-  /* ─── fetch all data ─── */
+  /* ─── fetch all data (courts & users cached in IndexedDB for speed) ─── */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       const headers = getAuthHeaders()
-      const [statsRes, bookingsRes, expensesRes, courtsRes, equipRes] = await Promise.all([
-        fetch('/api/stats', { headers }),
-        fetch('/api/bookings', { headers }),
-        fetch('/api/expenses', { headers }),
-        fetch('/api/courts', { headers }),
-        fetch('/api/equipment', { headers }),
+
+      // Courts: cache-first (rarely change) — instant on repeat visits
+      const courtsPromise = cachedFetch('courts', async () => {
+        const res = await fetch('/api/courts', { headers })
+        if (!res.ok) throw new Error('err')
+        const d = await res.json()
+        return Array.isArray(d) ? d : []
+      })
+
+      // Users for booking form: cache-first
+      const usersPromise = cachedFetch('users', async () => {
+        const res = await fetch('/api/admin/users', { headers })
+        if (!res.ok) throw new Error('err')
+        const d = await res.json()
+        return Array.isArray(d) ? d : []
+      })
+
+      const [statsRes, bookingsRes, expensesRes, courtsData, usersData] = await Promise.all([
+        fetch('/api/stats', { headers }).catch(() => new Response(null, { status: 0 })),
+        fetch('/api/bookings', { headers }).catch(() => new Response(null, { status: 0 })),
+        fetch('/api/expenses', { headers }).catch(() => new Response(null, { status: 0 })),
+        courtsPromise,
+        usersPromise,
       ])
 
-      if (!bookingsRes.ok) {
-        const errData = await bookingsRes.json().catch(() => ({ error: 'Error desconocido' }))
-        console.error('[CREARD Admin] Error loading bookings:', bookingsRes.status, errData)
-      }
       if (statsRes.ok) setStats(await statsRes.json())
       if (bookingsRes.ok) {
         const bookingsData = await bookingsRes.json()
@@ -2377,18 +2391,17 @@ export default function AdminDashboard() {
         const expensesData = await expensesRes.json()
         setExpenses(Array.isArray(expensesData) ? expensesData : [])
       }
-      if (courtsRes.ok) {
-        const courtsData = await courtsRes.json()
-        setAllCourts(Array.isArray(courtsData) ? courtsData : [])
-      }
-      if (equipRes.ok) {
-        const equipData = await equipRes.json()
-        setEquipmentList(Array.isArray(equipData) ? equipData : [])
-      } else {
-        const eqErr = await equipRes.json().catch(() => ({ error: 'Error desconocido' }))
-        console.error('[CREARD Admin] Error loading equipment:', equipRes.status, eqErr)
-        toast({ title: 'Error cargando equipamiento', description: eqErr.error || `Status ${equipRes.status}`, variant: 'destructive' })
-      }
+      setAllCourts(courtsData)
+      setBookingUsers(usersData)
+
+      // Equipment still needs separate fetch (no cache)
+      try {
+        const equipRes = await fetch('/api/equipment', { headers })
+        if (equipRes.ok) {
+          const equipData = await equipRes.json()
+          setEquipmentList(Array.isArray(equipData) ? equipData : [])
+        }
+      } catch { /* silent */ }
     } catch {
       toast({ title: 'Error', description: 'No se pudieron cargar los datos. Verifica la conexion a la base de datos.', variant: 'destructive' })
     } finally {

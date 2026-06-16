@@ -1,0 +1,25 @@
+{
+  "name": "CREARD - Gestión de Canchas",
+  "short_name": "CREARD",
+  "description": "Plataforma de gestión y reserva de canchas deportivas",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/creard-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/creard-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
