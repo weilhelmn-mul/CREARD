@@ -5051,7 +5051,7 @@ export default function AdminDashboard() {
                 ))}
                 {(showEquipDetail.courtSubtotal !== undefined) && (
                   <div className="pt-2 border-t border-white/5 space-y-1">
-                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Cancha</span><span>{fmtCurrency(showEquipDetail.courtSubtotal || 0)}</span></div>
+                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Cancha</span><span>{fmtCurrency(Math.max(0, (showEquipDetail.totalPrice || 0) - (showEquipDetail.equipmentSubtotal || 0)))}</span></div>
                     <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Equip.</span><span className="text-blue-400">{fmtCurrency(showEquipDetail.equipmentSubtotal || 0)}</span></div>
                     <div className="flex justify-between text-xs font-bold pt-1 border-t border-white/5"><span>Total</span><span className="text-cm-primary">{fmtCurrency(showEquipDetail.totalPrice)}</span></div>
                   </div>
