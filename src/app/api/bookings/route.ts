@@ -70,6 +70,25 @@ function toCamelBooking(b: Record<string, unknown>) {
     subtotal: (eq.quantity || 1) * (eq.unit_price || eq.price_per_rental || 0),
   })) : [];
 
+  // Normalize: recalc equipment subtotal from items (more reliable than stored value)
+  const computedEquipSubtotal = equipmentItems.reduce((s: number, eq: { subtotal: number }) => s + eq.subtotal, 0);
+  const equipmentSubtotal = computedEquipSubtotal;
+
+  // Normalize court_subtotal: if stored value is wrong (old double-counting bug),
+  // derive it from total_price - equipment_subtotal
+  const totalPrice = b.total_price || 0;
+  const storedCourtSubtotal = b.court_subtotal || 0;
+  const courtSubtotal = (storedCourtSubtotal + equipmentSubtotal > totalPrice + 0.01)
+    ? Math.max(0, Math.round((totalPrice - equipmentSubtotal) * 100) / 100)
+    : storedCourtSubtotal;
+
+  // Normalize remaining_amount: ensure it equals total - advance
+  const advanceAmount = b.advance_amount || 0;
+  const storedRemaining = b.remaining_amount || 0;
+  const remainingAmount = (Math.abs(storedRemaining - (totalPrice - advanceAmount)) > 0.01)
+    ? Math.max(0, Math.round((totalPrice - advanceAmount) * 100) / 100)
+    : storedRemaining;
+
   return {
     id: b.id,
     courtId: b.court_id,
@@ -78,12 +97,12 @@ function toCamelBooking(b: Record<string, unknown>) {
     date: b.date,
     startTime: b.start_time,
     endTime: b.end_time,
-    totalPrice: b.total_price || 0,
-    courtSubtotal: b.court_subtotal || b.total_price || 0,
-    equipmentSubtotal: b.equipment_subtotal || 0,
+    totalPrice,
+    courtSubtotal,
+    equipmentSubtotal,
     equipmentItems,
-    advanceAmount: b.advance_amount || 0,
-    remainingAmount: b.remaining_amount || 0,
+    advanceAmount,
+    remainingAmount,
     status: migrateStatus(b.status || 'reserved'),
     slotStatus: b.slot_status,
     paymentMethod: b.payment_method,
