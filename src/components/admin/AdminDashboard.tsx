@@ -4024,88 +4024,52 @@ export default function AdminDashboard() {
                             })
                             if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
                           }}
-                          className={`group relative flex flex-col text-left transition-all duration-300 active:scale-95 rounded-xl border overflow-hidden ${
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all duration-200 active:scale-[0.97] ${
                             isSelected
-                              ? 'shadow-lg'
-                              : 'border-white/[0.08] bg-cm-surface-container-low hover:border-white/20'
+                              ? (isFutbol ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-blue-500/50 bg-blue-500/10')
+                              : 'border-white/[0.08] bg-cm-surface-container-low/50 hover:border-white/20'
                           }`}
-                          style={isSelected ? { borderColor: isFutbol ? 'rgba(52,211,153,0.6)' : 'rgba(96,165,250,0.6)' } : undefined}
                         >
-                          {/* Field illustration */}
-                          <div className={`w-full aspect-[4/3] relative overflow-hidden border-b border-white/10 ${
-                            isFutbol ? 'bg-gradient-to-b from-emerald-900 to-emerald-950' : 'bg-gradient-to-b from-blue-900 to-blue-950'
-                          }`}>
-                            {isFutbol ? (
-                              <>
-                                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/40" />
-                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 border border-white/40 rounded-full" />
-                                <div className="absolute left-0 top-1/4 h-1/2 w-3 border-r border-y border-white/40" />
-                                <div className="absolute right-0 top-1/4 h-1/2 w-3 border-l border-y border-white/40" />
-                              </>
-                            ) : (
-                              <>
-                                <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/50 z-10" style={{ boxShadow: '0 0 8px rgba(255,255,255,0.4)' }} />
-                                <div className="absolute inset-3 border border-white/30" />
-                                <div className="absolute inset-x-3 top-[30%] h-[40%] border-y border-white/20" />
-                              </>
-                            )}
-                            {/* Selected overlay */}
-                            {isSelected && (
-                              <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-white text-lg">check</span>
-                                </div>
-                              </div>
-                            )}
+                          {/* Mini field icon */}
+                          <div className={`w-5 h-5 rounded-[3px] flex-shrink-0 flex items-center justify-center ${
+                            isFutbol ? 'bg-emerald-900/80' : 'bg-blue-900/80'
+                          }`}
+                            style={isSelected ? { boxShadow: isFutbol ? '0 0 6px rgba(52,211,153,0.4)' : '0 0 6px rgba(96,165,250,0.4)' } : undefined}
+                          >
+                            <span className="material-symbols-outlined text-white/70" style={{ fontSize: '12px' }}>{isFutbol ? 'sports_soccer' : 'sports_volleyball'}</span>
                           </div>
-                          {/* Info */}
-                          <div className="p-2.5 flex flex-col gap-1">
-                            <span className={`text-xs font-semibold font-[family-name:var(--font-sora)] ${isSelected ? (isFutbol ? 'text-emerald-400' : 'text-blue-400') : 'text-cm-on-surface'}`}>{courtLabel}</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cm-primary" style={isFutbol ? { boxShadow: '0 0 8px rgba(52,211,153,0.4)' } : { boxShadow: '0 0 8px rgba(96,165,250,0.4)' }} />
-                              <span className={`text-[10px] font-semibold font-[family-name:var(--font-inter)] ${isFutbol ? 'text-emerald-400' : 'text-blue-400'}`}>Disponible</span>
-                            </div>
-                            <div className="flex gap-3 mt-0.5 border-t border-white/[0.06] pt-1 w-full">
-                              {morning && <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{morning.label}: S/{morning.pricePerHour}/h</span>}
-                              {afternoon && <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{afternoon.label}: S/{afternoon.pricePerHour}/h</span>}
-                              {!morning && !afternoon && <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">S/{c.pricePerHour}/h</span>}
-                            </div>
-                          </div>
+                          <span className={`text-[11px] font-semibold font-[family-name:var(--font-sora)] leading-tight ${isSelected ? (isFutbol ? 'text-emerald-400' : 'text-blue-400') : 'text-cm-on-surface'}`}>{courtLabel}</span>
+                          <span className={`text-[9px] font-[family-name:var(--font-inter)] leading-tight ${isSelected ? 'text-white/50' : 'text-cm-on-surface-variant/70'}`}>
+                            {morning ? `${morning.label}: S/${morning.pricePerHour}` : ''}{morning && afternoon ? ' · ' : ''}{afternoon ? `${afternoon.label}: S/${afternoon.pricePerHour}` : ''}
+                            {!morning && !afternoon ? `S/${c.pricePerHour}/h` : ''}
+                          </span>
+                          {isSelected && <span className="material-symbols-outlined text-emerald-400 ml-auto" style={{ fontSize: '14px' }}>check_circle</span>}
                         </button>
                       )
                     }
 
                     return (
-                      <div className="space-y-3">
+                      <div className="flex flex-col gap-2">
                         {futbolCourts.length > 0 && (
                           <div>
-                            <div className="flex items-center gap-1.5 border-b border-white/[0.08] pb-1 mb-2">
-                              <span className="material-symbols-outlined text-emerald-400 text-[15px]">sports_soccer</span>
-                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-emerald-400 uppercase tracking-[0.1em]">Canchas de Fútbol</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                            <span className="text-[9px] font-bold font-[family-name:var(--font-inter)] text-emerald-400/70 uppercase tracking-[0.1em] mb-1 block">Fútbol</span>
+                            <div className="flex flex-wrap gap-1.5">
                               {futbolCourts.map(c => <CourtCard key={c.id} c={c} isFutbol />)}
                             </div>
                           </div>
                         )}
                         {voleyCourts.length > 0 && (
                           <div>
-                            <div className="flex items-center gap-1.5 border-b border-white/[0.08] pb-1 mb-2">
-                              <span className="material-symbols-outlined text-blue-400 text-[15px]">sports_volleyball</span>
-                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-blue-400 uppercase tracking-[0.1em]">Canchas de Vóley</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                            <span className="text-[9px] font-bold font-[family-name:var(--font-inter)] text-blue-400/70 uppercase tracking-[0.1em] mb-1 block">Vóley</span>
+                            <div className="flex flex-wrap gap-1.5">
                               {voleyCourts.map(c => <CourtCard key={c.id} c={c} isFutbol={false} />)}
                             </div>
                           </div>
                         )}
                         {otherCourts.length > 0 && (
                           <div>
-                            <div className="flex items-center gap-1.5 border-b border-white/[0.08] pb-1 mb-2">
-                              <span className="material-symbols-outlined text-sky-400 text-[15px]">sports</span>
-                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-sky-400 uppercase tracking-[0.1em]">Otras Canchas</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                            <span className="text-[9px] font-bold font-[family-name:var(--font-inter)] text-sky-400/70 uppercase tracking-[0.1em] mb-1 block">Otras</span>
+                            <div className="flex flex-wrap gap-1.5">
                               {otherCourts.map(c => <CourtCard key={c.id} c={c} isFutbol={false} />)}
                             </div>
                           </div>
