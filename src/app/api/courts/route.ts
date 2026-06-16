@@ -191,7 +191,16 @@ export async function GET(request: NextRequest) {
       courts.map((c) => toCamelCourt(c as Record<string, unknown>))
     );
 
-    return NextResponse.json(transformed);
+    // Deduplicate by name (migration may have created duplicates)
+    const seen = new Set<string>();
+    const deduped = transformed.filter(c => {
+      const key = (c.name as string || '').toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return NextResponse.json(deduped);
   } catch (error) {
     console.error('Error fetching courts:', error);
     // Return fallback courts on any error
