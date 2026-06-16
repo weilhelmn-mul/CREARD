@@ -4002,135 +4002,106 @@ export default function AdminDashboard() {
                     const futbolCourts = bookingCourtDetails.filter(c => c.sport === 'futbol')
                     const voleyCourts = bookingCourtDetails.filter(c => c.sport === 'voley')
                     const otherCourts = bookingCourtDetails.filter(c => c.sport !== 'futbol' && c.sport !== 'voley')
-                    const sportConfig = {
-                      futbol: {
-                        label: 'Canchas de F\u00fatbol', icon: 'sports_soccer',
-                        accent: 'text-emerald-400', borderAccent: 'border-emerald-400',
-                        hoverBorder: 'hover:border-emerald-400/60',
-                        selBorder: 'border-emerald-400/70', selBg: 'bg-emerald-400/[0.06]',
-                        glowCheck: 'bg-emerald-400', glowDot: 'bg-emerald-400',
-                        fieldBg: 'bg-gradient-to-b from-emerald-900/80 to-emerald-950/90',
-                      },
-                      voley: {
-                        label: 'Canchas de V\u00f3ley', icon: 'sports_volleyball',
-                        accent: 'text-blue-400', borderAccent: 'border-blue-400',
-                        hoverBorder: 'hover:border-blue-400/60',
-                        selBorder: 'border-blue-400/70', selBg: 'bg-blue-400/[0.06]',
-                        glowCheck: 'bg-blue-400', glowDot: 'bg-blue-400',
-                        fieldBg: 'bg-gradient-to-b from-blue-900/80 to-blue-950/90',
-                      },
-                      other: {
-                        label: 'Otras Canchas', icon: 'sports',
-                        accent: 'text-sky-400', borderAccent: 'border-sky-400',
-                        hoverBorder: 'hover:border-sky-400/60',
-                        selBorder: 'border-sky-400/70', selBg: 'bg-sky-400/[0.06]',
-                        glowCheck: 'bg-sky-400', glowDot: 'bg-sky-400',
-                        fieldBg: 'bg-gradient-to-b from-sky-900/60 to-sky-950/70',
-                      },
-                    }
-                    const groups = [
-                      ...(futbolCourts.length > 0 ? [{ key: 'futbol', cfg: sportConfig.futbol, courts: futbolCourts }] : []),
-                      ...(voleyCourts.length > 0 ? [{ key: 'voley', cfg: sportConfig.voley, courts: voleyCourts }] : []),
-                      ...(otherCourts.length > 0 ? [{ key: 'other', cfg: sportConfig.other, courts: otherCourts }] : []),
-                    ]
 
-                    return groups.map(group => (
-                      <div key={group.key} className="mb-5 last:mb-0">
-                        {/* Section header */}
-                        <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1.5 mb-3">
-                          <span className={`material-symbols-outlined text-[18px] ${group.cfg.accent}`}>{group.cfg.icon}</span>
-                          <h5 className={`text-xs font-bold font-[family-name:var(--font-inter)] uppercase tracking-[0.12em] ${group.cfg.accent}`}>{group.cfg.label}</h5>
-                        </div>
-                        {/* Grid */}
-                        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                          {group.courts.map((c) => {
-                            const isSelected = bookingForm.courtIds.includes(c.id)
-                            const isFutbol = group.key === 'futbol'
-                            const courtLabel = c.name.replace(/^(Cancha\s*)/i, '').trim() || c.name
-                            return (
-                              <button type="button"
-                                key={c.id}
-                                onClick={() => {
-                                  setBookingForm((prev) => {
-                                    const newIds = isSelected
-                                      ? prev.courtIds.filter((id) => id !== c.id)
-                                      : [...prev.courtIds, c.id]
-                                    const updated = {
-                                      ...prev,
-                                      courtIds: newIds,
-                                      courtId: newIds[0] || '',
-                                    }
-                                    if (newIds.length > 0 && updated.startTime && updated.endTime) {
-                                      const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
-                                      updated.totalPrice = String(price)
-                                      if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
-                                        updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
-                                      }
-                                    } else {
-                                      updated.totalPrice = ''
-                                      updated.advanceAmount = ''
-                                    }
-                                    return updated
-                                  })
-                                  if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
-                                }}
-                                className={`group relative flex flex-col text-left transition-all duration-300 active:scale-[0.97] rounded-xl border overflow-hidden ${
-                                  isSelected
-                                    ? `${group.cfg.selBorder} ${group.cfg.selBg} shadow-lg`
-                                    : `border-white/[0.08] bg-cm-surface-container-low ${group.cfg.hoverBorder}`
-                                }`}
-                              >
-                                {/* Field illustration */}
-                                <div className={`w-full aspect-[4/3] ${group.cfg.fieldBg} relative overflow-hidden border-b border-white/10`}>
-                                  {isFutbol ? (
-                                    <>
-                                      {/* Soccer field markings */}
-                                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/30" />
-                                      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 border border-white/30 rounded-full" />
-                                      <div className="absolute left-0 top-1/4 h-1/2 w-3 sm:w-4 border-r border-y border-white/30" />
-                                      <div className="absolute right-0 top-1/4 h-1/2 w-3 sm:w-4 border-l border-y border-white/30" />
-                                      {/* Center dot */}
-                                      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white/40" />
-                                    </>
-                                  ) : (
-                                    <>
-                                      {/* Volleyball court */}
-                                      <div className="absolute inset-3 sm:inset-4 border border-white/30" />
-                                      <div className="absolute inset-x-3 sm:inset-x-4 top-[30%] h-[40%] border-y border-white/20" />
-                                      {/* Net */}
-                                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/50 shadow-[0_0_6px_rgba(255,255,255,0.3)] z-10" />
-                                    </>
-                                  )}
-                                  {/* Selected overlay */}
-                                  {isSelected && (
-                                    <div className="absolute inset-0 bg-white/[0.04] flex items-center justify-center">
-                                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${group.cfg.glowCheck}/90 flex items-center justify-center shadow-lg backdrop-blur-sm`}>
-                                        <span className="material-symbols-outlined text-white text-xl sm:text-2xl">check</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                                {/* Info below field */}
-                                <div className="px-3 py-2.5 sm:px-4 sm:py-3 flex flex-col gap-1">
-                                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{courtLabel}</span>
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`w-2 h-2 rounded-full ${group.cfg.glowDot}`} style={group.key === 'futbol' ? { boxShadow: '0 0 8px rgba(52,211,153,0.5)' } : group.key === 'voley' ? { boxShadow: '0 0 8px rgba(96,165,250,0.5)' } : { boxShadow: '0 0 8px rgba(56,189,248,0.5)' }} />
-                                      <span className={`text-[10px] font-semibold font-[family-name:var(--font-inter)] ${group.cfg.accent}`}>
-                                        S/ {c.pricePerHour}/h
-                                      </span>
-                                    </div>
-                                    {isSelected && (
-                                      <span className="text-[9px] font-bold font-[family-name:var(--font-inter)] text-cm-on-surface-variant/60 uppercase tracking-wider">Activa</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
+                    const renderCourt = (c: typeof bookingCourtDetails[0], isSelected: boolean, accentCls: string, selBorder: string, selBg: string, isFutbol: boolean) => {
+                      const courtLabel = c.name.replace(/^(Cancha\s*)/i, '').trim() || c.name
+                      const sched = c.pricingSchedule && c.pricingSchedule.length > 0 ? c.pricingSchedule : []
+                      const morning = sched.find(s => s.startHour < 12)
+                      const afternoon = sched.find(s => s.startHour >= 12)
+                      return (
+                        <button type="button" key={c.id}
+                          onClick={() => {
+                            setBookingForm((prev) => {
+                              const newIds = isSelected ? prev.courtIds.filter(id => id !== c.id) : [...prev.courtIds, c.id]
+                              const updated = { ...prev, courtIds: newIds, courtId: newIds[0] || '' }
+                              if (newIds.length > 0 && updated.startTime && updated.endTime) {
+                                const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+                                updated.totalPrice = String(price)
+                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+                              } else { updated.totalPrice = ''; updated.advanceAmount = '' }
+                              return updated
+                            })
+                            if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
+                          }}
+                          className={`relative rounded-lg p-2.5 text-left transition-all duration-200 border ${
+                            isSelected ? `${selBorder} ${selBg} shadow-md` : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.15]'
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full ${accentCls.replace('text-','bg-')} flex items-center justify-center ring-1 ring-cm-surface-container`}>
+                              <span className="material-symbols-outlined text-white text-[10px]">check</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isFutbol ? 'bg-emerald-900/60' : 'bg-blue-900/60'}`}>
+                              <span className="material-symbols-outlined text-white/60 text-[14px]">{isFutbol ? 'sports_soccer' : 'sports_volleyball'}</span>
+                            </div>
+                            <span className={`text-xs font-semibold font-[family-name:var(--font-sora)] truncate ${isSelected ? accentCls : 'text-cm-on-surface'}`}>{courtLabel}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            {morning && (
+                              <div className="flex-1 bg-white/[0.03] rounded-md px-1.5 py-1 text-center">
+                                <p className="text-[9px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] leading-none mb-0.5">{morning.label}</p>
+                                <p className={`text-[11px] font-bold font-[family-name:var(--font-sora)] leading-none ${isSelected ? accentCls : 'text-cm-on-surface'}`}>S/{morning.pricePerHour}</p>
+                              </div>
+                            )}
+                            {afternoon && (
+                              <div className="flex-1 bg-white/[0.03] rounded-md px-1.5 py-1 text-center">
+                                <p className="text-[9px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] leading-none mb-0.5">{afternoon.label}</p>
+                                <p className={`text-[11px] font-bold font-[family-name:var(--font-sora)] leading-none ${isSelected ? accentCls : 'text-cm-on-surface'}`}>S/{afternoon.pricePerHour}</p>
+                              </div>
+                            )}
+                            {sched.length === 0 && (
+                              <div className="flex-1 bg-white/[0.03] rounded-md px-1.5 py-1 text-center">
+                                <p className="text-[9px] text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] leading-none mb-0.5">Tarifa</p>
+                                <p className={`text-[11px] font-bold font-[family-name:var(--font-sora)] leading-none ${isSelected ? accentCls : 'text-cm-on-surface'}`}>S/{c.pricePerHour}</p>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {futbolCourts.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span className="material-symbols-outlined text-emerald-400 text-[14px]">sports_soccer</span>
+                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-emerald-400 uppercase tracking-wider">Fútbol</span>
+                              <div className="flex-1 h-px bg-white/[0.06]" />
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {futbolCourts.map(c => renderCourt(c, bookingForm.courtIds.includes(c.id), 'text-emerald-400', 'border-emerald-500/40', 'bg-emerald-500/[0.05]', true))}
+                            </div>
+                          </div>
+                        )}
+                        {voleyCourts.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span className="material-symbols-outlined text-blue-400 text-[14px]">sports_volleyball</span>
+                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-blue-400 uppercase tracking-wider">Vóley</span>
+                              <div className="flex-1 h-px bg-white/[0.06]" />
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {voleyCourts.map(c => renderCourt(c, bookingForm.courtIds.includes(c.id), 'text-blue-400', 'border-blue-500/40', 'bg-blue-500/[0.05]', false))}
+                            </div>
+                          </div>
+                        )}
+                        {otherCourts.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span className="material-symbols-outlined text-sky-400 text-[14px]">sports</span>
+                              <span className="text-[10px] font-bold font-[family-name:var(--font-inter)] text-sky-400 uppercase tracking-wider">Otras</span>
+                              <div className="flex-1 h-px bg-white/[0.06]" />
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {otherCourts.map(c => renderCourt(c, bookingForm.courtIds.includes(c.id), 'text-sky-400', 'border-sky-500/40', 'bg-sky-500/[0.05]', false))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))
+                    )
                   })()}
                   {formErrors.courtId && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.courtId}</p>}
 
