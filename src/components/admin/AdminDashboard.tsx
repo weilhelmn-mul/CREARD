@@ -2285,6 +2285,8 @@ export default function AdminDashboard() {
     courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00',
     totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '',
   })
+  // Track whether user manually edited totalPrice (to avoid overwriting their input)
+  const [priceManuallyEdited, setPriceManuallyEdited] = useState(false)
   const [bookingUsers, setBookingUsers] = useState<Array<{ id: string; name: string; email: string; phone?: string | null }>>([])
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
@@ -2499,16 +2501,22 @@ export default function AdminDashboard() {
   }
 
   const handleBookingFormChange = (field: string, value: string) => {
+    // If user edits totalPrice manually, mark it so we don't overwrite
+    if (field === 'totalPrice') {
+      setPriceManuallyEdited(true)
+    }
     setBookingForm((prev) => {
       const updated = { ...prev, [field]: value }
-      // Auto-calculate price when courts or times change — sum ALL selected courts
-      if (field === 'courtId' || field === 'startTime' || field === 'endTime') {
+      // Auto-calculate court price when courts or times change (only if user hasn't manually edited)
+      if (!priceManuallyEdited && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
         const ids = updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : [])
         if (ids.length > 0 && updated.startTime && updated.endTime) {
-          const price = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
-          updated.totalPrice = String(price)
+          const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+          const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+          const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+          updated.totalPrice = String(grandTotal)
           if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
-            updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+            updated.advanceAmount = String(Math.round(grandTotal * 0.5 * 100) / 100)
           }
         }
       }
@@ -2638,27 +2646,31 @@ export default function AdminDashboard() {
 
   const equipmentFormTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
 
-  const recalcBookingPrice = useCallback(() => {
-    setBookingForm(prev => {
-      const courtPrice = parseFloat(prev.totalPrice) || 0
-      // Only recalculate if there was a prior court price set (not including equipment)
-      // We store the equipment portion separately, totalPrice is always the grand total
-      return prev
-    })
-  }, [])
-
-  // Effect: whenever selectedEquipItems changes, update totalPrice (court price + equipment)
+  // Effect: whenever equipment items change, recalculate totalPrice ONLY if user hasn't manually edited it
   useEffect(() => {
+    if (priceManuallyEdited) return
     if (bookingForm.courtIds.length === 0 && !bookingForm.courtId) return
     if (!bookingForm.startTime || !bookingForm.endTime) return
-    // Use the same calculation as handleBookingFormChange — respects pricing schedules
     const ids = bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId]
     const courtPrice = calculateMultiCourtPrice(ids, bookingForm.startTime, bookingForm.endTime)
-    const newTotal = courtPrice + equipmentFormTotal
-    if (courtPrice > 0 && newTotal > 0) {
-      setBookingForm(prev => ({ ...prev, totalPrice: String(Math.round(newTotal * 100) / 100) }))
+    const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    if (grandTotal > 0) {
+      setBookingForm(prev => {
+        // Don't overwrite if user is currently typing
+        if (priceManuallyEdited) return prev
+        const newAdv = !prev.advanceAmount || parseFloat(prev.advanceAmount) <= 0
+          ? String(Math.round(grandTotal * 0.5 * 100) / 100)
+          : prev.advanceAmount
+        return { ...prev, totalPrice: String(grandTotal), advanceAmount: newAdv }
+      })
     }
-  }, [selectedEquipItems, bookingForm.courtIds, bookingForm.courtId, bookingForm.startTime, bookingForm.endTime])
+  }, [selectedEquipItems]) // Only react to equipment changes, not to form changes (avoid loops)
+
+  // Reset manual edit flag when courts or times change
+  useEffect(() => {
+    setPriceManuallyEdited(false)
+  }, [bookingForm.courtIds, bookingForm.courtId, bookingForm.startTime, bookingForm.endTime])
 
   const handleCreateBooking = async () => {
     if (!validateBookingForm()) return
@@ -2695,6 +2707,7 @@ export default function AdminDashboard() {
         setFormErrors({})
         setSelectedEquipItems([])
         setShowEquipPanel(false)
+        setPriceManuallyEdited(false)
         fetchData()
       } else {
         const err = await res.json()
@@ -2713,6 +2726,7 @@ export default function AdminDashboard() {
     setFormErrors({})
     setSelectedEquipItems([])
     setShowEquipPanel(false)
+    setPriceManuallyEdited(false)
     loadBookingFormData()
     setShowBookingForm(true)
     setClientDropdownOpen(false)
@@ -4029,9 +4043,11 @@ export default function AdminDashboard() {
                               const newIds = isSelected ? prev.courtIds.filter(id => id !== c.id) : [...prev.courtIds, c.id]
                               const updated = { ...prev, courtIds: newIds, courtId: newIds[0] || '' }
                               if (newIds.length > 0 && updated.startTime && updated.endTime) {
-                                const price = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
-                                updated.totalPrice = String(price)
-                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) updated.advanceAmount = String(Math.round(price * 0.5 * 100) / 100)
+                                const courtPrice = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+                                const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+                                const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+                                updated.totalPrice = String(grandTotal)
+                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) updated.advanceAmount = String(Math.round(grandTotal * 0.5 * 100) / 100)
                               } else { updated.totalPrice = ''; updated.advanceAmount = '' }
                               return updated
                             })
@@ -4215,6 +4231,17 @@ export default function AdminDashboard() {
                       }
                       return null
                     })()}
+                    {selectedEquipItems.length > 0 && (
+                      <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-0.5">
+                        <p className="text-[10px] text-blue-400/80 font-semibold font-[family-name:var(--font-inter)]">Equipamiento:</p>
+                        {selectedEquipItems.map((eq) => (
+                          <div key={eq.equipmentId} className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+                            <span className="text-cm-on-surface-variant">{eq.name} ×{eq.quantity}</span>
+                            <span className="text-blue-400">S/ {eq.subtotal.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     </div>
                   )}
                 </div>
