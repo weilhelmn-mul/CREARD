@@ -155,13 +155,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No se generaron fechas con los parámetros dados.' }, { status: 400 });
     }
 
-    // Price per booking
+    // Price per booking — frontend sends grand total (court + equipment), avoid double-counting
     const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
     let equipmentSubtotal = 0;
     for (const eq of eqItems) {
       equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
     }
-    const courtPrice = parseFloat(totalPrice) || 0;
+    const providedTotal = parseFloat(totalPrice) || 0;
+    const courtPrice = providedTotal > 0 ? Math.max(0, providedTotal - equipmentSubtotal) : 0;
     const price = courtPrice + equipmentSubtotal;
     const adv = parseFloat(advanceAmount) || price * 0.5;
 

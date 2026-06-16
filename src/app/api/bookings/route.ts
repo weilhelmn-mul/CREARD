@@ -434,9 +434,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Calculate price (sum all courts if not provided) ──
-    let courtPriceTotal = parseFloat(totalPrice) || 0;
-    if (!totalPrice) {
+    // ── Calculate price ──
+    // Frontend sends totalPrice as grand total (court + equipment combined).
+    // We compute courtSubtotal and equipmentSubtotal separately for storage/display.
+    const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
+    let equipmentSubtotal = 0;
+    for (const eq of eqItems) {
+      equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
+    }
+
+    let courtPriceTotal: number;
+    const providedTotal = parseFloat(totalPrice) || 0;
+    if (providedTotal > 0) {
+      // Frontend already included equipment in totalPrice — extract court portion
+      courtPriceTotal = Math.max(0, providedTotal - equipmentSubtotal);
+    } else {
+      // No price from frontend — calculate from court rates
       courtPriceTotal = 0;
       for (const cId of allCourtIds) {
         const court = await getCourtById(cId);
@@ -454,12 +467,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Equipment subtotal ──
-    const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
-    let equipmentSubtotal = 0;
-    for (const eq of eqItems) {
-      equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
-    }
     const price = courtPriceTotal + equipmentSubtotal;
 
     const adv = parseFloat(advanceAmount) || price * 0.5;
