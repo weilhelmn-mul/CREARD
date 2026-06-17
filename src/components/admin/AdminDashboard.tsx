@@ -4324,8 +4324,8 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Cliente *</label>
                     <button type="button"
-                      onClick={openNewClientDialog}
-                      className="inline-flex items-center gap-1 text-[11px] text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
+                      onClick={(e) => { e.stopPropagation(); openNewClientDialog() }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-cm-primary font-semibold hover:bg-cm-primary/10 rounded-lg transition-colors font-[family-name:var(--font-inter)] cursor-pointer"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
                       Nuevo usuario
