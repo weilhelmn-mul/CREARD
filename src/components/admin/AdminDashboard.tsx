@@ -3057,7 +3057,7 @@ export default function AdminDashboard() {
   // Income = all money actually received (completed totals + reserved advances)
   const completedIncome = bookings
     .filter((b) => b.status === 'completed')
-    .reduce((s, b) => s + b.advanceAmount, 0)
+    .reduce((s, b) => s + b.totalPrice, 0)
   const reservedAdvances = bookings
     .filter((b) => b.status === 'reserved')
     .reduce((s, b) => s + b.advanceAmount, 0)
@@ -3170,7 +3170,7 @@ export default function AdminDashboard() {
   const kpis = [
     { label: 'Canchas Ocupadas Hoy', value: todayBookings.length, icon: 'sports_soccer', color: 'text-cm-primary', bg: 'bg-cm-primary/10', sub: `de ${allCourts.length} canchas` },
     { label: 'Reservas del Día', value: todayBookings.length, icon: 'event', color: 'text-blue-400', bg: 'bg-blue-500/10', sub: `Hoy ${fmtDate(today)}` },
-    { label: 'Ingresos del Día', value: fmtCurrency(todayRevenue), icon: 'payments', color: 'text-green-400', bg: 'bg-green-500/10', sub: 'Pagos completados' },
+    { label: 'Ingresos del Día', value: fmtCurrency(todayRevenue), icon: 'payments', color: 'text-green-400', bg: 'bg-green-500/10', sub: 'Completados + adelantos' },
     { label: 'Pagos Pendientes', value: fmtCurrency(pendingTotal), icon: 'schedule', color: 'text-amber-400', bg: 'bg-amber-500/10', sub: `${pendingPayments.length} reservas` },
   ]
 
@@ -3544,11 +3544,19 @@ export default function AdminDashboard() {
                               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
                             </div>
                           </div>
-                          {/* Status badge */}
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                            {st.label}
-                          </span>
+                          {/* Status badge + Payment method */}
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                              {st.label}
+                            </span>
+                            {b.paymentMethod && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                                <span>{b.paymentMethod}</span>
+                              </span>
+                            )}
+                          </div>
                           {/* Price breakdown */}
                           <div className="pt-2 border-t border-white/5 space-y-1">
                             <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
@@ -3659,6 +3667,12 @@ export default function AdminDashboard() {
                               <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                               {st.label}
                             </span>
+                            {b.paymentMethod && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex">
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                                <span>{b.paymentMethod}</span>
+                              </span>
+                            )}
                             <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
                             {b.remainingAmount > 0 && (
                               <button type="button"
@@ -4138,9 +4152,9 @@ export default function AdminDashboard() {
                         {startTimeDrop && (
                           <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
                             {timeSlots.map((ts) => (
-                              <button type="button"
-                                key={ts.value}
+                              <button
                                 type="button"
+                                key={ts.value}
                                 disabled={ts.disabled}
                                 onClick={() => { handleBookingFormChange('startTime', ts.value); setStartTimeDrop(false) }}
                                 className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
@@ -4169,9 +4183,9 @@ export default function AdminDashboard() {
                         {endTimeDrop && (
                           <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
                             {timeSlots.map((ts) => (
-                              <button type="button"
-                                key={`end-${ts.value}`}
+                              <button
                                 type="button"
+                                key={`end-${ts.value}`}
                                 disabled={ts.disabled || ts.value <= bookingForm.startTime}
                                 onClick={() => { handleBookingFormChange('endTime', ts.value); setEndTimeDrop(false) }}
                                 className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
@@ -4380,9 +4394,9 @@ export default function AdminDashboard() {
                       { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet', color: 'text-purple-400' },
                       { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet', color: 'text-cyan-400' },
                     ].map((pm) => (
-                      <button type="button"
-                        key={pm.key}
+                      <button
                         type="button"
+                        key={pm.key}
                         onClick={() => handleBookingFormChange('paymentMethod', pm.key)}
                         className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
                           bookingForm.paymentMethod === pm.key
@@ -4553,9 +4567,9 @@ export default function AdminDashboard() {
                                   { key: 'biweekly' as const, label: 'Quincenal' },
                                   { key: 'custom' as const, label: 'Personalizada' },
                                 ]).map((f) => (
-                                  <button type="button"
-                                    key={f.key}
+                                  <button
                                     type="button"
+                                    key={f.key}
                                     onClick={() => setRecurringConfig((p) => ({ ...p, frequency: f.key }))}
                                     className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                                       recurringConfig.frequency === f.key
@@ -4578,9 +4592,9 @@ export default function AdminDashboard() {
                                     const dayNum = idx === 6 ? 0 : idx + 1 // Mon=1, Tue=2, ... Sun=0
                                     const isSelected = recurringConfig.daysOfWeek.includes(dayNum)
                                     return (
-                                      <button type="button"
-                                        key={day}
+                                      <button
                                         type="button"
+                                        key={day}
                                         onClick={() => {
                                           setRecurringConfig((p) => ({
                                             ...p,
@@ -4960,9 +4974,9 @@ export default function AdminDashboard() {
                       { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet' },
                       { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet' },
                     ].map((pm) => (
-                      <button type="button"
-                        key={pm.key}
+                      <button
                         type="button"
+                        key={pm.key}
                         onClick={() => setAdvanceMethod(pm.key)}
                         className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
                           advanceMethod === pm.key
