@@ -100,6 +100,23 @@ export interface Payment {
   updated_at: Date;
 }
 
+export interface RetainedAdvance {
+  id: string;
+  booking_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string | null;
+  court_name: string;
+  booking_date: string;
+  amount: number;
+  original_total: number;
+  payment_method: string;
+  reason: string;
+  status: 'retained' | 'refunded';
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface Expense {
   id: string;
   description: string;
@@ -501,6 +518,43 @@ export async function createExpense(data: Partial<Expense>): Promise<string> {
     date: data.date,
     notes: data.notes || null,
   });
+}
+
+// --- Retained Advances (adelantos retenidos por cancelación) ---
+export async function getRetainedAdvances(filters?: {
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+}): Promise<Partial<RetainedAdvance>[]> {
+  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
+  if (filters?.startDate) constraints.push({ field: 'created_at', op: '>=', value: filters.startDate });
+  if (filters?.endDate) constraints.push({ field: 'created_at', op: '<=', value: filters.endDate });
+  return queryDocs('retained_advances', constraints, 'created_at', 'desc');
+}
+
+export async function createRetainedAdvance(data: Partial<RetainedAdvance>): Promise<string> {
+  return addDoc('retained_advances', {
+    booking_id: data.booking_id,
+    user_id: data.user_id,
+    user_name: data.user_name || '',
+    user_email: data.user_email || null,
+    court_name: data.court_name || '',
+    booking_date: data.booking_date || '',
+    amount: data.amount || 0,
+    original_total: data.original_total || 0,
+    payment_method: data.payment_method || 'EFECTIVO',
+    reason: data.reason || 'Cancelación de reserva',
+    status: data.status || 'retained',
+  });
+}
+
+export async function updateRetainedAdvance(id: string, data: Partial<RetainedAdvance>): Promise<void> {
+  await updateDocById('retained_advances', id, data as Record<string, unknown>);
+}
+
+export async function deleteRetainedAdvance(id: string): Promise<void> {
+  await deleteDocById('retained_advances', id);
 }
 
 // --- Users ---

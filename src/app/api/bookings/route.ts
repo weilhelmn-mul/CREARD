@@ -7,6 +7,7 @@ import {
   getUserById,
   getBookingById,
   createPayment,
+  createRetainedAdvance,
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
@@ -631,7 +632,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -668,6 +669,67 @@ export async function PUT(request: NextRequest) {
     }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
+
+    // When cancelling a booking with advance, handle retained/refunded advance
+    if (status === 'cancelled' || (status && migrateStatus(status) === 'cancelled')) {
+      try {
+        const booking = await getBookingById(id);
+        if (booking && ((booking.advance_amount as number) || 0) > 0) {
+          const advAmount = (booking.advance_amount as number) || 0;
+          const isRetained = advanceAction === 'retain';
+          const statusAdvance = isRetained ? 'retained' : 'refunded';
+
+          // Get court name for the record
+          let courtName = '';
+          try {
+            const cId = (booking.court_ids as string[])?.[0] || (booking.court_id as string) || '';
+            if (cId) {
+              const court = await getCourtById(cId);
+              courtName = (court?.name as string) || '';
+            }
+          } catch { /* non-critical */ }
+
+          // Get user name
+          let userName = '';
+          try {
+            const uId = booking.user_id as string;
+            if (uId) {
+              const user = await getUserById(uId);
+              userName = (user?.name as string) || '';
+            }
+          } catch { /* non-critical */ }
+
+          await createRetainedAdvance({
+            booking_id: id,
+            user_id: (booking.user_id as string) || '',
+            user_name: userName,
+            user_email: (booking.user_email as string) || null,
+            court_name: courtName,
+            booking_date: (booking.date as string) || '',
+            amount: advAmount,
+            original_total: (booking.total_price as number) || 0,
+            payment_method: (booking.payment_method as string) || 'EFECTIVO',
+            reason: cancelReason || 'Cancelación de reserva',
+            status: statusAdvance,
+          });
+
+          // Create a payment record for the refund/retention
+          try {
+            await createPayment(id, {
+              user_id: (booking.user_id as string) || '',
+              amount: advAmount,
+              type: isRetained ? 'retained' : 'refund',
+              method: (booking.payment_method as string) || 'EFECTIVO',
+              status: 'completed',
+            });
+          } catch (payErr) {
+            console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
+          }
+        }
+      } catch (err) {
+        console.error('[BOOKINGS] Warning: could not create retained advance record:', err);
+      }
+    }
 
     // If advance amount is being updated, create a payment record for the increment
     if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number') {

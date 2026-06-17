@@ -1,4 +1,4 @@
-const CACHE_NAME = 'creard-v2';
+const CACHE_NAME = 'creard-v3';
 const STATIC_ASSETS = [
   '/',
   '/admin',
@@ -55,11 +55,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // NEVER cache /api/stats, /api/expenses, /api/equipment — mutable admin data
+  // NEVER cache /api/stats, /api/expenses, /api/equipment, /api/retained-advances — mutable admin data
   if (url.pathname.startsWith('/api/stats') ||
       url.pathname.startsWith('/api/expenses') ||
       url.pathname.startsWith('/api/equipment') ||
-      url.pathname.startsWith('/api/payments')) {
+      url.pathname.startsWith('/api/payments') ||
+      url.pathname.startsWith('/api/retained-advances')) {
     return;
   }
 

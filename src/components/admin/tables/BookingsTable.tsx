@@ -59,7 +59,7 @@ interface BookingsTableProps {
   getAlertLevel: (id: string) => string
   openSeriesModal: (groupId: string) => void
   openAdvanceModal: (booking: Booking) => void
-  handleUpdateStatus: (id: string, status: string) => void
+  handleUpdateStatus: (booking: Booking, status: string) => void
   onShowEquipDetail: (booking: Booking) => void
   advanceAmount: string
   advanceTarget: Booking | null
@@ -204,7 +204,7 @@ export default function BookingsTable({
                       )}
                       <select
                         value={b.status}
-                        onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                        onChange={(e) => handleUpdateStatus(b, e.target.value)}
                         className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                       >
                         <option value="reserved">Reservado</option>

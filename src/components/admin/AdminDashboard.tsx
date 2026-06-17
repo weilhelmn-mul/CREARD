@@ -103,6 +103,23 @@ interface Expense {
   created_at?: string
 }
 
+interface RetainedAdvance {
+  id: string
+  bookingId: string
+  userId: string
+  userName: string
+  userEmail: string | null
+  courtName: string
+  bookingDate: string
+  amount: number
+  originalTotal: number
+  paymentMethod: string
+  reason: string
+  status: 'retained' | 'refunded'
+  createdAt: string
+  updatedAt: string
+}
+
 interface Stats {
   totalBookings: number
   activeBookings: number
@@ -2248,6 +2265,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [retainedAdvances, setRetainedAdvances] = useState<RetainedAdvance[]>([])
   const [allCourts, setAllCourts] = useState<Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>>([])
 
   /* filters */
@@ -2263,6 +2281,13 @@ export default function AdminDashboard() {
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'price_desc' | 'price_asc' | 'name_asc'>('date_desc')
   const [showPastBookings, setShowPastBookings] = useState(false)
+
+  /* cancel dialog (advance handling) */
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
+  const [cancelAdvanceAction, setCancelAdvanceAction] = useState<'retain' | 'refund'>('retain')
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancellingBooking, setCancellingBooking] = useState(false)
 
   /* expense form */
   const [showExpenseForm, setShowExpenseForm] = useState(false)
@@ -2416,6 +2441,14 @@ export default function AdminDashboard() {
         const expensesData = await expensesRes.json()
         setExpenses(Array.isArray(expensesData) ? expensesData : [])
       }
+      // Fetch retained advances
+      try {
+        const raRes = await fetch('/api/retained-advances', { headers })
+        if (raRes.ok) {
+          const raData = await raRes.json()
+          setRetainedAdvances(Array.isArray(raData.advances) ? raData.advances : [])
+        }
+      } catch { /* silent */ }
       setAllCourts(courtsData)
       setBookingUsers(usersData)
 
@@ -3104,8 +3137,18 @@ export default function AdminDashboard() {
     .filter((b) => b.status === 'reserved')
     .reduce((s, b) => s + b.advanceAmount, 0)
   const totalIncome = completedIncome + reservedAdvances
-  const totalAdvances = totalIncome
-  const balance = totalIncome - totalExpenses
+
+  // Retained advances (adelantos de reservas canceladas que se quedaron en caja)
+  const retainedTotal = retainedAdvances
+    .filter((ra) => ra.status === 'retained')
+    .reduce((s, ra) => s + ra.amount, 0)
+  const refundedTotal = retainedAdvances
+    .filter((ra) => ra.status === 'refunded')
+    .reduce((s, ra) => s + ra.amount, 0)
+
+  // Real money in box = normal income + retained advances - refunded advances
+  const effectiveIncome = totalIncome + retainedTotal - refundedTotal
+  const balance = effectiveIncome - totalExpenses
 
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount
@@ -3127,12 +3170,17 @@ export default function AdminDashboard() {
   const rankedUsers = Object.values(userStats).sort((a, b) => b.totalSpent - a.totalSpent)
 
   /* ─── actions ─── */
-  const handleUpdateStatus = async (id: string, status: string) => {
+  const handleUpdateStatus = async (id: string, status: string, advanceAction?: 'retain' | 'refund', cancelReason?: string) => {
     try {
+      const body: Record<string, unknown> = { id, status }
+      if (status === 'cancelled' && advanceAction) {
+        body.advanceAction = advanceAction
+        body.cancelReason = cancelReason || ''
+      }
       const res = await fetch('/api/bookings', {
         method: 'PUT',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)))
@@ -3142,6 +3190,26 @@ export default function AdminDashboard() {
     } catch {
       toast({ title: 'Error', description: 'No se pudo actualizar el estado', variant: 'destructive' })
     }
+  }
+
+  const handleStatusChangeWithAdvanceCheck = (booking: Booking, newStatus: string) => {
+    if (newStatus === 'cancelled' && booking.advanceAmount > 0) {
+      setCancelTarget(booking)
+      setCancelAdvanceAction('retain')
+      setCancelReason('')
+      setShowCancelDialog(true)
+    } else {
+      handleUpdateStatus(booking.id, newStatus)
+    }
+  }
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return
+    setCancellingBooking(true)
+    await handleUpdateStatus(cancelTarget.id, 'cancelled', cancelAdvanceAction, cancelReason)
+    setShowCancelDialog(false)
+    setCancelTarget(null)
+    setCancellingBooking(false)
   }
 
   const handleToggleEquipment = async (bookingId: string, field: 'equipmentDelivered' | 'equipmentReturned', value: boolean) => {
@@ -3533,7 +3601,7 @@ export default function AdminDashboard() {
                   getAlertLevel={getAlertLevel}
                   openSeriesModal={openSeriesModal}
                   openAdvanceModal={openAdvanceModal}
-                  handleUpdateStatus={handleUpdateStatus}
+                  handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
                   onShowEquipDetail={setShowEquipDetail}
                   advanceAmount={advanceAmount}
                   advanceTarget={advanceTarget}
@@ -3637,7 +3705,7 @@ export default function AdminDashboard() {
                             )}
                             <select
                               value={b.status}
-                              onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
                               className="flex-1 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                             >
                               <option value="reserved">Reservado</option>
@@ -3737,7 +3805,7 @@ export default function AdminDashboard() {
                             )}
                             <select
                               value={b.status}
-                              onChange={(e) => handleUpdateStatus(b.id, e.target.value)}
+                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
                               className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                             >
                               <option value="reserved">Reservado</option>
@@ -3758,88 +3826,185 @@ export default function AdminDashboard() {
           {/* ─── FINANZAS ─── */}
           {activeTab === 'finanzas' && (
             <motion.div key="finanzas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-4">
-              {/* Income summary cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Row 1: Main income cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>account_balance_wallet</span>
                     <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Ingresos Totales</span>
                   </div>
                   <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-primary">{fmtCurrency(totalIncome)}</p>
-                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Por reservas completadas y pagadas</p>
+                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Completados + adelantos activos</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>savings</span>
-                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelantos Recibidos</span>
+                    <span className="material-symbols-outlined text-green-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Servicios Completados</span>
                   </div>
-                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-blue-400">{fmtCurrency(totalAdvances)}</p>
-                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Suma de todos los adelantos</p>
+                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(completedIncome)}</p>
+                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Reservas pagadas al 100%</p>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass-card rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>savings</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelantos Activos</span>
+                  </div>
+                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-blue-400">{fmtCurrency(reservedAdvances)}</p>
+                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Saldo pendiente de reservas</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="material-symbols-outlined text-green-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
-                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pagos Completos</span>
+                    <span className="material-symbols-outlined text-red-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>trending_down</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Egresos</span>
                   </div>
-                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(totalIncome)}</p>
-                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Reservas pagadas al 100%</p>
+                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-red-400">{fmtCurrency(totalExpenses)}</p>
+                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Total de gastos registrados</p>
                 </motion.div>
               </div>
 
-              {/* Expenses & Balance */}
+              {/* Row 2: Retained advances + Balance */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="material-symbols-outlined text-red-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>trending_down</span>
-                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Egresos Totales</span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>lock_person</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelantos por Cancelaciones</span>
                   </div>
-                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-red-400">{fmtCurrency(totalExpenses)}</p>
-                  <div className="mt-3 space-y-1.5">
-                    {Object.entries(expensesByCategory).map(([cat, amount]) => {
-                      const catInfo = expenseCategories[cat] || expenseCategories.otros
-                      return (
-                        <div key={cat} className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                            <span className="material-symbols-outlined text-[14px]">{catInfo.icon}</span>
-                            {catInfo.label}
-                          </span>
-                          <span className="text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtCurrency(amount)}</span>
-                        </div>
-                      )
-                    })}
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="p-3 rounded-lg bg-orange-400/10">
+                      <p className="text-[10px] text-orange-300 font-[family-name:var(--font-inter)] mb-1">Retenidos (en caja)</p>
+                      <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-orange-400">{fmtCurrency(retainedTotal)}</p>
+                      <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.filter((ra) => ra.status === 'retained').length} registros</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-purple-400/10">
+                      <p className="text-[10px] text-purple-300 font-[family-name:var(--font-inter)] mb-1">Devueltos al cliente</p>
+                      <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-purple-400">{fmtCurrency(refundedTotal)}</p>
+                      <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.filter((ra) => ra.status === 'refunded').length} registros</p>
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-cm-surface-container-highest/40 flex items-center justify-between">
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Neto retenido</span>
+                    <span className="font-[family-name:var(--font-sora)] text-sm font-bold text-orange-400">{fmtCurrency(retainedTotal - refundedTotal)}</span>
                   </div>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`material-symbols-outlined text-[20px] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`} style={{ fontVariationSettings: '"FILL" 1' }}>analytics</span>
-                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Balance</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Balance (Dinero en Caja)</span>
                   </div>
-                  <p className={`font-[family-name:var(--font-sora)] text-2xl font-bold ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>
+                  <p className={`font-[family-name:var(--font-sora)] text-3xl font-bold ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>
                     {fmtCurrency(balance)}
                   </p>
-                  <div className="mt-3 p-3 rounded-lg bg-cm-surface-container-highest/40">
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-green-400 font-[family-name:var(--font-inter)]">+ Ingresos</span>
+                  <div className="mt-3 p-3 rounded-lg bg-cm-surface-container-highest/40 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-400 font-[family-name:var(--font-inter)]">+ Ingresos por servicios</span>
                       <span className="text-green-400 font-[family-name:var(--font-inter)]">{fmtCurrency(totalIncome)}</span>
                     </div>
+                    {retainedTotal > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-orange-400 font-[family-name:var(--font-inter)]">+ Adelantos retenidos</span>
+                        <span className="text-orange-400 font-[family-name:var(--font-inter)]">+{fmtCurrency(retainedTotal)}</span>
+                      </div>
+                    )}
+                    {refundedTotal > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">- Adelantos devueltos</span>
+                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">-{fmtCurrency(refundedTotal)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs">
                       <span className="text-red-400 font-[family-name:var(--font-inter)]">- Egresos</span>
-                      <span className="text-red-400 font-[family-name:var(--font-inter)]">{fmtCurrency(totalExpenses)}</span>
+                      <span className="text-red-400 font-[family-name:var(--font-inter)]">-{fmtCurrency(totalExpenses)}</span>
                     </div>
-                    <div className="border-t border-white/5 mt-2 pt-2 flex justify-between text-sm font-bold">
-                      <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Balance</span>
+                    <div className="border-t border-white/10 mt-2 pt-2 flex justify-between text-sm font-bold">
+                      <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Balance Total</span>
                       <span className={`font-[family-name:var(--font-sora)] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>{fmtCurrency(balance)}</span>
                     </div>
                   </div>
                 </motion.div>
               </div>
 
+              {/* Row 3: Expense breakdown */}
+              {Object.keys(expensesByCategory).length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="glass-card rounded-xl p-4">
+                  <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3">Desglose de Gastos</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(expensesByCategory).map(([cat, amount]) => {
+                      const catInfo = expenseCategories[cat] || expenseCategories.otros
+                      return (
+                        <div key={cat} className="flex items-center gap-2 p-2.5 rounded-lg bg-cm-surface-container-highest/30">
+                          <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant">{catInfo.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{catInfo.label}</p>
+                            <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(amount)}</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Row 4: Retained advances table */}
+              {retainedAdvances.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
+                      <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Historial de Adelantos por Cancelaciones</h3>
+                    </div>
+                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
+                  </div>
+                  <div className="overflow-x-auto -mx-4 px-4">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-white/5">
+                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Fecha</th>
+                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cliente</th>
+                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cancha</th>
+                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelanto</th>
+                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Total Reserva</th>
+                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Estado</th>
+                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Motivo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {retainedAdvances.map((ra) => (
+                          <tr key={ra.id} className="border-b border-white/5 last:border-0">
+                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
+                              {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es') : '-')}
+                            </td>
+                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
+                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
+                            <td className="py-2 text-right font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</td>
+                            <td className="py-2 text-right text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{fmtCurrency(ra.originalTotal)}</td>
+                            <td className="py-2 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium font-[family-name:var(--font-inter)] ${
+                                ra.status === 'retained'
+                                  ? 'bg-orange-400/20 text-orange-400'
+                                  : 'bg-purple-400/20 text-purple-400'
+                              }`}>
+                                <span className="material-symbols-outlined text-[10px]">
+                                  {ra.status === 'retained' ? 'lock' : 'currency_exchange'}
+                                </span>
+                                {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
+                              </span>
+                            </td>
+                            <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px] truncate">{ra.reason || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Revenue chart */}
               {stats?.revenueByMonth && stats.revenueByMonth.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-5">
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="glass-card rounded-xl p-5">
                   <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-4">Ingresos por Mes</h2>
                   <div className="space-y-2">
                     {stats.revenueByMonth.map((item, i) => {
@@ -5155,6 +5320,114 @@ export default function AdminDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ─── Cancel Booking Dialog (advance handling) ─── */}
+      <Dialog open={showCancelDialog} onOpenChange={(open) => { if (!open) setShowCancelDialog(false) }}>
+        <DialogContent className="z-[70] bg-[#1a1a2e] border border-white/10 text-white max-w-md mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>warning</span>
+              Cancelar Reserva con Adelanto
+            </DialogTitle>
+            <DialogDescription className="text-cm-on-surface-variant">
+              Esta reserva tiene un adelanto pagado de <span className="font-bold text-orange-400">{cancelTarget ? fmtCurrency(cancelTarget.advanceAmount) : ''}</span>. Indica que se hizo con ese dinero.
+            </DialogDescription>
+          </DialogHeader>
+
+          {cancelTarget && (
+            <div className="space-y-4 mt-2">
+              {/* Booking summary */}
+              <div className="p-3 rounded-lg bg-cm-surface-container-highest/40 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-cm-on-surface-variant">Cliente</span>
+                  <span className="text-cm-on-surface font-medium">{cancelTarget.user?.name || 'Sin nombre'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-cm-on-surface-variant">Cancha</span>
+                  <span className="text-cm-on-surface font-medium">{cancelTarget.court?.name || '-'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-cm-on-surface-variant">Fecha</span>
+                  <span className="text-cm-on-surface font-medium">{cancelTarget.date}</span>
+                </div>
+                <div className="border-t border-white/5 pt-1.5 flex justify-between text-xs">
+                  <span className="text-cm-on-surface-variant">Adelanto pagado</span>
+                  <span className="text-orange-400 font-bold">{fmtCurrency(cancelTarget.advanceAmount)}</span>
+                </div>
+              </div>
+
+              {/* Action selection */}
+              <div>
+                <label className="text-xs text-cm-on-surface-variant font-medium mb-2 block">Que se hizo con el adelanto?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCancelAdvanceAction('retain')}
+                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+                      cancelAdvanceAction === 'retain'
+                        ? 'border-orange-400 bg-orange-400/10'
+                        : 'border-white/10 bg-cm-surface-container-highest/20 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-[18px] text-orange-400" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+                      <span className="text-sm font-semibold text-cm-on-surface">Retener</span>
+                    </div>
+                    <p className="text-[10px] text-cm-on-surface-variant">El dinero se queda en caja como compensacion</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCancelAdvanceAction('refund')}
+                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+                      cancelAdvanceAction === 'refund'
+                        ? 'border-purple-400 bg-purple-400/10'
+                        : 'border-white/10 bg-cm-surface-container-highest/20 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-[18px] text-purple-400" style={{ fontVariationSettings: '"FILL" 1' }}>currency_exchange</span>
+                      <span className="text-sm font-semibold text-cm-on-surface">Devolver</span>
+                    </div>
+                    <p className="text-[10px] text-cm-on-surface-variant">Se devolvio el dinero al cliente</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="text-xs text-cm-on-surface-variant font-medium mb-1.5 block">Motivo de cancelacion (opcional)</label>
+                <input
+                  type="text"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ej: El cliente no se presento..."
+                  className="w-full bg-cm-surface-container-highest/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setShowCancelDialog(false)}
+              disabled={cancellingBooking}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 text-sm text-cm-on-surface-variant hover:bg-white/5 transition-colors font-[family-name:var(--font-inter)]"
+            >
+              No cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmCancel}
+              disabled={cancellingBooking}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-red-500/20 text-red-400 text-sm font-semibold hover:bg-red-500/30 transition-colors flex items-center justify-center gap-2 font-[family-name:var(--font-inter)]"
+            >
+              {cancellingBooking && <Loader2 className="h-4 w-4 animate-spin" />}
+              {cancellingBooking ? 'Cancelando...' : 'Confirmar Cancelacion'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Series Management Modal ─── */}
       <AnimatePresence>

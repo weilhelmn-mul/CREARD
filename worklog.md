@@ -356,3 +356,30 @@ Stage Summary:
 - Root cause: z-index collision between custom modals (z-50) and Radix Dialog (z-50)
 - Key fix: Elevated Dialog overlay/content to z-[60]/z-[70] in dialog.tsx
 - Deployed to https://creard.vercel.app
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Integrar adelantos retenidos por cancelación en Finanzas
+
+Work Log:
+- Explorado código completo: Finanzas tab, booking cancellation, stats API, Firestore schema
+- Identificado problema: al cancelar reservas con adelanto, el dinero NO se rastreaba en finanzas
+- Agregada interfaz RetainedAdvance y funciones CRUD en db.ts
+- Creada colección Firestore "retained_advances" con campos: booking_id, user_name, court_name, amount, status (retained/refunded), reason
+- Creado API route /api/retained-advances (GET, POST, PUT)
+- Modificado PUT /api/bookings: al cancelar con adelanto > 0, crea registro en retained_advances
+- Agregado Dialog de cancelación que pregunta si se retiene o devuelve el adelanto
+- Rediseñada sección Finanzas: 4 tarjetas principales, tarjeta de adelantos por cancelación (retenidos vs devueltos), balance real con desglose, tabla de historial
+- Corregido bug: "Adelantos Recibidos" y "Pagos Completos" mostraban mismo valor que totalIncome
+- Actualizado BookingsTable para usar nueva firma handleUpdateStatus(booking, status)
+- Excluido /api/retained-advances de Service Worker cache
+- Bumped SW cache version a v3
+- Deploy exitoso a creard.vercel.app
+
+Stage Summary:
+- Nueva colección retained_advances en Firebase con CRUD completo
+- Al cancelar reserva con adelanto, admin elige: Retener (queda en caja) o Devolver
+- Finanzas muestra: Ingresos Totales, Servicios Completados, Adelantos Activos, Egresos, Adelantos por Cancelaciones (retenidos/devueltos), Balance real
+- Historial completo de adelantos por cancelación con fecha, cliente, cancha, monto, estado, motivo
+

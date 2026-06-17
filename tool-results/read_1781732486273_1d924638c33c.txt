@@ -1,0 +1,402 @@
+     1→     1→  3758→          {/* ─── FINANZAS ─── */}
+     2→     2→  3759→          {activeTab === 'finanzas' && (
+     3→     3→  3760→            <motion.div key="finanzas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-4">
+     4→     4→  3761→              {/* Income summary cards */}
+     5→     5→  3762→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+     6→     6→  3763→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card rounded-xl p-4">
+     7→     7→  3764→                  <div className="flex items-center gap-2 mb-2">
+     8→     8→  3765→                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>account_balance_wallet</span>
+     9→     9→  3766→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Ingresos Totales</span>
+    10→    10→  3767→                  </div>
+    11→    11→  3768→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-primary">{fmtCurrency(totalIncome)}</p>
+    12→    12→  3769→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Por reservas completadas y pagadas</p>
+    13→    13→  3770→                </motion.div>
+    14→    14→  3771→
+    15→    15→  3772→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-xl p-4">
+    16→    16→  3773→                  <div className="flex items-center gap-2 mb-2">
+    17→    17→  3774→                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>savings</span>
+    18→    18→  3775→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelantos Recibidos</span>
+    19→    19→  3776→                  </div>
+    20→    20→  3777→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-blue-400">{fmtCurrency(totalAdvances)}</p>
+    21→    21→  3778→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Suma de todos los adelantos</p>
+    22→    22→  3779→                </motion.div>
+    23→    23→  3780→
+    24→    24→  3781→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card rounded-xl p-4">
+    25→    25→  3782→                  <div className="flex items-center gap-2 mb-2">
+    26→    26→  3783→                    <span className="material-symbols-outlined text-green-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+    27→    27→  3784→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pagos Completos</span>
+    28→    28→  3785→                  </div>
+    29→    29→  3786→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(totalIncome)}</p>
+    30→    30→  3787→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Reservas pagadas al 100%</p>
+    31→    31→  3788→                </motion.div>
+    32→    32→  3789→              </div>
+    33→    33→  3790→
+    34→    34→  3791→              {/* Expenses & Balance */}
+    35→    35→  3792→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    36→    36→  3793→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-xl p-4">
+    37→    37→  3794→                  <div className="flex items-center gap-2 mb-2">
+    38→    38→  3795→                    <span className="material-symbols-outlined text-red-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>trending_down</span>
+    39→    39→  3796→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Egresos Totales</span>
+    40→    40→  3797→                  </div>
+    41→    41→  3798→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-red-400">{fmtCurrency(totalExpenses)}</p>
+    42→    42→  3799→                  <div className="mt-3 space-y-1.5">
+    43→    43→  3800→                    {Object.entries(expensesByCategory).map(([cat, amount]) => {
+    44→    44→  3801→                      const catInfo = expenseCategories[cat] || expenseCategories.otros
+    45→    45→  3802→                      return (
+    46→    46→  3803→                        <div key={cat} className="flex items-center justify-between text-xs">
+    47→    47→  3804→                          <span className="flex items-center gap-1.5 text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+    48→    48→  3805→                            <span className="material-symbols-outlined text-[14px]">{catInfo.icon}</span>
+    49→    49→  3806→                            {catInfo.label}
+    50→    50→  3807→                          </span>
+    51→    51→  3808→                          <span className="text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtCurrency(amount)}</span>
+    52→    52→  3809→                        </div>
+    53→    53→  3810→                      )
+    54→    54→  3811→                    })}
+    55→    55→  3812→                  </div>
+    56→    56→  3813→                </motion.div>
+    57→    57→  3814→
+    58→    58→  3815→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card rounded-xl p-4">
+    59→    59→  3816→                  <div className="flex items-center gap-2 mb-2">
+    60→    60→  3817→                    <span className={`material-symbols-outlined text-[20px] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`} style={{ fontVariationSettings: '"FILL" 1' }}>analytics</span>
+    61→    61→  3818→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Balance</span>
+    62→    62→  3819→                  </div>
+    63→    63→  3820→                  <p className={`font-[family-name:var(--font-sora)] text-2xl font-bold ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>
+    64→    64→  3821→                    {fmtCurrency(balance)}
+    65→    65→  3822→                  </p>
+    66→    66→  3823→                  <div className="mt-3 p-3 rounded-lg bg-cm-surface-container-highest/40">
+    67→    67→  3824→                    <div className="flex justify-between text-xs mb-1.5">
+    68→    68→  3825→                      <span className="text-green-400 font-[family-name:var(--font-inter)]">+ Ingresos</span>
+    69→    69→  3826→                      <span className="text-green-400 font-[family-name:var(--font-inter)]">{fmtCurrency(totalIncome)}</span>
+    70→    70→  3827→                    </div>
+    71→    71→  3828→                    <div className="flex justify-between text-xs">
+    72→    72→  3829→                      <span className="text-red-400 font-[family-name:var(--font-inter)]">- Egresos</span>
+    73→    73→  3830→                      <span className="text-red-400 font-[family-name:var(--font-inter)]">{fmtCurrency(totalExpenses)}</span>
+    74→    74→  3831→                    </div>
+    75→    75→  3832→                    <div className="border-t border-white/5 mt-2 pt-2 flex justify-between text-sm font-bold">
+    76→    76→  3833→                      <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Balance</span>
+    77→    77→  3834→                      <span className={`font-[family-name:var(--font-sora)] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>{fmtCurrency(balance)}</span>
+    78→    78→  3835→                    </div>
+    79→    79→  3836→                  </div>
+    80→    80→  3837→                </motion.div>
+    81→    81→  3838→              </div>
+    82→    82→  3839→
+    83→    83→  3840→              {/* Revenue chart */}
+    84→    84→  3841→              {stats?.revenueByMonth && stats.revenueByMonth.length > 0 && (
+    85→    85→  3842→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-5">
+    86→    86→  3843→                  <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-4">Ingresos por Mes</h2>
+    87→    87→  3844→                  <div className="space-y-2">
+    88→    88→  3845→                    {stats.revenueByMonth.map((item, i) => {
+    89→    89→  3846→                      const maxRevenue = Math.max(...stats.revenueByMonth.map((m) => m.revenue), 1)
+    90→    90→  3847→                      const barWidth = (item.revenue / maxRevenue) * 100
+    91→    91→  3848→                      return (
+    92→    92→  3849→                        <div key={i} className="flex items-center gap-3">
+    93→    93→  3850→                          <span className="text-xs text-cm-on-surface-variant w-12 text-right font-[family-name:var(--font-inter)]">{item.month}</span>
+    94→    94→  3851→                          <div className="flex-1 h-7 bg-cm-surface-container-highest/40 rounded-lg overflow-hidden">
+    95→    95→  3852→                            <motion.div
+    96→    96→  3853→                              initial={{ width: 0 }}
+    97→    97→  3854→                              animate={{ width: `${Math.max(barWidth, 2)}%` }}
+    98→    98→  3855→                              transition={{ duration: 0.6, delay: i * 0.05 }}
+    99→    99→  3856→                              className="h-full rounded-lg flex items-center px-2"
+   100→   100→  3857→                              style={{
+   101→   101→  3858→                                background: i === stats.revenueByMonth.length - 1
+   102→   102→  3859→                                  ? 'linear-gradient(90deg, #00ff41, #00cc33)'
+   103→   103→  3860→                                  : 'linear-gradient(90deg, rgba(0,255,65,0.6), rgba(0,255,65,0.3))',
+   104→   104→  3861→                              }}
+   105→   105→  3862→                            >
+   106→   106→  3863→                              <span className="text-[10px] font-semibold text-cm-on-primary font-[family-name:var(--font-inter)] whitespace-nowrap">
+   107→   107→  3864→                                {item.revenue > 0 ? fmtCurrency(item.revenue) : ''}
+   108→   108→  3865→                              </span>
+   109→   109→  3866→                            </motion.div>
+   110→   110→  3867→                          </div>
+   111→   111→  3868→                        </div>
+   112→   112→  3869→                      )
+   113→   113→  3870→                    })}
+   114→   114→  3871→                  </div>
+   115→   115→  3872→                </motion.div>
+   116→   116→  3873→              )}
+   117→   117→  3874→            </motion.div>
+   118→   118→  3875→          )}
+   119→   119→  3876→
+   120→   120→  3877→          {/* ─── GASTOS ─── */}
+   121→   121→  3878→          {activeTab === 'gastos' && (
+   122→   122→  3879→            <motion.div key="gastos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   123→   123→  3880→              {/* Header with add button */}
+   124→   124→  3881→              <div className="flex items-center justify-between mb-4">
+   125→   125→  3882→                <div>
+   126→   126→  3883→                  <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Registro de Gastos</h2>
+   127→   127→  3884→                  <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{expenses.length} gastos · Total {fmtCurrency(totalExpenses)}</p>
+   128→   128→  3885→                </div>
+   129→   129→  3886→                <button type="button"
+   130→   130→  3887→                  onClick={() => setShowExpenseForm(true)}
+   131→   131→  3888→                  className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+   132→   132→  3889→                >
+   133→   133→  3890→                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
+   134→   134→  3891→                  Agregar Gasto
+   135→   135→  3892→                </button>
+   136→   136→  3893→              </div>
+   137→   137→  3894→
+   138→   138→  3895→              {/* Expense list */}
+   139→   139→  3896→              <ExpensesTable expenses={expenses} />
+   140→   140→  3897→
+   141→   141→  3898→              {/* Add expense modal */}
+   142→   142→  3899→              <AnimatePresence>
+   143→   143→  3900→                {showExpenseForm && (
+   144→   144→  3901→                  <motion.div
+   145→   145→  3902→                    initial={{ opacity: 0 }}
+   146→   146→  3903→                    animate={{ opacity: 1 }}
+   147→   147→  3904→                    exit={{ opacity: 0 }}
+   148→   148→  3905→                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   149→   149→  3906→                    onClick={() => !submittingExpense && setShowExpenseForm(false)}
+   150→   150→  3907→                  >
+   151→   151→  3908→                    <motion.div
+   152→   152→  3909→                      initial={{ y: 100, opacity: 0 }}
+   153→   153→  3910→                      animate={{ y: 0, opacity: 1 }}
+   154→   154→  3911→                      exit={{ y: 100, opacity: 0 }}
+   155→   155→  3912→                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+   156→   156→  3913→                      className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20"
+   157→   157→  3914→                      onClick={(e) => e.stopPropagation()}
+   158→   158→  3915→                    >
+   159→   159→  3916→                      <div className="flex items-center justify-between mb-5">
+   160→   160→  3917→                        <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Agregar Gasto</h3>
+   161→   161→  3918→                        {!submittingExpense && (
+   162→   162→  3919→                          <button type="button" onClick={() => setShowExpenseForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+   163→   163→  3920→                            <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+   164→   164→  3921→                          </button>
+   165→   165→  3922→                        )}
+   166→   166→  3923→                      </div>
+   167→   167→  3924→
+   168→   168→  3925→                      <div className="space-y-3">
+   169→   169→  3926→                        <div>
+   170→   170→  3927→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Descripción *</label>
+   171→   171→  3928→                          <input
+   172→   172→  3929→                            value={expForm.description}
+   173→   173→  3930→                            onChange={(e) => setExpForm((f) => ({ ...f, description: e.target.value }))}
+   174→   174→  3931→                            className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   175→   175→  3932→                            placeholder="Ej. Mantenimiento césped"
+   176→   176→  3933→                          />
+   177→   177→  3934→                        </div>
+   178→   178→  3935→                        <div className="grid grid-cols-2 gap-3">
+   179→   179→  3936→                          <div>
+   180→   180→  3937→                            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Monto (S/) *</label>
+   181→   181→  3938→                            <input
+   182→   182→  3939→                              type="number"
+   183→   183→  3940→                              step="0.01"
+   184→   184→  3941→                              value={expForm.amount}
+   185→   185→  3942→                              onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))}
+   186→   186→  3943→                              className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   187→   187→  3944→                              placeholder="0.00"
+   188→   188→  3945→                            />
+   189→   189→  3946→                          </div>
+   190→   190→  3947→                          <div>
+   191→   191→  3948→                            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Fecha *</label>
+   192→   192→  3949→                            <input
+   193→   193→  3950→                              type="date"
+   194→   194→  3951→                              value={expForm.date}
+   195→   195→  3952→                              onChange={(e) => setExpForm((f) => ({ ...f, date: e.target.value }))}
+   196→   196→  3953→                              className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   197→   197→  3954→                            />
+   198→   198→  3955→                          </div>
+   199→   199→  3956→                        </div>
+   200→   200→  3957→                        <div>
+   201→   201→  3958→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Categoría *</label>
+   202→   202→  3959→                          <div className="grid grid-cols-3 gap-2">
+   203→   203→  3960→                            {Object.entries(expenseCategories).map(([key, cat]) => (
+   204→   204→  3961→                              <button type="button"
+   205→   205→  3962→                                key={key}
+   206→   206→  3963→                                onClick={() => setExpForm((f) => ({ ...f, category: key }))}
+   207→   207→  3964→                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
+   208→   208→  3965→                                  expForm.category === key
+   209→   209→  3966→                                    ? 'bg-cm-primary/10 border-cm-primary/40 text-cm-primary'
+   210→   210→  3967→                                    : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+   211→   211→  3968→                                }`}
+   212→   212→  3969→                              >
+   213→   213→  3970→                                <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
+   214→   214→  3971→                                {cat.label}
+   215→   215→  3972→                              </button>
+   216→   216→  3973→                            ))}
+   217→   217→  3974→                          </div>
+   218→   218→  3975→                        </div>
+   219→   219→  3976→                        <div>
+   220→   220→  3977→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Notas</label>
+   221→   221→  3978→                          <textarea
+   222→   222→  3979→                            value={expForm.notes}
+   223→   223→  3980→                            onChange={(e) => setExpForm((f) => ({ ...f, notes: e.target.value }))}
+   224→   224→  3981→                            rows={2}
+   225→   225→  3982→                            className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 resize-none font-[family-name:var(--font-inter)]"
+   226→   226→  3983→                            placeholder="Notas opcionales..."
+   227→   227→  3984→                          />
+   228→   228→  3985→                        </div>
+   229→   229→  3986→                      </div>
+   230→   230→  3987→
+   231→   231→  3988→                      <button type="button"
+   232→   232→  3989→                        onClick={handleAddExpense}
+   233→   233→  3990→                        disabled={submittingExpense}
+   234→   234→  3991→                        className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+   235→   235→  3992→                      >
+   236→   236→  3993→                        {submittingExpense ? (
+   237→   237→  3994→                          <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Registrando...</>
+   238→   238→  3995→                        ) : (
+   239→   239→  3996→                          <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Gasto</>
+   240→   240→  3997→                        )}
+   241→   241→  3998→                      </button>
+   242→   242→  3999→                    </motion.div>
+   243→   243→  4000→                  </motion.div>
+   244→   244→  4001→                )}
+   245→   245→  4002→              </AnimatePresence>
+   246→   246→  4003→            </motion.div>
+   247→   247→  4004→          )}
+   248→   248→  4005→
+   249→   249→  4006→          {/* ─── USUARIOS ─── */}
+   250→   250→  4007→          {activeTab === 'usuarios' && (
+   251→   251→  4008→            <motion.div key="usuarios" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   252→   252→  4009→              <UsersTab />
+   253→   253→  4010→            </motion.div>
+   254→   254→  4011→          )}
+   255→   255→  4012→
+   256→   256→  4013→          {/* ─── CANCHAS (Court Management) ─── */}
+   257→   257→  4014→          {activeTab === 'canchas' && (
+   258→   258→  4015→            <CourtsTab allCourts={allCourts} onRefresh={fetchData} />
+   259→   259→  4016→          )}
+   260→   260→  4017→
+   261→   261→  4018→          {/* ─── EQUIPOS (Equipment Management) ─── */}
+   262→   262→  4019→          {activeTab === 'equipos' && (
+   263→   263→  4020→            <motion.div key="equipos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+   264→   264→  4021→              <EquipmentManager equipmentList={equipmentList} onRefresh={fetchData} />
+   265→   265→  4022→            </motion.div>
+   266→   266→  4023→          )}
+   267→   267→  4024→
+   268→   268→  4025→          {/* ─── ALARMAS (Notification Settings) ─── */}
+   269→   269→  4026→          {activeTab === 'alarmas' && (
+   270→   270→  4027→            <motion.div key="alarmas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+   271→   271→  4028→              <NotificationSettingsPanel
+   272→   272→  4029→                settings={notifSettings}
+   273→   273→  4030→                onSettingsChange={setNotifSettings}
+   274→   274→  4031→              />
+   275→   275→  4032→            </motion.div>
+   276→   276→  4033→          )}
+   277→   277→  4034→
+   278→   278→  4035→          {/* ─── CONTENIDO (Edit Home Page) ─── */}
+   279→   279→  4036→          {activeTab === 'contenido' && (
+   280→   280→  4037→            <ContentTab />
+   281→   281→  4038→          )}
+   282→   282→  4039→        </AnimatePresence>
+   283→   283→  4040→      </div>
+   284→   284→  4041→
+   285→   285→  4042→      {/* ═══════════════════════════════════════════════════════════════
+   286→   286→  4043→           MODALS: Booking Form, Advance Payment, Schedule
+   287→   287→  4044→         ═══════════════════════════════════════════════════════════════ */}
+   288→   288→  4045→      <AnimatePresence>
+   289→   289→  4046→        {/* ─── New Booking Modal ─── */}
+   290→   290→  4047→        {showBookingForm && (
+   291→   291→  4048→          <motion.div
+   292→   292→  4049→            initial={{ opacity: 0 }}
+   293→   293→  4050→            animate={{ opacity: 1 }}
+   294→   294→  4051→            exit={{ opacity: 0 }}
+   295→   295→  4052→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   296→   296→  4053→            onClick={() => !submittingBooking && setShowBookingForm(false)}
+   297→   297→  4054→          >
+   298→   298→  4055→            <motion.div
+   299→   299→  4056→              initial={{ y: 100, opacity: 0 }}
+   300→   300→  4057→              animate={{ y: 0, opacity: 1 }}
+   301→   301→  4058→              exit={{ y: 100, opacity: 0 }}
+   302→   302→  4059→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+   303→   303→  4060→              className="w-[92vw] max-w-6xl lg:max-w-7xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[92vh]"
+   304→   304→  4061→              onClick={(e) => e.stopPropagation()}
+   305→   305→  4062→            >
+   306→   306→  4063→              <div className="flex items-center justify-between mb-5 flex-shrink-0">
+   307→   307→  4064→                <div className="flex items-center gap-2">
+   308→   308→  4065→                  <div className="w-10 h-10 rounded-xl bg-cm-primary/10 flex items-center justify-center">
+   309→   309→  4066→                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
+   310→   310→  4067→                  </div>
+   311→   311→  4068→                  <div>
+   312→   312→  4069→                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Nueva Reserva</h3>
+   313→   313→  4070→                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Crear reserva manualmente</p>
+   314→   314→  4071→                  </div>
+   315→   315→  4072→                </div>
+   316→   316→  4073→                {!submittingBooking && (
+   317→   317→  4074→                  <button type="button" onClick={() => setShowBookingForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+   318→   318→  4075→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+   319→   319→  4076→                  </button>
+   320→   320→  4077→                )}
+   321→   321→  4078→              </div>
+   322→   322→  4079→
+   323→   323→  4080→              <div className="overflow-y-auto flex-1 pr-1">
+   324→   324→  4081→                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-5">
+   325→   325→  4082→
+   326→   326→  4083→                {/* ═══ SECTION 1 — Cancha y Horario ═══ */}
+   327→   327→  4084→                <div className="lg:col-span-2">
+   328→   328→  4085→                  <div className="flex items-center gap-2 mb-3">
+   329→   329→  4086→                    <span className="w-6 h-6 rounded-lg bg-cm-primary/15 text-cm-primary text-[11px] font-bold flex items-center justify-center font-[family-name:var(--font-sora)]">1</span>
+   330→   330→  4087→                    <h4 className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cancha y Horario</h4>
+   331→   331→  4088→                  </div>
+   332→   332→  4089→
+   333→   333→  4090→                  <div className="flex items-center justify-between mb-3">
+   334→   334→  4091→                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] block">Selecciona cancha(s) *</label>
+   335→   335→  4092→                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cm-primary/10 text-cm-primary font-semibold font-[family-name:var(--font-inter)]">
+   336→   336→  4093→                      {bookingForm.courtIds.length} seleccionada{bookingForm.courtIds.length !== 1 ? 's' : ''}
+   337→   337→  4094→                    </span>
+   338→   338→  4095→                  </div>
+   339→   339→  4096→
+   340→   340→  4097→                  {(() => {
+   341→   341→  4098→                    const futbolCourts = bookingCourtDetails.filter(c => c.sport === 'futbol')
+   342→   342→  4099→                    const voleyCourts = bookingCourtDetails.filter(c => c.sport === 'voley')
+   343→   343→  4100→                    const otherCourts = bookingCourtDetails.filter(c => c.sport !== 'futbol' && c.sport !== 'voley')
+   344→   344→  4101→
+   345→   345→  4102→                    const CourtCard = ({ c, isFutbol }: { c: typeof bookingCourtDetails[0]; isFutbol: boolean }) => {
+   346→   346→  4103→                      const isSelected = bookingForm.courtIds.includes(c.id)
+   347→   347→  4104→                      const courtLabel = c.name.replace(/^(Cancha\s*)/i, '').trim() || c.name
+   348→   348→  4105→                      const sched = c.pricingSchedule && c.pricingSchedule.length > 0 ? c.pricingSchedule : []
+   349→   349→  4106→                      const morning = sched.find(s => s.startHour < 12)
+   350→   350→  4107→                      const afternoon = sched.find(s => s.startHour >= 12)
+   351→   351→  4108→                      return (
+   352→   352→  4109→                        <button type="button" key={c.id}
+   353→   353→  4110→                          onClick={() => {
+   354→   354→  4111→                            setBookingForm((prev) => {
+   355→   355→  4112→                              const newIds = isSelected ? prev.courtIds.filter(id => id !== c.id) : [...prev.courtIds, c.id]
+   356→   356→  4113→                              const updated = { ...prev, courtIds: newIds, courtId: newIds[0] || '' }
+   357→   357→  4114→                              if (newIds.length > 0 && updated.startTime && updated.endTime) {
+   358→   358→  4115→                                const courtPrice = calculateMultiCourtPrice(newIds, updated.startTime, updated.endTime)
+   359→   359→  4116→                                const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+   360→   360→  4117→                                const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+   361→   361→  4118→                                updated.totalPrice = String(grandTotal)
+   362→   362→  4119→                                if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) updated.advanceAmount = String(Math.round(grandTotal * 0.5 * 100) / 100)
+   363→   363→  4120→                              } else { updated.totalPrice = ''; updated.advanceAmount = '' }
+   364→   364→  4121→                              return updated
+   365→   365→  4122→                            })
+   366→   366→  4123→                            if (formErrors.courtId) setFormErrors(prev => { const n = { ...prev }; delete n.courtId; return n })
+   367→   367→  4124→                          }}
+   368→   368→  4125→                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all duration-200 active:scale-[0.97] ${
+   369→   369→  4126→                            isSelected
+   370→   370→  4127→                              ? (isFutbol ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-blue-500/50 bg-blue-500/10')
+   371→   371→  4128→                              : 'border-white/[0.08] bg-cm-surface-container-low/50 hover:border-white/20'
+   372→   372→  4129→                          }`}
+   373→   373→  4130→                        >
+   374→   374→  4131→                          {/* Mini field icon */}
+   375→   375→  4132→                          <div className={`w-5 h-5 rounded-[3px] flex-shrink-0 flex items-center justify-center ${
+   376→   376→  4133→                            isFutbol ? 'bg-emerald-900/80' : 'bg-blue-900/80'
+   377→   377→  4134→                          }`}
+   378→   378→  4135→                            style={isSelected ? { boxShadow: isFutbol ? '0 0 6px rgba(52,211,153,0.4)' : '0 0 6px rgba(96,165,250,0.4)' } : undefined}
+   379→   379→  4136→                          >
+   380→   380→  4137→                            <span className="material-symbols-outlined text-white/70" style={{ fontSize: '12px' }}>{isFutbol ? 'sports_soccer' : 'sports_volleyball'}</span>
+   381→   381→  4138→                          </div>
+   382→   382→  4139→                          <span className={`text-[11px] font-semibold font-[family-name:var(--font-sora)] leading-tight ${isSelected ? (isFutbol ? 'text-emerald-400' : 'text-blue-400') : 'text-cm-on-surface'}`}>{courtLabel}</span>
+   383→   383→  4140→                          <span className={`text-[9px] font-[family-name:var(--font-inter)] leading-tight ${isSelected ? 'text-white/50' : 'text-cm-on-surface-variant/70'}`}>
+   384→   384→  4141→                            {morning ? `${morning.label}: S/${morning.pricePerHour}` : ''}{morning && afternoon ? ' · ' : ''}{afternoon ? `${afternoon.label}: S/${afternoon.pricePerHour}` : ''}
+   385→   385→  4142→                            {!morning && !afternoon ? `S/${c.pricePerHour}/h` : ''}
+   386→   386→  4143→                          </span>
+   387→   387→  4144→                          {isSelected && <span className="material-symbols-outlined text-emerald-400 ml-auto" style={{ fontSize: '14px' }}>check_circle</span>}
+   388→   388→  4145→                        </button>
+   389→   389→  4146→                      )
+   390→   390→  4147→                    }
+   391→   391→  4148→
+   392→   392→  4149→                    return (
+   393→   393→  4150→                      <div className="flex flex-col gap-2">
+   394→   394→  4151→                        {futbolCourts.length > 0 && (
+   395→   395→  4152→                          <div>
+   396→   396→  4153→                            <span className="text-[9px] font-bold font-[family-name:var(--font-inter)] text-emerald-400/70 uppercase tracking-[0.1em] mb-1 block">Fútbol</span>
+   397→   397→  4154→                            <div className="flex flex-wrap gap-1.5">
+   398→   398→  4155→                              {futbolCourts.map(c => <CourtCard key={c.id} c={c} isFutbol />)}
+   399→   399→  4156→                            </div>
+   400→   400→  4157→                          </div>
+   401→   401→
+   402→   402→[showing lines 3758-4157 of 5317; use offset=4158 with limit to continue reading]
