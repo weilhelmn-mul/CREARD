@@ -2676,15 +2676,17 @@ export default function AdminDashboard() {
     if (!validateBookingForm()) return
     setSubmittingBooking(true)
     try {
+      const parsedTotal = parseFloat(bookingForm.totalPrice)
+      const parsedAdvance = parseFloat(bookingForm.advanceAmount) || parsedTotal * 0.5
       const body = {
         courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
         userId: bookingForm.userId,
         date: bookingForm.date,
         startTime: bookingForm.startTime,
         endTime: bookingForm.endTime,
-        totalPrice: parseFloat(bookingForm.totalPrice),
-        advanceAmount: parseFloat(bookingForm.advanceAmount) || parseFloat(bookingForm.totalPrice) * 0.5,
-        remainingAmount: parseFloat(bookingForm.totalPrice) - (parseFloat(bookingForm.advanceAmount) || 0),
+        totalPrice: parsedTotal,
+        advanceAmount: parsedAdvance,
+        remainingAmount: parsedTotal - parsedAdvance,
         status: bookingForm.status,
         paymentMethod: bookingForm.paymentMethod,
         notes: bookingForm.notes || null,
@@ -3089,7 +3091,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('/api/bookings', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status }),
       })
       if (res.ok) {

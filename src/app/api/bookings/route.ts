@@ -5,6 +5,7 @@ import {
   updateBooking,
   getCourtById,
   getUserById,
+  getBookingById,
   createPayment,
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
@@ -493,11 +494,18 @@ export async function POST(request: NextRequest) {
     const rem = parseFloat(remainingAmount) || price - adv;
     const bookingStatus = migrateStatus(status || 'reserved');
 
+    // Resolve client email for denormalized search
+    let clientEmail = authUser.email;
+    try {
+      const clientUser = await getUserById(userId);
+      if (clientUser?.email) clientEmail = clientUser.email;
+    } catch { /* fallback to admin email */ }
+
     // Save to Firestore — single booking with all courts
     const id = await createBooking({
       court_ids: allCourtIds,
       user_id: userId,
-      user_email: authUser.email,
+      user_email: clientEmail,
       date,
       start_time: startTime,
       end_time: endTime,
@@ -519,7 +527,7 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         amount: adv,
         type: 'advance',
-        method: paymentMethod || 'yape',
+        method: normalizedPaymentMethod || 'EFECTIVO',
         status: 'completed',
       });
     } catch (payErr) {
@@ -600,6 +608,30 @@ export async function PUT(request: NextRequest) {
     }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
+
+    // If advance amount is being updated, create a payment record for the increment
+    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number') {
+      try {
+        const booking = await getBookingById(id);
+        if (booking) {
+          const prevAdvance = (booking.advance_amount as number) || 0;
+          const paymentIncrement = reqAdvance - prevAdvance;
+          if (paymentIncrement > 0.01) {
+            try {
+              await createPayment(id, {
+                user_id: booking.user_id as string,
+                amount: paymentIncrement,
+                type: reqRemaining <= 0 ? 'full_payment' : 'advance',
+                method: (updateData.payment_method as string) || 'EFECTIVO',
+                status: 'completed',
+              });
+            } catch (payErr) {
+              console.error('[BOOKINGS] Warning: could not create payment record for advance update:', payErr);
+            }
+          }
+        }
+      } catch { /* non-critical: proceed with booking update */ }
+    }
 
     await updateBooking(id, updateData);
 

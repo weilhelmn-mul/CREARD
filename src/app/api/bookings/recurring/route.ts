@@ -240,6 +240,13 @@ export async function POST(request: NextRequest) {
     const bookingStatus = migrateStatus(status || 'reserved');
     const createdBookings: Array<{ id: string; date: string }> = [];
 
+    // Resolve client email for denormalized search
+    let clientEmail = authUser.email;
+    try {
+      const clientUser = await getUserById(userId);
+      if (clientUser?.email) clientEmail = clientUser.email;
+    } catch { /* fallback to admin email */ }
+
     for (let i = 0; i < dates.length; i++) {
       const item = previewItems[i];
       if (!item.available) continue;
@@ -247,7 +254,7 @@ export async function POST(request: NextRequest) {
       const id = await createBooking({
         court_ids: allCourtIds,
         user_id: userId,
-        user_email: authUser.email,
+        user_email: clientEmail,
         date: dates[i],
         start_time: startTime,
         end_time: endTime,
