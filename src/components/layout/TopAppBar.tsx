@@ -40,7 +40,20 @@ export default function TopAppBar() {
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    // Also close on touch start (mobile)
+    const handleTouchOutside = (e: TouchEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false)
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener('touchstart', handleTouchOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleTouchOutside)
+    }
   }, [])
 
   // Get user initials
@@ -54,12 +67,12 @@ export default function TopAppBar() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-cm-surface/80 backdrop-blur-xl border-b border-white/10">
-      <div className="max-w-7xl mx-auto h-full flex items-center justify-between px-4 md:px-6">
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 bg-cm-surface/90 backdrop-blur-xl border-b border-white/10">
+      <div className="max-w-7xl mx-auto h-full flex items-center justify-between px-3 sm:px-6">
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
-          <img src="/creard-logo.png" alt="CREARD" className="h-8 w-8 rounded-lg" />
-          <h1 className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-primary text-glow">
+          <img src="/creard-logo.png" alt="CREARD" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg" />
+          <h1 className="font-[family-name:var(--font-sora)] text-lg sm:text-xl font-bold text-cm-primary text-glow">
             CREARD
           </h1>
         </div>
@@ -88,7 +101,7 @@ export default function TopAppBar() {
         </nav>
 
         {/* Right section: Notifications + Auth */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Notifications - only show if logged in */}
           {user && (
             <div className="relative" ref={notifRef}>
@@ -97,11 +110,11 @@ export default function TopAppBar() {
                   setShowNotifications(!showNotifications)
                   setShowUserMenu(false)
                 }}
-                className="relative p-2 rounded-full text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/5 transition-all"
+                className="relative p-2 rounded-full text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/5 transition-all active:scale-95"
               >
-                <span className="material-symbols-outlined">notifications</span>
+                <span className="material-symbols-outlined text-[22px] sm:text-[24px]">notifications</span>
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-cm-surface">
                     {unreadCount}
                   </span>
                 )}
@@ -114,23 +127,23 @@ export default function TopAppBar() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-12 w-80 glass-card rounded-xl overflow-hidden shadow-2xl"
+                    className="absolute right-0 top-12 sm:top-13 w-[calc(100vw-1.5rem)] sm:w-80 bg-cm-surface-container border border-white/15 rounded-2xl overflow-hidden shadow-2xl sm:glass-card"
                   >
-                    <div className="p-4 border-b border-white/10">
-                      <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm sm:text-base">
                         Notificaciones
                       </h3>
                     </div>
                     <div className="max-h-64 overflow-y-auto">
                       {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-cm-on-surface-variant text-sm">
+                        <div className="p-6 text-center text-cm-on-surface-variant text-sm">
                           No hay notificaciones
                         </div>
                       ) : (
                         notifications.map((n) => (
                           <div
                             key={n.id}
-                            className={`p-4 border-b border-white/5 hover:bg-white/5 transition-colors ${
+                            className={`p-3.5 sm:p-4 border-b border-white/5 active:bg-white/5 transition-colors ${
                               !n.read ? 'bg-cm-primary/5' : ''
                             }`}
                           >
@@ -199,7 +212,7 @@ export default function TopAppBar() {
 
               <button
                 onClick={() => setView('login')}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-all duration-200 border border-cm-primary/20"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-sm font-medium bg-cm-primary text-cm-on-primary hover:brightness-110 transition-all duration-200 active:scale-95"
               >
                 <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                   login
@@ -214,9 +227,9 @@ export default function TopAppBar() {
                   setShowUserMenu(!showUserMenu)
                   setShowNotifications(false)
                 }}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/5 transition-all"
+                className="flex items-center gap-2 px-1.5 sm:px-2 py-1.5 rounded-full hover:bg-white/5 transition-all active:scale-95"
               >
-                <div className="w-8 h-8 rounded-full bg-cm-primary/15 border border-cm-primary/30 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-cm-primary/20 border-2 border-cm-primary/40 flex items-center justify-center">
                   <span className="text-cm-primary text-xs font-bold font-[family-name:var(--font-sora)]">
                     {getUserInitials()}
                   </span>
@@ -246,37 +259,47 @@ export default function TopAppBar() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-12 w-56 glass-card rounded-xl overflow-hidden shadow-2xl"
+                    className="absolute right-0 top-12 sm:top-13 w-[calc(100vw-1.5rem)] sm:w-60 bg-cm-surface-container border border-white/15 rounded-2xl overflow-hidden shadow-2xl"
                   >
                     {/* User info header */}
-                    <div className="p-3 border-b border-white/10">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-cm-primary/15 border border-cm-primary/30 flex items-center justify-center">
+                    <div className="px-4 py-3.5 bg-cm-primary/5 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-cm-primary/20 border-2 border-cm-primary/40 flex items-center justify-center flex-shrink-0">
                           <span className="text-cm-primary text-sm font-bold font-[family-name:var(--font-sora)]">
                             {getUserInitials()}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-cm-on-surface truncate font-[family-name:var(--font-sora)]">
+                          <p className="text-sm font-bold text-cm-on-surface truncate font-[family-name:var(--font-sora)]">
                             {user.name}
                           </p>
-                          <p className="text-xs text-cm-on-surface-variant truncate font-[family-name:var(--font-inter)]">
+                          <p className="text-xs text-cm-on-surface-variant truncate font-[family-name:var(--font-inter)] mt-0.5">
                             {user.email}
                           </p>
+                          {isAdmin && (
+                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-cm-primary/15 border border-cm-primary/20">
+                              <span className="material-symbols-outlined text-cm-primary text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                                shield
+                              </span>
+                              <span className="text-[10px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
+                                {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                              </span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Menu items */}
-                    <div className="py-1">
+                    <div className="p-2">
                       <button
                         onClick={() => {
                           setShowUserMenu(false)
                           setView('profile')
                         }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/5 transition-colors font-[family-name:var(--font-inter)]"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-cm-on-surface hover:bg-white/5 active:bg-white/8 rounded-xl transition-colors font-[family-name:var(--font-inter)]"
                       >
-                        <span className="material-symbols-outlined text-[20px]">person</span>
+                        <span className="material-symbols-outlined text-[22px] text-cm-on-surface-variant">person</span>
                         Mi Perfil
                       </button>
 
@@ -286,10 +309,16 @@ export default function TopAppBar() {
                             setShowUserMenu(false)
                             setView('admin')
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/5 transition-colors font-[family-name:var(--font-inter)]"
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-cm-primary bg-cm-primary/8 hover:bg-cm-primary/15 active:bg-cm-primary/20 rounded-xl transition-colors font-[family-name:var(--font-inter)] mt-1"
                         >
-                          <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
-                          Panel de Administración
+                          <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                            admin_panel_settings
+                          </span>
+                          <div className="flex-1 text-left">
+                            <p>Panel de Administración</p>
+                            <p className="text-[10px] font-normal text-cm-primary/60 mt-0.5">Gestionar reservas, canchas y más</p>
+                          </div>
+                          <span className="material-symbols-outlined text-[18px] text-cm-primary/50">chevron_right</span>
                         </button>
                       )}
 
@@ -299,25 +328,25 @@ export default function TopAppBar() {
                             setShowUserMenu(false)
                             setView('bookings')
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/5 transition-colors font-[family-name:var(--font-inter)]"
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-cm-on-surface hover:bg-white/5 active:bg-white/8 rounded-xl transition-colors font-[family-name:var(--font-inter)] mt-1"
                         >
-                          <span className="material-symbols-outlined text-[20px]">calendar_month</span>
+                          <span className="material-symbols-outlined text-[22px] text-cm-on-surface-variant">calendar_month</span>
                           Mis Reservas
                         </button>
                       )}
                     </div>
 
                     {/* Logout */}
-                    <div className="border-t border-white/10 py-1">
+                    <div className="px-2 pb-2">
                       <button
                         onClick={async () => {
                           setShowUserMenu(false)
                           const { signOutFirebase } = await import('@/lib/auth-helpers')
                           await signOutFirebase()
                         }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-cm-error hover:bg-cm-error-container/10 transition-colors font-[family-name:var(--font-inter)]"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-cm-error hover:bg-cm-error/10 active:bg-cm-error/15 rounded-xl transition-colors font-[family-name:var(--font-inter)]"
                       >
-                        <span className="material-symbols-outlined text-[20px]">logout</span>
+                        <span className="material-symbols-outlined text-[22px]">logout</span>
                         Cerrar Sesión
                       </button>
                     </div>
