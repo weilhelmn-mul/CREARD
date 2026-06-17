@@ -242,6 +242,7 @@ function calculatePriceForTimeSlot(
 }
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
   const firebaseOk = isFirebaseAvailable();
 
   try {
@@ -288,16 +289,63 @@ export async function GET(request: NextRequest) {
       })) as Record<string, unknown>[];
     }
 
-    // Enrich each booking (safe, per-booking error handling)
-    const enriched: Record<string, unknown>[] = [];
-    for (const b of bookings) {
+    // Enrich each booking with cached court/user lookups (avoid N+1 Firestore reads)
+    const courtCache = new Map<string, Record<string, unknown> | null>();
+    const userCache = new Map<string, Record<string, unknown> | null>();
+    const getCourtCached = async (cid: string) => {
+      if (courtCache.has(cid)) return courtCache.get(cid)!;
       try {
-        const raw = await safeEnrichBooking(b);
-        enriched.push(toCamelBooking(raw));
-      } catch (e) {
-        console.error('[BOOKINGS] Error enriching booking:', b.id, e);
-        // Still include the booking, just without enrichment
-        enriched.push(toCamelBooking(b));
+        const c = await getCourtById(cid);
+        courtCache.set(cid, c as Record<string, unknown> | null);
+        return c as Record<string, unknown> | null;
+      } catch { courtCache.set(cid, null); return null; }
+    };
+    const getUserCached = async (uid: string) => {
+      if (userCache.has(uid)) return userCache.get(uid)!;
+      try {
+        const u = await getUserById(uid);
+        userCache.set(uid, u as Record<string, unknown> | null);
+        return u as Record<string, unknown> | null;
+      } catch { userCache.set(uid, null); return null; }
+    };
+
+    const enriched: Record<string, unknown>[] = [];
+    // Process in batches of 10 to avoid overwhelming Firestore
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < bookings.length; i += BATCH_SIZE) {
+      const batch = bookings.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (b) => {
+          const allCourtIds: string[] = Array.isArray(b.court_ids)
+            ? b.court_ids as string[] : (b.court_id ? [b.court_id as string] : []);
+          let court: Record<string, unknown> | null = null;
+          let courts: Array<Record<string, unknown>> = [];
+          let user: Record<string, unknown> | null = null;
+          try {
+            if (allCourtIds.length > 0) court = await getCourtCached(allCourtIds[0]);
+          } catch { /* skip */ }
+          if (allCourtIds.length > 1) {
+            const enrichedCourts: Array<Record<string, unknown>> = [];
+            for (const cid of allCourtIds) {
+              try {
+                const c = await getCourtCached(cid);
+                if (c) enrichedCourts.push(c);
+              } catch { /* skip */ }
+            }
+            courts = enrichedCourts;
+          }
+          try {
+            if (b.user_id) user = await getUserCached(b.user_id as string);
+          } catch { /* skip */ }
+          return toCamelBooking({ ...b, _court: court, _courts: courts, _user: user });
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          enriched.push(r.value);
+        } else {
+          console.error('[BOOKINGS] Batch enrichment error:', r.reason);
+        }
       }
     }
 
@@ -325,6 +373,8 @@ export async function GET(request: NextRequest) {
       // Same date: chronological by start time
       return String(a.startTime || '').localeCompare(String(b.startTime || ''));
     });
+
+    console.log(`[BOOKINGS] GET: ${enriched.length} bookings returned in ${Date.now() - startTime}ms (auth=${authUser.role}, filters: courtId=${courtId||'all'}, date=${date||'all'}, status=${status||'all'})`);
 
     return NextResponse.json(enriched);
   } catch (error) {
@@ -520,6 +570,8 @@ export async function POST(request: NextRequest) {
       payment_method: normalizedPaymentMethod || null,
       notes: notes || null,
     });
+
+    console.log(`[BOOKINGS] POST: Created booking ${id} for user=${userId} date=${date} ${startTime}-${endTime} courts=${allCourtIds.join(',')} total=${price} advance=${adv} remaining=${rem} method=${normalizedPaymentMethod} email=${clientEmail}`);
 
     // Create advance payment record
     try {

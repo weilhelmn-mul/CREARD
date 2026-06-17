@@ -2385,7 +2385,19 @@ export default function AdminDashboard() {
       if (statsRes.ok) setStats(await statsRes.json())
       if (bookingsRes.ok) {
         const bookingsData = await bookingsRes.json()
+        console.log(`[AdminDashboard] ${Array.isArray(bookingsData) ? bookingsData.length : 0} bookings loaded`)
         setBookings(Array.isArray(bookingsData) ? bookingsData : [])
+      } else if (bookingsRes.status === 0) {
+        console.error('[AdminDashboard] Bookings fetch failed (network error)')
+        toast({ title: 'Error de conexion', description: 'No se pudieron cargar las reservas. Verifica tu conexion a internet.', variant: 'destructive' })
+      } else if (bookingsRes.status >= 400) {
+        console.error('[AdminDashboard] Bookings API error:', bookingsRes.status)
+        try {
+          const errData = await bookingsRes.json()
+          toast({ title: 'Error al cargar reservas', description: errData.error || `Error ${bookingsRes.status}`, variant: 'destructive' })
+        } catch {
+          toast({ title: 'Error al cargar reservas', description: `Error del servidor (${bookingsRes.status})`, variant: 'destructive' })
+        }
       }
       if (expensesRes.ok) {
         const expensesData = await expensesRes.json()
