@@ -292,6 +292,8 @@ export async function getBookings(filters?: {
   userId?: string;
   userEmail?: string;
   date?: string;
+  dateFrom?: string;
+  dateTo?: string;
   status?: string;
 }): Promise<Partial<Booking>[]> {
   // Build non-court constraints (shared by both queries)
@@ -299,6 +301,8 @@ export async function getBookings(filters?: {
   if (filters?.userId) baseConstraints.push({ field: 'user_id', op: '==', value: filters.userId });
   if (filters?.userEmail) baseConstraints.push({ field: 'user_email', op: '==', value: filters.userEmail });
   if (filters?.date) baseConstraints.push({ field: 'date', op: '==', value: filters.date });
+  if (filters?.dateFrom) baseConstraints.push({ field: 'date', op: '>=', value: filters.dateFrom });
+  if (filters?.dateTo) baseConstraints.push({ field: 'date', op: '<=', value: filters.dateTo });
   if (filters?.status) baseConstraints.push({ field: 'status', op: '==', value: filters.status });
 
   // No court filter — single query

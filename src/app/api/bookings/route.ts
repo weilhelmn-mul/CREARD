@@ -250,6 +250,8 @@ export async function GET(request: NextRequest) {
     const courtId = searchParams.get('courtId');
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
     const status = searchParams.get('status');
 
     // Court availability check (courtId + date) is public — no auth required
@@ -280,11 +282,13 @@ export async function GET(request: NextRequest) {
       const effectiveUserId = userId || authUser.id;
       bookings = await searchBookingsForUser(effectiveUserId, authUser.email);
     } else {
-      // Admin: fetch with optional filters
+      // Admin: fetch with optional filters (date range for performance)
       bookings = (await getBookings({
         courtId: courtId || undefined,
         userId: userId || undefined,
         date: date || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
         status: status || undefined,
       })) as Record<string, unknown>[];
     }

@@ -2376,7 +2376,13 @@ export default function AdminDashboard() {
 
       const [statsRes, bookingsRes, expensesRes, courtsData, usersData] = await Promise.all([
         fetch('/api/stats', { headers }).catch(() => new Response(null, { status: 0 })),
-        fetch('/api/bookings', { headers }).catch(() => new Response(null, { status: 0 })),
+        // Only fetch recent bookings: 30 days back to 60 days forward (avoid timeout)
+        (() => {
+          const today = todayStr()
+          const from = new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          return fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers })
+        })().catch(() => new Response(null, { status: 0 })),
         fetch('/api/expenses', { headers }).catch(() => new Response(null, { status: 0 })),
         courtsPromise,
         usersPromise,
