@@ -1,7 +1,5 @@
-const CACHE_NAME = 'creard-v3';
+const CACHE_NAME = 'creard-v4';
 const STATIC_ASSETS = [
-  '/',
-  '/admin',
   '/creard-logo.png',
   '/favicon.ico',
   '/apple-touch-icon.png'
@@ -14,7 +12,7 @@ const CACHEABLE_API = [
   '/api/settings'
 ];
 
-// Install: pre-cache static shell
+// Install: pre-cache static assets only (NOT HTML pages)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -51,11 +49,10 @@ self.addEventListener('fetch', (event) => {
 
   // NEVER cache /api/bookings — must always be fresh data
   if (url.pathname.startsWith('/api/bookings')) {
-    // Pass through to network, no caching
     return;
   }
 
-  // NEVER cache /api/stats, /api/expenses, /api/equipment, /api/retained-advances — mutable admin data
+  // NEVER cache mutable admin API endpoints
   if (url.pathname.startsWith('/api/stats') ||
       url.pathname.startsWith('/api/expenses') ||
       url.pathname.startsWith('/api/equipment') ||
@@ -71,13 +68,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets & pages: cache-first (only non-API routes)
+  // HTML pages: NETWORK-FIRST (always try to get the latest version)
   if (url.origin === self.location.origin && !url.pathname.startsWith('/api/')) {
+    const isHtml = request.headers.get('accept')?.includes('text/html') ||
+                   url.pathname === '/' ||
+                   url.pathname === '/admin' ||
+                   url.pathname.endsWith('/') ||
+                   !url.pathname.includes('.');
+    if (isHtml) {
+      event.respondWith(networkFirstForPages(request));
+      return;
+    }
+    // Static assets (images, JS, CSS with hash): cache-first
     event.respondWith(cacheFirst(request));
     return;
   }
 });
 
+// Network-first for HTML pages: always fetch fresh, fall back to cache
+async function networkFirstForPages(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    return new Response('Sin conexión', { status: 503, statusText: 'Sin conexión' });
+  }
+}
+
+// Cache-first for static assets (JS/CSS bundles have content hashes)
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
