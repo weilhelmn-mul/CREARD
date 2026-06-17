@@ -63,6 +63,8 @@ interface BookingsTableProps {
   onShowEquipDetail: (booking: Booking) => void
   advanceAmount: string
   advanceTarget: Booking | null
+  isSuperAdmin?: boolean
+  onDeleteBooking?: (bookingId: string) => void
 }
 
 export default function BookingsTable({
@@ -74,6 +76,8 @@ export default function BookingsTable({
   onShowEquipDetail,
   advanceAmount,
   advanceTarget,
+  isSuperAdmin = false,
+  onDeleteBooking,
 }: BookingsTableProps) {
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -211,6 +215,15 @@ export default function BookingsTable({
                         <option value="completed">Completo</option>
                         <option value="cancelled">Cancelado</option>
                       </select>
+                      {isSuperAdmin && onDeleteBooking && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteBooking(b.id) }}
+                          className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                          title="Eliminar permanentemente"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -2258,7 +2258,8 @@ function LiveClock({ alarmsCount, settings }: { alarmsCount: number; settings: N
    COMPONENT
    ═══════════════════════════════════════════════════ */
 export default function AdminDashboard() {
-  const { setView } = useAppStore()
+  const { setView, user: loggedInUser } = useAppStore()
+  const isSuperAdmin = loggedInUser?.role === 'super_admin'
   const [activeTab, setActiveTab] = useState<AdminTab>('reservas')
 
   /* data */
@@ -3230,6 +3231,26 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (!confirm('Eliminar permanentemente esta reserva? Se borrara de la base de datos y no se podra recuperar.')) return
+    try {
+      const res = await fetch(`/api/bookings?id=${bookingId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      })
+      if (res.ok) {
+        toast({ title: 'Reserva eliminada', description: 'La reserva fue eliminada permanentemente de la base de datos.' })
+        setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo eliminar la reserva.', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo eliminar la reserva.', variant: 'destructive' })
+    }
+  }
+
   const handleAddExpense = async () => {
     if (!expForm.description || !expForm.amount || !expForm.category || !expForm.date) {
       toast({ title: 'Error', description: 'Completa todos los campos requeridos', variant: 'destructive' })
@@ -3605,6 +3626,8 @@ export default function AdminDashboard() {
                   onShowEquipDetail={setShowEquipDetail}
                   advanceAmount={advanceAmount}
                   advanceTarget={advanceTarget}
+                  isSuperAdmin={isSuperAdmin}
+                  onDeleteBooking={handleDeleteBooking}
                 />
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
@@ -3721,6 +3744,15 @@ export default function AdminDashboard() {
                                 <span className="material-symbols-outlined text-[16px]">payments</span>
                               </button>
                             )}
+                            {isSuperAdmin && (
+                              <button type="button"
+                                onClick={() => handleDeleteBooking(b.id)}
+                                className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-400/20 transition-colors flex-shrink-0"
+                                title="Eliminar permanentemente"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </motion.div>
@@ -3812,6 +3844,15 @@ export default function AdminDashboard() {
                               <option value="completed">Completo</option>
                               <option value="cancelled">Cancelado</option>
                             </select>
+                            {isSuperAdmin && (
+                              <button type="button"
+                                onClick={() => handleDeleteBooking(b.id)}
+                                className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                title="Eliminar permanentemente"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </motion.div>

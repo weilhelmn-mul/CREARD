@@ -3,6 +3,7 @@ import {
   getBookings,
   createBooking,
   updateBooking,
+  deleteDocById,
   getCourtById,
   getUserById,
   getBookingById,
@@ -762,5 +763,48 @@ export async function PUT(request: NextRequest) {
     console.error('[BOOKINGS] PUT error:', error);
     const msg = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: 'Error al actualizar reserva', detail: msg }, { status: 500 });
+  }
+}
+
+// DELETE /api/bookings — permanently delete a booking (super_admin only)
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await requireAuth(request, 'super_admin');
+    if (authResult instanceof NextResponse) return authResult;
+
+    if (!isFirebaseAvailable()) {
+      return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
+    }
+
+    // Delete the booking document and its payments subcollection
+    const { getAdminDb } = await import('@/lib/firebase-admin');
+    const db = await getAdminDb();
+
+    // Delete payments subcollection
+    try {
+      const paymentsSnapshot = await db.collection('bookings').doc(id).collection('payments').get();
+      for (const doc of paymentsSnapshot.docs) {
+        await doc.ref.delete();
+      }
+    } catch (err) {
+      console.error('[BOOKINGS] Warning: could not delete payments subcollection:', err);
+    }
+
+    // Delete the booking document itself
+    await deleteDocById('bookings', id);
+
+    console.log('[BOOKINGS] Booking permanently deleted:', id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[BOOKINGS] DELETE error:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Error al eliminar reserva', detail: msg }, { status: 500 });
   }
 }

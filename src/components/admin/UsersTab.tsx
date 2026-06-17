@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthHeaders } from '@/lib/auth-helpers'
+import { useAppStore } from '@/store/useAppStore'
 
 // Helper: add auth headers to fetch calls
 function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
@@ -48,6 +49,10 @@ const roleConfig: Record<string, { label: string; color: string }> = {
 }
 
 export default function UsersTab() {
+  const { user: loggedInUser } = useAppStore()
+  const isSuperAdmin = loggedInUser?.role === 'super_admin'
+  const availableRoles = isSuperAdmin ? ['user', 'admin', 'super_admin'] as const : ['user', 'admin'] as const
+
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -58,6 +63,26 @@ export default function UsersTab() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', phone: '', role: 'user' })
   const [creating, setCreating] = useState(false)
+  const [deletingUser, setDeletingUser] = useState<string | null>(null)
+
+  const handleDeleteUser = async (userId: string) => {
+    setDeletingUser(userId)
+    try {
+      const res = await authFetch(`/api/admin/users?userId=${userId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error || 'Error al eliminar usuario', 'error')
+        return
+      }
+      showToast('Usuario eliminado permanentemente')
+      fetchUsers()
+      setSelectedUser(null)
+    } catch {
+      showToast('Error de conexion', 'error')
+    } finally {
+      setDeletingUser(null)
+    }
+  }
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -447,7 +472,7 @@ export default function UsersTab() {
                 <div>
                   <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Rol</label>
                   <div className="flex gap-2">
-                    {(['user', 'admin', 'super_admin'] as const).map((r) => (
+                    {availableRoles.map((r) => (
                       <button
                         key={r}
                         onClick={() => setCreateForm(p => ({ ...p, role: r }))}
@@ -548,7 +573,7 @@ export default function UsersTab() {
               <div className="mb-5">
                 <p className="text-xs text-cm-on-surface-variant mb-2 font-semibold font-[family-name:var(--font-inter)]">Cambiar Rol</p>
                 <div className="flex gap-2">
-                  {(['user', 'admin', 'super_admin'] as const).map((r) => (
+                  {availableRoles.map((r) => (
                     <button
                       key={r}
                       onClick={() => handleAction(selectedUser.id, 'set_role', { role: r })}
@@ -595,6 +620,20 @@ export default function UsersTab() {
                       className="py-2.5 px-3 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]">
                       <span className="material-symbols-outlined text-[16px]">check_circle</span>
                       Habilitar
+                    </button>
+                  )}
+                  {isSuperAdmin && selectedUser.id !== loggedInUser?.id && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Eliminar permanentemente a ${selectedUser.name}? Esta accion no se puede deshacer.`)) {
+                          handleDeleteUser(selectedUser.id)
+                        }
+                      }}
+                      disabled={!!deletingUser}
+                      className="py-2.5 px-3 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 border border-red-600/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{deletingUser === selectedUser.id ? 'progress_activity' : 'delete_forever'}</span>
+                      {deletingUser === selectedUser.id ? 'Eliminando...' : 'Eliminar Cuenta'}
                     </button>
                   )}
                 </div>
