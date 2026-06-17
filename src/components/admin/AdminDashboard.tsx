@@ -2391,8 +2391,15 @@ export default function AdminDashboard() {
       if (statsRes.ok) setStats(await statsRes.json())
       if (bookingsRes.ok) {
         const bookingsData = await bookingsRes.json()
-        console.log(`[AdminDashboard] ${Array.isArray(bookingsData) ? bookingsData.length : 0} bookings loaded`)
-        setBookings(Array.isArray(bookingsData) ? bookingsData : [])
+        const arr = Array.isArray(bookingsData) ? bookingsData : []
+        console.log(`[AdminDashboard] ${arr.length} bookings loaded from API`)
+        if (arr.length > 0) {
+          console.log(`[AdminDashboard] Date range in data: ${arr[0]?.date} → ${arr[arr.length - 1]?.date}`)
+          console.log(`[AdminDashboard] Sample booking:`, { id: arr[0].id, date: arr[0].date, dateType: typeof arr[0].date, status: arr[0].status })
+        } else {
+          console.warn('[AdminDashboard] API returned 0 bookings — check Firestore data')
+        }
+        setBookings(arr)
       } else if (bookingsRes.status === 0) {
         console.error('[AdminDashboard] Bookings fetch failed (network error)')
         toast({ title: 'Error de conexion', description: 'No se pudieron cargar las reservas. Verifica tu conexion a internet.', variant: 'destructive' })
@@ -3005,10 +3012,19 @@ export default function AdminDashboard() {
 
   const filteredBookings = (() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
+    const afterStatus = result.length;
     // Hide past bookings unless toggle is on
     if (!showPastBookings) {
       const today = todayStr();
-      result = result.filter((b) => b.date >= today);
+      const beforeDate = result.length;
+      result = result.filter((b) => {
+        const ok = typeof b.date === 'string' && b.date >= today;
+        if (!ok) console.debug('[Filter] Excluded past booking:', b.id, 'date=', b.date, 'typeof=', typeof b.date, 'today=', today);
+        return ok;
+      });
+      if (beforeDate > 0 && result.length === 0) {
+        console.warn(`[Filter] showPastBookings=false removed ALL ${beforeDate} bookings. Today(Lima)=`, today)
+      }
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -3492,7 +3508,17 @@ export default function AdminDashboard() {
               {filteredBookings.length === 0 ? (
                 <div className="glass-card rounded-xl p-12 text-center">
                   <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 block mb-2">search_off</span>
-                  <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">No hay reservas con estos filtros</p>
+                  <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2">No hay reservas con estos filtros</p>
+                  <div className="flex flex-col items-center gap-1 text-[11px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">
+                    <span>Total cargadas: {bookings.length} | Mostrando: {filteredBookings.length}</span>
+                    {!showPastBookings && <span className="text-cm-primary/70">Las reservas pasadas estan ocultas. Activa "Ver pasadas" para mostrarlas.</span>}
+                    {bookings.length === 0 && <span>No se encontraron reservas en el rango de fechas consultado.</span>}
+                  </div>
+                  {bookings.length === 0 && (
+                    <button type="button" onClick={fetchData} className="mt-4 px-4 py-2 bg-cm-primary/10 text-cm-primary text-xs font-semibold rounded-lg hover:bg-cm-primary/20 transition-colors font-[family-name:var(--font-inter)]">
+                      <span className="material-symbols-outlined text-[14px] align-middle mr-1">refresh</span>Reintentar carga
+                    </button>
+                  )}
                 </div>
               ) : viewMode === 'table' ? (
                 /* ─── TABLE MODE ─── */

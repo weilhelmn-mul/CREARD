@@ -304,3 +304,29 @@ Stage Summary:
 - LOW fix: reset completo de estado en reservas recurrentes exitosas
 - Deploy: https://creard.vercel.app (build 9kXnFC17qNZNGJNWBoe729zNkt4z)
 - Commit: a5b7c24
+
+---
+Task ID: 1
+Agent: main
+Task: Fix admin booking visibility - "No hay reservas con estos filtros"
+
+Work Log:
+- Analyzed the full data flow: AdminDashboard → fetch /api/bookings → Firestore query → toCamelBooking → client-side filtering
+- Discovered ROOT CAUSE: Service Worker (sw.js) cache-first strategy was caching /api/bookings responses
+  - Lines 59-63 of sw.js applied cache-first to ALL same-origin GET requests except /api/courts, /api/admin/users, /api/settings
+  - /api/bookings was NOT excluded, so if the first load returned empty/error, that stale response was served forever
+  - The SW cache (Cache API) is separate from IndexedDB cache and persists across sessions
+- Fixed sw.js: 
+  - Changed cache name from 'creard-v1' to 'creard-v2' to invalidate all old cached responses
+  - Added explicit exclusions for /api/bookings, /api/stats, /api/expenses, /api/equipment, /api/payments
+  - Changed static cache-first to only apply to non-API routes
+- Defensive fix: Normalized `date` field in toCamelBooking to always be a string (handles potential Timestamp objects)
+- Added diagnostic logging in API GET handler (raw Firestore doc count + sample date type)
+- Added diagnostic logging in AdminDashboard (bookings loaded count, date range, filter warnings)
+- Improved empty state message to show total bookings loaded vs filtered, hint about "Ver pasadas", and retry button
+
+Stage Summary:
+- Root cause: Service Worker was caching /api/bookings with cache-first strategy, serving stale empty data
+- Key fix: sw.js v2 excludes all mutable API endpoints from caching
+- Cache version bump (creard-v1 → creard-v2) forces old cached data to be purged
+- Deployed to https://creard.vercel.app

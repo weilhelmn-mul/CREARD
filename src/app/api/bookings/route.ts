@@ -96,7 +96,7 @@ function toCamelBooking(b: Record<string, unknown>) {
     courtId: b.court_id,
     courtIds,
     userId: b.user_id,
-    date: b.date,
+    date: typeof b.date === 'string' ? b.date : (b.date ? String(b.date) : ''),
     startTime: b.start_time,
     endTime: b.end_time,
     totalPrice,
@@ -291,6 +291,10 @@ export async function GET(request: NextRequest) {
         dateTo: dateTo || undefined,
         status: status || undefined,
       })) as Record<string, unknown>[];
+      console.log(`[BOOKINGS] Firestore returned ${bookings.length} raw docs (dateFrom=${dateFrom}, dateTo=${dateTo})`);
+      if (bookings.length > 0) {
+        console.log(`[BOOKINGS] Sample raw date field: id=${bookings[0].id}, date=${JSON.stringify(bookings[0].date)}, type=${typeof bookings[0].date}`);
+      }
     }
 
     // Enrich each booking with cached court/user lookups (avoid N+1 Firestore reads)

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'creard-v1';
+const CACHE_NAME = 'creard-v2';
 const STATIC_ASSETS = [
   '/',
   '/admin',
@@ -49,6 +49,20 @@ self.addEventListener('fetch', (event) => {
   // Skip chrome-extension and other non-http
   if (!url.protocol.startsWith('http')) return;
 
+  // NEVER cache /api/bookings — must always be fresh data
+  if (url.pathname.startsWith('/api/bookings')) {
+    // Pass through to network, no caching
+    return;
+  }
+
+  // NEVER cache /api/stats, /api/expenses, /api/equipment — mutable admin data
+  if (url.pathname.startsWith('/api/stats') ||
+      url.pathname.startsWith('/api/expenses') ||
+      url.pathname.startsWith('/api/equipment') ||
+      url.pathname.startsWith('/api/payments')) {
+    return;
+  }
+
   // API calls: stale-while-revalidate (serve cache, update in background)
   const isCacheableApi = CACHEABLE_API.some((api) => url.pathname.startsWith(api));
   if (isCacheableApi) {
@@ -56,8 +70,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets & pages: cache-first
-  if (url.origin === self.location.origin) {
+  // Static assets & pages: cache-first (only non-API routes)
+  if (url.origin === self.location.origin && !url.pathname.startsWith('/api/')) {
     event.respondWith(cacheFirst(request));
     return;
   }
