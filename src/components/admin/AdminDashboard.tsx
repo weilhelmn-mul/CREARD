@@ -2550,6 +2550,7 @@ export default function AdminDashboard() {
 
   /* ─── quick client creation from booking modal ─── */
   const openNewClientDialog = useCallback((prefillName?: string) => {
+    console.log('[quickCreateClient] Opening dialog, prefill:', prefillName)
     setNewClientForm({ name: prefillName?.trim() || '', email: '', phone: '' })
     setNewClientErrors({})
     setShowNewClientDialog(true)
@@ -2575,6 +2576,7 @@ export default function AdminDashboard() {
     setCreatingClient(true)
     try {
       const headers = getAuthHeaders()
+      console.log('[quickCreateClient] Creating client:', newClientForm.name, newClientForm.phone)
       const res = await fetch('/api/usuarios', {
         method: 'POST',
         headers,
@@ -2586,6 +2588,7 @@ export default function AdminDashboard() {
       })
 
       const data = await res.json()
+      console.log('[quickCreateClient] Response:', res.status, data)
 
       if (!res.ok) {
         setNewClientErrors({ general: data.error || 'Error al crear cliente' })
@@ -2602,6 +2605,9 @@ export default function AdminDashboard() {
           return [...prev, { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone }]
         })
       }
+
+      // Invalidate users cache so next load gets fresh data
+      invalidateCache('users')
 
       setShowNewClientDialog(false)
       toast({
@@ -4822,7 +4828,18 @@ export default function AdminDashboard() {
 
         {/* ─── Quick Client Creation Dialog (nested, portal-based so it renders above booking modal) ─── */}
         <Dialog open={showNewClientDialog} onOpenChange={(open) => { if (!open) { setShowNewClientDialog(false); setNewClientErrors({}) } }}>
-          <DialogContent className="sm:max-w-md bg-cm-surface-container border-white/15 rounded-2xl p-6 shadow-2xl z-[100]">
+          <DialogContent 
+            className="sm:max-w-md bg-cm-surface-container border-white/15 rounded-2xl p-6 shadow-2xl z-[100]"
+            onInteractOutside={(e) => {
+              // Prevent closing when interacting with the booking modal underneath
+              e.preventDefault()
+            }}
+            onEscapeKeyDown={(e) => {
+              // Allow Escape to close only if not inside a nested interaction
+              setShowNewClientDialog(false)
+              setNewClientErrors({})
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="text-cm-on-surface font-[family-name:var(--font-sora)] text-lg flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-cm-primary" />

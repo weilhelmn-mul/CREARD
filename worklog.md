@@ -330,3 +330,29 @@ Stage Summary:
 - Key fix: sw.js v2 excludes all mutable API endpoints from caching
 - Cache version bump (creard-v1 → creard-v2) forces old cached data to be purged
 - Deployed to https://creard.vercel.app
+
+---
+Task ID: 2
+Agent: main
+Task: Fix "Nuevo usuario" button in booking form not working
+
+Work Log:
+- Analyzed the full flow: button → openNewClientDialog → Dialog → handleQuickCreateClient → /api/usuarios
+- Found ROOT CAUSE: z-index conflict between booking modal (custom motion.div at z-50) and Radix Dialog (overlay z-50, content z-50)
+  - Both the booking modal overlay and the Dialog overlay were at z-50, causing the Dialog to be hidden behind the booking modal
+  - Even though the AdminDashboard passed z-[100] on DialogContent, the DialogOverlay in dialog.tsx was hardcoded to z-50
+- Fixed dialog.tsx:
+  - DialogOverlay: z-50 → z-[60]
+  - DialogContent: z-50 → z-[70]
+  - Now all Radix Dialogs render above custom z-50 modals
+- Fixed AdminDashboard Dialog:
+  - Added onInteractOutside=(e) => e.preventDefault() to prevent accidental closes from booking modal interactions
+  - Added onEscapeKeyDown handler for explicit close behavior
+  - z-[100] override on DialogContent still works (twMerge keeps highest z-index)
+- Added invalidateCache('users') after creating a new client
+- Added diagnostic console.log in openNewClientDialog and handleQuickCreateClient
+
+Stage Summary:
+- Root cause: z-index collision between custom modals (z-50) and Radix Dialog (z-50)
+- Key fix: Elevated Dialog overlay/content to z-[60]/z-[70] in dialog.tsx
+- Deployed to https://creard.vercel.app
