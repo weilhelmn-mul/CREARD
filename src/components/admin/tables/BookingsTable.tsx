@@ -89,7 +89,8 @@ export default function BookingsTable({
               <th className="text-left px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Estado</th>
               <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Adelanto</th>
               <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Restante</th>
-              <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Total</th>
+              <th className="text-right px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)] hidden sm:table-cell">Total</th>
+              <th className="text-center px-2 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]" title="Método de pago">Pago</th>
               <th className="text-center px-4 py-3 text-cm-on-surface-variant text-xs font-semibold font-[family-name:var(--font-inter)]">Acciones</th>
             </tr>
           </thead>
@@ -170,7 +171,17 @@ export default function BookingsTable({
                   </td>
                   <td className="px-4 py-3 text-right text-cm-on-surface font-[family-name:var(--font-inter)] hidden sm:table-cell">{fmtCurrency(b.advanceAmount)}</td>
                   <td className={`px-4 py-3 text-right font-[family-name:var(--font-inter)] hidden sm:table-cell ${b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(b.remainingAmount)}</td>
-                  <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(b.totalPrice)}</td>
+                  <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)] hidden sm:table-cell">{fmtCurrency(b.totalPrice)}</td>
+                  <td className="px-2 py-3 text-center">
+                    {b.paymentMethod ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
+                        {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                        <span className="hidden lg:inline">{b.paymentMethod}</span>
+                      </span>
+                    ) : (
+                      <span className="text-cm-on-surface-variant/30 text-xs">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
                       {b.recurringGroupId && (

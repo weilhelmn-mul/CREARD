@@ -56,6 +56,7 @@ function toCamelBooking(b: Record<string, unknown>) {
     id: userRaw.id,
     name: userRaw.name,
     email: userRaw.email,
+    phone: userRaw.phone,
   } : null;
 
   // Court IDs array

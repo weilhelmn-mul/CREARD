@@ -1,6 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getCount, getAllFromCollection, getBookings, getCourtById } from '@/lib/db';
 
+/** Migrate legacy status values to the 3-status system */
+function migrateStatus(s: string): string {
+  switch (s) {
+    case 'pending':
+    case 'confirmed':
+    case 'partially_paid':
+    case 'reserved':
+      return 'reserved';
+    case 'fully_paid':
+    case 'completed':
+      return 'completed';
+    case 'no_show':
+    case 'expired':
+      return 'cancelled';
+    default:
+      return s;
+  }
+}
+
 function getTodayStr(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -28,8 +47,12 @@ export async function GET() {
       getCount('bookings'),
     ]);
 
-    // Todas las reservas para cálculos
+    // Todas las reservas para cálculos (migrate status for legacy data)
     const allBookings = await getAllFromCollection('bookings');
+    // Apply status migration in-place
+    for (const b of allBookings) {
+      b.status = migrateStatus((b.status as string) || 'reserved');
+    }
 
     // Reservas de hoy
     const todayBookingsList = allBookings.filter((b) => b.date === todayStr);
@@ -37,7 +60,7 @@ export async function GET() {
 
     // Ingresos de hoy: completados (total) + reservados (adelanto)
     const todayCompleted = todayBookingsList.filter(
-      (b) => b.status === 'completed' || b.status === 'fully_paid'
+      (b) => b.status === 'completed'
     );
     const todayCompletedRevenue = todayCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
     const todayReserved = todayBookingsList.filter((b) => b.status === 'reserved');
@@ -49,7 +72,7 @@ export async function GET() {
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = getDateStr(weekAgo);
     const weekCompleted = allBookings.filter(
-      (b) => b.date >= weekAgoStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
+      (b) => b.date >= weekAgoStr && b.date <= todayStr && b.status === 'completed'
     );
     const weekCompletedRevenue = weekCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
     const weekReserved = allBookings.filter(
@@ -62,7 +85,7 @@ export async function GET() {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthStartStr = getDateStr(monthStart);
     const monthCompleted = allBookings.filter(
-      (b) => b.date >= monthStartStr && b.date <= todayStr && (b.status === 'completed' || b.status === 'fully_paid')
+      (b) => b.date >= monthStartStr && b.date <= todayStr && b.status === 'completed'
     );
     const monthCompletedRevenue = monthCompleted.reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
     const monthReserved = allBookings.filter(
@@ -73,7 +96,7 @@ export async function GET() {
 
     // Total ingresos: completados (total) + reservados (adelanto)
     const allCompletedRevenue = allBookings
-      .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
+      .filter((b) => b.status === 'completed')
       .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
     const allReservedAdvances = allBookings
       .filter((b) => b.status === 'reserved')
@@ -126,7 +149,7 @@ export async function GET() {
       const priceShare = ((b.total_price as number) || 0) / courtCount;
       for (const cid of cIds) {
         courtBookingCounts[cid] = (courtBookingCounts[cid] || 0) + 1;
-        if (b.status === 'completed' || b.status === 'fully_paid') {
+        if (b.status === 'completed') {
           courtRevenue[cid] = (courtRevenue[cid] || 0) + priceShare;
         } else if (b.status === 'reserved') {
           // Count the advance amount, distributed proportionally
@@ -158,8 +181,7 @@ export async function GET() {
 
       const monthCompletedRev = allBookings
         .filter(
-          (b) => b.date >= monthStartStr && b.date <= monthEndStr &&
-                 (b.status === 'completed' || b.status === 'fully_paid')
+          (b) => b.date >= monthStartStr && b.date <= monthEndStr && b.status === 'completed'
         )
         .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
       const monthReservedAdv = allBookings
@@ -185,7 +207,7 @@ export async function GET() {
       const dayBookings = allBookings.filter((b) => b.date === dateStr);
 
       const dayCompletedRev = dayBookings
-        .filter((b) => b.status === 'completed' || b.status === 'fully_paid')
+        .filter((b) => b.status === 'completed')
         .reduce((sum, b) => sum + ((b.total_price as number) || 0), 0);
       const dayReservedAdv = dayBookings
         .filter((b) => b.status === 'reserved')

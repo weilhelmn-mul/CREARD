@@ -1874,7 +1874,6 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                         <p className="text-[10px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)]">Define precios diferentes según el turno. Las reservas calcularán automáticamente.</p>
                       </div>
                       <button type="button"
-                        type="button"
                         onClick={addScheduleBlock}
                         className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-[#00ff41] bg-[#00ff41]/10 border border-[#00ff41]/30 rounded-lg hover:bg-[#00ff41]/20 transition-all"
                       >
@@ -1943,7 +1942,6 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                               </div>
                               {/* Remove */}
                               <button type="button"
-                                type="button"
                                 onClick={() => removeScheduleBlock(idx)}
                                 className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
                               >
@@ -2596,8 +2594,10 @@ export default function AdminDashboard() {
   /* ─── computed ─── */
   const today = todayStr()
   const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled')
-  const todayPaid = bookings.filter((b) => b.date === today && b.status === 'completed')
-  const todayRevenue = todayPaid.reduce((s, b) => s + b.totalPrice, 0)
+  const todayCompleted = bookings.filter((b) => b.date === today && b.status === 'completed')
+  const todayReserved = bookings.filter((b) => b.date === today && b.status === 'reserved')
+  const todayRevenue = todayCompleted.reduce((s, b) => s + b.totalPrice, 0)
+    + todayReserved.reduce((s, b) => s + b.advanceAmount, 0)
   const pendingPayments = bookings.filter((b) => b.status === 'reserved' && b.remainingAmount > 0)
   const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
 
@@ -3054,12 +3054,15 @@ export default function AdminDashboard() {
   }
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-  const totalIncome = bookings
+  // Income = all money actually received (completed totals + reserved advances)
+  const completedIncome = bookings
     .filter((b) => b.status === 'completed')
-    .reduce((s, b) => s + b.totalPrice, 0)
-  const totalAdvances = bookings
-    .filter((b) => ['reserved', 'completed'].includes(b.status))
     .reduce((s, b) => s + b.advanceAmount, 0)
+  const reservedAdvances = bookings
+    .filter((b) => b.status === 'reserved')
+    .reduce((s, b) => s + b.advanceAmount, 0)
+  const totalIncome = completedIncome + reservedAdvances
+  const totalAdvances = totalIncome
   const balance = totalIncome - totalExpenses
 
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
@@ -4126,7 +4129,6 @@ export default function AdminDashboard() {
                           Hora inicio *
                         </label>
                         <button type="button"
-                          type="button"
                           onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
                         >
@@ -4158,7 +4160,6 @@ export default function AdminDashboard() {
                       <div className="relative">
                         <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
                         <button type="button"
-                          type="button"
                           onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
                         >
@@ -4257,7 +4258,6 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Cliente *</label>
                     <button type="button"
-                      type="button"
                       onClick={openNewClientDialog}
                       className="inline-flex items-center gap-1 text-[11px] text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
                     >
@@ -4268,7 +4268,6 @@ export default function AdminDashboard() {
                   <Popover open={clientDropdownOpen} onOpenChange={setClientDropdownOpen}>
                     <PopoverTrigger asChild>
                       <button type="button"
-                        type="button"
                         className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.userId ? 'border-red-400' : 'border-white/10'}`}
                       >
                         <span className={bookingForm.userId ? 'text-cm-on-surface' : 'text-cm-on-surface-variant/40'}>
@@ -4301,7 +4300,6 @@ export default function AdminDashboard() {
                             <div className="px-2 py-3 text-center">
                               <p className="text-xs text-cm-on-surface-variant/60 mb-2 font-[family-name:var(--font-inter)]">No se encontro el cliente</p>
                               <button type="button"
-                                type="button"
                                 onClick={() => openNewClientDialog(clientSearch)}
                                 className="inline-flex items-center gap-1.5 text-xs text-cm-primary font-semibold hover:text-cm-primary/80 transition-colors font-[family-name:var(--font-inter)]"
                               >
@@ -4454,7 +4452,6 @@ export default function AdminDashboard() {
 
                 <div className="lg:col-span-2">
                   <button type="button"
-                    type="button"
                     onClick={() => setShowEquipPanel(!showEquipPanel)}
                     className="flex items-center gap-2.5 w-full text-left"
                   >
@@ -4523,7 +4520,6 @@ export default function AdminDashboard() {
 
                 <div className="lg:col-span-2">
                   <button type="button"
-                    type="button"
                     onClick={() => { setShowRecurring(!showRecurring); setRecurringStep('config'); setRecurringPreview(null) }}
                     className="flex items-center gap-2.5 w-full text-left"
                   >
@@ -4610,7 +4606,6 @@ export default function AdminDashboard() {
                               <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Condición de fin</label>
                               <div className="grid grid-cols-2 gap-2 mb-2">
                                 <button type="button"
-                                  type="button"
                                   onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'date' }))}
                                   className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                                     recurringConfig.endCondition === 'date'
@@ -4621,7 +4616,6 @@ export default function AdminDashboard() {
                                   Por fecha final
                                 </button>
                                 <button type="button"
-                                  type="button"
                                   onClick={() => setRecurringConfig((p) => ({ ...p, endCondition: 'count' }))}
                                   className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                                     recurringConfig.endCondition === 'count'
@@ -4657,7 +4651,6 @@ export default function AdminDashboard() {
 
                             {/* Preview button */}
                             <button type="button"
-                              type="button"
                               onClick={handlePreviewRecurring}
                               disabled={previewLoading}
                               className="w-full py-2.5 bg-cm-primary/10 text-cm-primary rounded-xl text-sm font-semibold hover:bg-cm-primary/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
@@ -4698,14 +4691,12 @@ export default function AdminDashboard() {
                                 {/* Action buttons */}
                                 <div className="flex gap-2">
                                   <button type="button"
-                                    type="button"
                                     onClick={() => { setRecurringStep('config'); setRecurringPreview(null) }}
                                     className="flex-1 py-2.5 bg-cm-surface-container-highest/40 text-cm-on-surface-variant rounded-xl text-xs font-semibold hover:bg-cm-surface-container-highest/60 transition-all"
                                   >
                                     Volver
                                   </button>
                                   <button type="button"
-                                    type="button"
                                     onClick={handleCreateRecurring}
                                     disabled={creatingRecurring || recurringPreviewSummary.availableCount === 0}
                                     className="flex-[2] py-2.5 bg-cm-primary text-cm-on-primary rounded-xl text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -4840,7 +4831,6 @@ export default function AdminDashboard() {
 
             <DialogFooter className="mt-4 gap-2">
               <button type="button"
-                type="button"
                 onClick={() => { setShowNewClientDialog(false); setNewClientErrors({}) }}
                 disabled={creatingClient}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-cm-on-surface-variant border border-white/15 bg-cm-surface-container-highest/40 hover:bg-cm-surface-container-highest/60 transition-colors font-[family-name:var(--font-inter)] disabled:opacity-50"
@@ -4848,7 +4838,6 @@ export default function AdminDashboard() {
                 Cancelar
               </button>
               <button type="button"
-                type="button"
                 onClick={handleQuickCreateClient}
                 disabled={creatingClient}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-cm-on-primary bg-cm-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 font-[family-name:var(--font-inter)] disabled:opacity-50"
