@@ -633,7 +633,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -670,6 +670,63 @@ export async function PUT(request: NextRequest) {
     }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
+
+    // Extend time: update end_time and total_price, create payment record
+    if (extendTime && reqEndTime && reqTotalPrice) {
+      // Validate: new end must be after current end
+      const booking = await getBookingById(id);
+      if (booking) {
+        const currentEnd = booking.end_time as string || '';
+        if (reqEndTime <= currentEnd) {
+          return NextResponse.json({ error: 'La nueva hora de fin debe ser posterior a la actual' }, { status: 400 });
+        }
+        // Check for conflicts with other bookings (same court, same date, overlapping time)
+        const allCourtIds: string[] = Array.isArray(booking.court_ids) ? booking.court_ids : (booking.court_id ? [booking.court_id] : []);
+        const bookingDate = booking.date as string;
+        if (allCourtIds.length > 0 && bookingDate) {
+          const allBookings = await getBookings();
+          const conflicts = allBookings.filter((ob: Record<string, unknown>) => {
+            const obId = ob.id as string;
+            if (obId === id) return false;
+            if (ob.status === 'cancelled') return false;
+            if (ob.date !== bookingDate) return false;
+            const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
+            if (!obCourtIds.some((cid: string) => allCourtIds.includes(cid))) return false;
+            return (ob.start_time as string) < reqEndTime && (ob.end_time as string) > (booking.start_time as string);
+          });
+          // Filter to only real conflicts (overlapping with the NEW extended period)
+          const realConflicts = conflicts.filter((ob: Record<string, unknown>) => {
+            return (ob.start_time as string) < reqEndTime && (ob.end_time as string) > currentEnd;
+          });
+          if (realConflicts.length > 0) {
+            return NextResponse.json({ error: 'Hay una reserva que ocupa ese horario. No se puede extender.' }, { status: 409 });
+          }
+        }
+
+        const extraCost = Math.max(0, (reqTotalPrice - ((booking.total_price as number) || 0)));
+        updateData.end_time = reqEndTime;
+        updateData.total_price = reqTotalPrice;
+
+        // If admin collected payment for the extension, create a payment record
+        if (typeof reqAdvance === 'number' && extraCost > 0.01) {
+          const prevAdvance = (booking.advance_amount as number) || 0;
+          const paymentIncrement = reqAdvance - prevAdvance;
+          if (paymentIncrement > 0.01) {
+            try {
+              await createPayment(id, {
+                user_id: booking.user_id as string,
+                amount: paymentIncrement,
+                type: 'extension',
+                method: (reqPaymentMethod as string) || 'EFECTIVO',
+                status: 'completed',
+              });
+            } catch (payErr) {
+              console.error('[BOOKINGS] Warning: could not create payment record for extension:', payErr);
+            }
+          }
+        }
+      }
+    }
 
     // When cancelling a booking with advance, handle retained/refunded advance
     if (status === 'cancelled' || (status && migrateStatus(status) === 'cancelled')) {

@@ -68,6 +68,7 @@ interface BookingsTableProps {
   isSuperAdmin?: boolean
   onDeleteBooking?: (bookingId: string) => void
   use12hFormat?: boolean
+  onExtendTime?: (booking: Booking) => void
 }
 
 export default function BookingsTable({
@@ -82,6 +83,7 @@ export default function BookingsTable({
   isSuperAdmin = false,
   onDeleteBooking,
   use12hFormat = false,
+  onExtendTime,
 }: BookingsTableProps) {
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -208,6 +210,15 @@ export default function BookingsTable({
                           title={parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto'}
                         >
                           <span className="material-symbols-outlined text-[16px]">payments</span>
+                        </button>
+                      )}
+                      {b.status === 'reserved' && onExtendTime && (
+                        <button
+                          onClick={() => onExtendTime(b)}
+                          className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+                          title="Extender tiempo"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">schedule</span>
                         </button>
                       )}
                       <select

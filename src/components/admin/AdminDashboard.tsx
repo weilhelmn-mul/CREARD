@@ -2364,6 +2364,15 @@ export default function AdminDashboard() {
   const [advanceMethod, setAdvanceMethod] = useState('EFECTIVO')
   const [submittingAdvance, setSubmittingAdvance] = useState(false)
 
+  /* extend time modal */
+  const [showExtendModal, setShowExtendModal] = useState(false)
+  const [extendTarget, setExtendTarget] = useState<Booking | null>(null)
+  const [extendNewEnd, setExtendNewEnd] = useState('')
+  const [extendExtraCost, setExtendExtraCost] = useState(0)
+  const [extendMethod, setExtendMethod] = useState('EFECTIVO')
+  const [extendPaidNow, setExtendPaidNow] = useState('')
+  const [submittingExtend, setSubmittingExtend] = useState(false)
+
   /* notification alarm system */
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS)
   const { alerts: bookingAlerts, dismissAlert: dismissBookingAlert, clearAllAlerts, getAlertLevel } = useBookingAlarm(bookings, notifSettings)
@@ -3054,6 +3063,113 @@ export default function AdminDashboard() {
     }
   }
 
+  /* ─── extend time handlers ─── */
+  const extendTimeSlots = useMemo(() => {
+    if (!extendTarget) return []
+    const [eh, em] = extendTarget.endTime.split(':').map(Number)
+    // Generate slots starting from 30min after current end, up to 3h extra
+    const slots: string[] = []
+    let cursorMin = (eh * 60 + em) + 30 // minimum +30min extension
+    const maxMin = cursorMin + 180 // max 3 extra hours
+    while (cursorMin <= Math.min(maxMin, 23 * 60 + 30)) {
+      const h = Math.floor(cursorMin / 60)
+      const m = cursorMin % 60
+      if (h <= 23) slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+      cursorMin += 30
+    }
+    return slots
+  }, [extendTarget])
+
+  const openExtendModal = (booking: Booking) => {
+    if (booking.status === 'completed' || booking.status === 'cancelled') return
+    setExtendTarget(booking)
+    // Default to +30min
+    const [eh, em] = booking.endTime.split(':').map(Number)
+    const newMin = eh * 60 + em + 30
+    const nh = Math.floor(newMin / 60)
+    const nm = newMin % 60
+    const defaultEnd = `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`
+    setExtendNewEnd(defaultEnd)
+    // Calculate extra cost
+    const court = bookingCourtDetails.find(c => c.id === booking.courtId)
+    let extraCost = 0
+    if (court) {
+      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+        const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, defaultEnd)
+        const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, booking.endTime)
+        extraCost = Math.round((newTotal - oldTotal) * 100) / 100
+      } else {
+        extraCost = Math.round(court.pricePerHour * 0.5 * 100) / 100 // default 30min
+      }
+    }
+    setExtendExtraCost(Math.max(0, extraCost))
+    setExtendPaidNow(String(Math.max(0, extraCost)))
+    setExtendMethod('EFECTIVO')
+    setShowExtendModal(true)
+  }
+
+  const handleExtendEndChange = (newEnd: string) => {
+    setExtendNewEnd(newEnd)
+    if (!extendTarget) return
+    const court = bookingCourtDetails.find(c => c.id === extendTarget.courtId)
+    let extraCost = 0
+    if (court) {
+      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+        const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, newEnd)
+        const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, extendTarget.endTime)
+        extraCost = Math.round((newTotal - oldTotal) * 100) / 100
+      } else {
+        const origH = calculateHours(extendTarget.startTime, extendTarget.endTime)
+        const newH = calculateHours(extendTarget.startTime, newEnd)
+        extraCost = Math.round(court.pricePerHour * (newH - origH) * 100) / 100
+      }
+    }
+    setExtendExtraCost(Math.max(0, extraCost))
+    setExtendPaidNow(String(Math.max(0, extraCost)))
+  }
+
+  const handleSubmitExtend = async () => {
+    if (!extendTarget || !extendNewEnd || extendNewEnd <= extendTarget.endTime || extendExtraCost <= 0) return
+    setSubmittingExtend(true)
+    try {
+      const paidNow = Math.min(parseFloat(extendPaidNow) || 0, extendExtraCost)
+      const newTotalPrice = Math.round((extendTarget.totalPrice + extendExtraCost) * 100) / 100
+      const newAdvance = extendTarget.advanceAmount + paidNow
+      const newRemaining = Math.round((newTotalPrice - newAdvance) * 100) / 100
+
+      const res = await fetch('/api/bookings', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: extendTarget.id,
+          endTime: extendNewEnd,
+          totalPrice: newTotalPrice,
+          advanceAmount: newAdvance,
+          remainingAmount: Math.max(0, newRemaining),
+          paymentMethod: extendMethod,
+          extendTime: true,
+        }),
+      })
+      if (res.ok) {
+        const hoursAdded = calculateHours(extendTarget.endTime, extendNewEnd)
+        toast({
+          title: 'Tiempo extendido',
+          description: `Se agregó ${hoursAdded}h extra a la reserva. Costo adicional: ${fmtCurrency(extendExtraCost)}${paidNow > 0 ? ` (Pagado: ${fmtCurrency(paidNow)})` : ''}`,
+        })
+        setShowExtendModal(false)
+        setExtendTarget(null)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo extender el tiempo', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo extender el tiempo', variant: 'destructive' })
+    } finally {
+      setSubmittingExtend(false)
+    }
+  }
+
   const filteredBookings = (() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
     const afterStatus = result.length;
@@ -3637,6 +3753,7 @@ export default function AdminDashboard() {
                   isSuperAdmin={isSuperAdmin}
                   onDeleteBooking={handleDeleteBooking}
                   use12hFormat={use12hFormat}
+                  onExtendTime={openExtendModal}
                 />
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
@@ -3753,6 +3870,15 @@ export default function AdminDashboard() {
                                 <span className="material-symbols-outlined text-[16px]">payments</span>
                               </button>
                             )}
+                            {b.status === 'reserved' && (
+                              <button type="button"
+                                onClick={() => openExtendModal(b)}
+                                className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-400/20 transition-colors flex-shrink-0"
+                                title="Extender tiempo"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">schedule</span>
+                              </button>
+                            )}
                             {isSuperAdmin && (
                               <button type="button"
                                 onClick={() => handleDeleteBooking(b.id)}
@@ -3842,6 +3968,15 @@ export default function AdminDashboard() {
                                 title="Registrar pago"
                               >
                                 <span className="material-symbols-outlined text-[14px]">payments</span>
+                              </button>
+                            )}
+                            {b.status === 'reserved' && (
+                              <button type="button"
+                                onClick={() => openExtendModal(b)}
+                                className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+                                title="Extender tiempo"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">schedule</span>
                               </button>
                             )}
                             <select
@@ -5297,6 +5432,175 @@ export default function AdminDashboard() {
                   <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
                 )}
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Extend Time Modal ─── */}
+      <AnimatePresence>
+        {showExtendModal && extendTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => !submittingExtend && setShowExtendModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-md glass-card border border-white/10 rounded-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>schedule</span>
+                  </div>
+                  <div>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Extender Tiempo</h3>
+                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Agregar tiempo extra a la reserva</p>
+                  </div>
+                </div>
+                {!submittingExtend && (
+                  <button type="button" onClick={() => setShowExtendModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Booking summary */}
+                <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
+                    <span className="material-symbols-outlined text-[14px]">sports</span>
+                    <span className="font-medium">{extendTarget.courtIds && extendTarget.courtIds.length > 1 ? (extendTarget.courts?.map(c => c.name).join(', ') || `${extendTarget.courtIds.length} canchas`) : (extendTarget.court?.name || 'N/A')}</span>
+                    <span className="text-cm-on-surface-variant">•</span>
+                    <span>{fmtDate(extendTarget.date)}</span>
+                    <span className="text-cm-on-surface-variant">•</span>
+                    <span>{formatTimeRange(extendTarget.startTime, extendTarget.endTime, use12hFormat)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                    <span className="material-symbols-outlined text-[14px]">person</span>
+                    {extendTarget.user?.name || 'Sin nombre'}
+                  </div>
+                  <div className="flex justify-between text-xs font-[family-name:var(--font-inter)] pt-1 border-t border-white/5">
+                    <span className="text-cm-on-surface-variant">Total actual</span>
+                    <span className="text-cm-on-surface">{fmtCurrency(extendTarget.totalPrice)}</span>
+                  </div>
+                </div>
+
+                {/* New end time selector */}
+                <div>
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+                    Nueva hora de fin
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {extendTimeSlots.map((slot) => {
+                      const fmt = use12hFormat ? formatTime12(slot) : formatTime24(slot)
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => handleExtendEndChange(slot)}
+                          disabled={submittingExtend}
+                          className={`py-2 px-1 rounded-lg text-xs font-medium font-[family-name:var(--font-inter)] transition-all ${
+                            extendNewEnd === slot
+                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
+                              : 'bg-cm-surface-container-highest/40 text-cm-on-surface border border-white/10 hover:border-white/20'
+                          }`}
+                        >
+                          {fmt}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Extra cost info */}
+                {extendExtraCost > 0 && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-emerald-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
+                      <span className="text-xs font-semibold text-emerald-400 font-[family-name:var(--font-sora)]">
+                        Costo adicional: {fmtCurrency(extendExtraCost)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant">Nuevo total</span>
+                      <span className="text-cm-on-surface font-semibold">{fmtCurrency(Math.round((extendTarget.totalPrice + extendExtraCost) * 100) / 100)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment method and amount */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+                      Metodo de pago del extra
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['EFECTIVO', 'YAPE', 'PLIN'].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setExtendMethod(m)}
+                          disabled={submittingExtend}
+                          className={`py-2 rounded-lg text-xs font-semibold font-[family-name:var(--font-inter)] transition-all ${
+                            extendMethod === m
+                              ? 'bg-cm-primary/20 text-cm-primary border border-cm-primary/40'
+                              : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'
+                          }`}
+                        >
+                          {m === 'YAPE' ? '📱 ' : m === 'PLIN' ? '💜 ' : '💵 '}{m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+                      Monto a cobrar ahora
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-sm">S/</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max={extendExtraCost}
+                        value={extendPaidNow}
+                        onChange={(e) => {
+                          const v = Math.min(parseFloat(e.target.value) || 0, extendExtraCost)
+                          setExtendPaidNow(String(Math.max(0, Math.round(v * 100) / 100)))
+                        }}
+                        disabled={submittingExtend}
+                        className="w-full pl-8 pr-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="text-[10px] text-cm-on-surface-variant mt-1 font-[family-name:var(--font-inter)]">
+                      Si cobra menos ahora, el resto se agrega al saldo pendiente
+                    </p>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <button
+                  type="button"
+                  onClick={handleSubmitExtend}
+                  disabled={submittingExtend || extendExtraCost <= 0 || !extendNewEnd}
+                  className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 font-[family-name:var(--font-sora)]"
+                >
+                  {submittingExtend ? (
+                    <><span className="animate-spin"><Loader2 size={18} /></span> Procesando...</>
+                  ) : (
+                    <><span className="material-symbols-outlined text-[18px]">schedule</span> Extender y Cobrar</>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
