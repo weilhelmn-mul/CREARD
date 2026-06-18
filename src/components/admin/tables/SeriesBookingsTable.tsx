@@ -24,6 +24,8 @@ const statusConfig: Record<string, { label: string; color: string; dot: string }
   cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
 }
 
+import { formatTimeRange } from '@/lib/timeUtils'
+
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer', voley: 'sports_volleyball', basket: 'sports_basketball',
   tenis: 'sports_tennis', eventos: 'celebration',
@@ -38,9 +40,10 @@ const fmtDate = (d: string) => {
 interface SeriesBookingsTableProps {
   bookings: Booking[]
   onCancelSingle: (id: string) => void
+  use12hFormat?: boolean
 }
 
-export default function SeriesBookingsTable({ bookings, onCancelSingle }: SeriesBookingsTableProps) {
+export default function SeriesBookingsTable({ bookings, onCancelSingle, use12hFormat = false }: SeriesBookingsTableProps) {
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
@@ -61,7 +64,7 @@ export default function SeriesBookingsTable({ bookings, onCancelSingle }: Series
               return (
                 <tr key={sb.id} className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors ${sb.status === 'cancelled' ? 'opacity-40' : ''}`}>
                   <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtDate(sb.date)}</td>
-                  <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{sb.startTime}-{sb.endTime}</td>
+                  <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">{formatTimeRange(sb.startTime, sb.endTime, use12hFormat)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[sb.court?.sport || ''] || 'sports'}</span>

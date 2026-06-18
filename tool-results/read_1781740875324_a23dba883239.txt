@@ -1,0 +1,637 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback } from 'react'
+     4→import { useAppStore } from '@/store/useAppStore'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { getAuthHeaders } from '@/lib/auth-helpers'
+     8→import CulqiPayButton from '@/components/payments/CulqiPayButton'
+     9→
+    10→/* ─── types ─── */
+    11→interface Booking {
+    12→  id: string
+    13→  courtId: string
+    14→  userId: string
+    15→  date: string
+    16→  startTime: string
+    17→  endTime: string
+    18→  totalPrice: number
+    19→  advanceAmount: number
+    20→  remainingAmount: number
+    21→  status: string
+    22→  paymentMethod: string | null
+    23→  notes: string | null
+    24→  court: {
+    25→    id: string
+    26→    name: string
+    27→    sport: string
+    28→    branch: { id: string; name: string }
+    29→  }
+    30→  user: { id: string; name: string; email: string }
+    31→}
+    32→
+    33→type TabType = 'upcoming' | 'completed' | 'cancelled'
+    34→
+    35→/* ─── config ─── */
+    36→const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
+    37→  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',   icon: 'check_circle' },
+    38→  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'verified' },
+    39→  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
+    40→}
+    41→
+    42→const sportIcons: Record<string, string> = {
+    43→  futbol: 'sports_soccer',
+    44→  voley: 'sports_volleyball',
+    45→  basket: 'sports_basketball',
+    46→  tenis: 'sports_tennis',
+    47→  eventos: 'celebration',
+    48→}
+    49→
+    50→const sportLabels: Record<string, string> = {
+    51→  futbol: 'Fútbol',
+    52→  voley: 'Vóley',
+    53→  basket: 'Básquet',
+    54→  tenis: 'Tenis',
+    55→  eventos: 'Eventos',
+    56→}
+    57→
+    58→const paymentMethodLabels: Record<string, string> = {
+    59→  yape: 'Yape',
+    60→  plin: 'Plin',
+    61→  culqi: 'Culqi',
+    62→  card: 'Tarjeta',
+    63→  cash: 'Efectivo',
+    64→  transfer: 'Transferencia',
+    65→}
+    66→
+    67→const onlineMethods = ['culqi', 'yape', 'plin', 'card', 'tarjeta']
+    68→const manualMethods = ['efectivo', 'transferencia', 'cash', 'transfer']
+    69→
+    70→const tabs: { key: TabType; label: string }[] = [
+    71→  { key: 'upcoming',   label: 'Próximas' },
+    72→  { key: 'completed',  label: 'Completadas' },
+    73→  { key: 'cancelled',  label: 'Canceladas' },
+    74→]
+    75→
+    76→/* ─── helpers ─── */
+    77→// Parse date string as local date (avoids UTC timezone issues for Peru, UTC-5)
+    78→function parseLocalDate(dateStr: string): Date {
+    79→  const parts = dateStr.split('-')
+    80→  if (parts.length === 3) {
+    81→    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    82→  }
+    83→  return new Date(dateStr + 'T00:00:00')
+    84→}
+    85→
+    86→const fmt = (dateStr: string) => {
+    87→  const d = parseLocalDate(dateStr)
+    88→  return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+    89→}
+    90→
+    91→const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+    92→
+    93→/* ─── component ─── */
+    94→export default function BookingsView() {
+    95→  const { user, setView } = useAppStore()
+    96→  const [bookings, setBookings] = useState<Booking[]>([])
+    97→  const [activeTab, setActiveTab] = useState<TabType>('upcoming')
+    98→  const [loading, setLoading] = useState(true)
+    99→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   100→
+   101→  /* pay-remaining modal */
+   102→  const [payModal, setPayModal] = useState<Booking | null>(null)
+   103→  const [payMethod, setPayMethod] = useState('yape')
+   104→  const [paying, setPaying] = useState(false)
+   105→  const [payModalTab, setPayModalTab] = useState<'online' | 'manual'>('online')
+   106→
+   107→  /* ─── fetch ─── */
+   108→  const fetchBookings = useCallback(async () => {
+   109→    if (!user) return
+   110→    try {
+   111→      setLoading(true)
+   112→      // Don't send userId as query param — let the server determine it from auth headers
+   113→      // This avoids mismatch between old demo IDs and real Firebase UIDs
+   114→      const res = await fetch('/api/bookings', {
+   115→        headers: getAuthHeaders(),
+   116→      })
+   117→      if (res.ok) {
+   118→        const data: Booking[] = await res.json()
+   119→        setBookings(data)
+   120→        console.log('[CREARD] Bookings loaded:', data.length)
+   121→      } else {
+   122→        const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+   123→        console.error('[CREARD] Error loading bookings:', res.status, err)
+   124→      }
+   125→    } catch (err) {
+   126→      console.error('[CREARD] Fetch bookings error:', err)
+   127→      toast({ title: 'Error', description: 'No se pudieron cargar las reservas', variant: 'destructive' })
+   128→    } finally {
+   129→      setLoading(false)
+   130→    }
+   131→  }, [user])
+   132→
+   133→  useEffect(() => { fetchBookings() }, [fetchBookings])
+   134→
+   135→  /* ─── filter ─── */
+   136→  const today = new Date()
+   137→  today.setHours(0, 0, 0, 0)
+   138→  const tomorrow = new Date(today)
+   139→  tomorrow.setDate(tomorrow.getDate() + 1)
+   140→
+   141→  const filtered = bookings.filter((b) => {
+   142→    const bd = parseLocalDate(b.date)
+   143→    // Users cannot see today's reservations
+   144→    if (bd >= today && bd < tomorrow) return false
+   145→    switch (activeTab) {
+   146→      case 'upcoming':
+   147→        return (
+   148→          bd >= tomorrow &&
+   149→          !['cancelled', 'completed'].includes(b.status)
+   150→        )
+   151→      case 'completed':
+   152→        return b.status === 'completed' && !(bd >= today && bd < tomorrow)
+   153→      case 'cancelled':
+   154→        return b.status === 'cancelled' && !(bd >= today && bd < tomorrow)
+   155→      default:
+   156→        return true
+   157→    }
+   158→  })
+   159→
+   160→  /* ─── actions ─── */
+   161→  const handleCancel = async (id: string) => {
+   162→    try {
+   163→      const res = await fetch('/api/bookings', {
+   164→        method: 'PUT',
+   165→        headers: getAuthHeaders(),
+   166→        body: JSON.stringify({ id, status: 'cancelled' }),
+   167→      })
+   168→      if (res.ok) {
+   169→        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
+   170→        setExpandedId(null)
+   171→        toast({ title: 'Reserva cancelada', description: 'Tu reserva ha sido cancelada exitosamente.' })
+   172→      }
+   173→    } catch {
+   174→      toast({ title: 'Error', description: 'No se pudo cancelar la reserva', variant: 'destructive' })
+   175→    }
+   176→  }
+   177→
+   178→  const handlePayRemaining = async () => {
+   179→    if (!payModal) return
+   180→    setPaying(true)
+   181→    try {
+   182→      const res = await fetch('/api/payments', {
+   183→        method: 'POST',
+   184→        headers: getAuthHeaders(),
+   185→        body: JSON.stringify({
+   186→          bookingId: payModal.id,
+   187→          type: 'remaining',
+   188→          amount: payModal.remainingAmount,
+   189→          method: payMethod,
+   190→        }),
+   191→      })
+   192→      if (res.ok) {
+   193→        toast({ title: 'Pago registrado', description: `Se registró el pago restante de ${fmtCurrency(payModal.remainingAmount)}` })
+   194→        setPayModal(null)
+   195→        fetchBookings()
+   196→      } else {
+   197→        const err = await res.json()
+   198→        toast({ title: 'Error', description: err.error || 'No se pudo procesar el pago', variant: 'destructive' })
+   199→      }
+   200→    } catch {
+   201→      toast({ title: 'Error', description: 'No se pudo procesar el pago', variant: 'destructive' })
+   202→    } finally {
+   203→      setPaying(false)
+   204→    }
+   205→  }
+   206→
+   207→  /* ─── tab counts ─── */
+   208→  const tabCounts = {
+   209→    upcoming: bookings.filter((b) => {
+   210→      const bd = parseLocalDate(b.date)
+   211→      return bd >= tomorrow && b.status === 'reserved'
+   212→    }).length,
+   213→    completed: bookings.filter((b) => b.status === 'completed').length,
+   214→    cancelled: bookings.filter((b) => b.status === 'cancelled').length,
+   215→  }
+   216→
+   217→  return (
+   218→    <div className="px-4 py-6 pb-28">
+   219→      <div className="max-w-4xl mx-auto">
+   220→        {/* Header */}
+   221→        <div className="flex items-center justify-between mb-6">
+   222→          <div>
+   223→            <h1 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
+   224→              Mis Reservas
+   225→            </h1>
+   226→            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   227→              Gestiona tus reservas de canchas
+   228→            </p>
+   229→          </div>
+   230→          <button type="button"
+   231→            onClick={() => setView('search')}
+   232→            className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+   233→          >
+   234→            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
+   235→            <span className="hidden sm:inline">Nueva Reserva</span>
+   236→          </button>
+   237→        </div>
+   238→
+   239→        {/* Tabs */}
+   240→        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6">
+   241→          {tabs.map((tab) => (
+   242→            <button type="button"
+   243→              key={tab.key}
+   244→              onClick={() => setActiveTab(tab.key)}
+   245→              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+   246→                activeTab === tab.key
+   247→                  ? 'bg-cm-primary/10 text-cm-primary font-semibold'
+   248→                  : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   249→              }`}
+   250→            >
+   251→              {tab.label}
+   252→              {tabCounts[tab.key] > 0 && (
+   253→                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+   254→                  activeTab === tab.key ? 'bg-cm-primary/20 text-cm-primary' : 'bg-cm-surface-container-highest text-cm-on-surface-variant'
+   255→                }`}>
+   256→                  {tabCounts[tab.key]}
+   257→                </span>
+   258→              )}
+   259→            </button>
+   260→          ))}
+   261→        </div>
+   262→
+   263→        {/* Content */}
+   264→        {loading ? (
+   265→          <div className="space-y-3">
+   266→            {[1, 2, 3].map((i) => (
+   267→              <div key={i} className="glass-card rounded-xl p-4 animate-pulse">
+   268→                <div className="flex items-center gap-3">
+   269→                  <div className="w-12 h-12 bg-cm-surface-container-highest rounded-xl" />
+   270→                  <div className="flex-1 space-y-2">
+   271→                    <div className="h-4 bg-cm-surface-container-highest rounded w-3/4" />
+   272→                    <div className="h-3 bg-cm-surface-container-highest rounded w-1/2" />
+   273→                  </div>
+   274→                </div>
+   275→              </div>
+   276→            ))}
+   277→          </div>
+   278→        ) : filtered.length === 0 ? (
+   279→          <div className="text-center py-16">
+   280→            <div className="w-20 h-20 rounded-full bg-cm-surface-container-highest/60 flex items-center justify-center mx-auto mb-4">
+   281→              <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/40">event_busy</span>
+   282→            </div>
+   283→            <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] text-base">
+   284→              No tienes reservas {activeTab === 'upcoming' ? 'próximas' : activeTab === 'completed' ? 'completadas' : 'canceladas'}
+   285→            </p>
+   286→            <button type="button"
+   287→              onClick={() => setView('search')}
+   288→              className="mt-4 text-cm-primary text-sm font-semibold hover:underline"
+   289→            >
+   290→              Buscar canchas
+   291→            </button>
+   292→          </div>
+   293→        ) : (
+   294→          <div className="space-y-3">
+   295→            <AnimatePresence mode="popLayout">
+   296→              {filtered.map((booking) => {
+   297→                const status = statusConfig[booking.status] || statusConfig.reserved
+   298→                const isExpanded = expandedId === booking.id
+   299→                const progressPercent = booking.totalPrice > 0
+   300→                  ? (booking.advanceAmount / booking.totalPrice) * 100
+   301→                  : 0
+   302→
+   303→                return (
+   304→                  <motion.div
+   305→                    key={booking.id}
+   306→                    layout
+   307→                    initial={{ opacity: 0, y: 10 }}
+   308→                    animate={{ opacity: 1, y: 0 }}
+   309→                    exit={{ opacity: 0, y: -10 }}
+   310→                    transition={{ duration: 0.2 }}
+   311→                    className={`glass-card rounded-xl overflow-hidden transition-all ${
+   312→                      isExpanded ? 'border-cm-primary/30 glow-accent' : 'hover:border-white/15'
+   313→                    }`}
+   314→                  >
+   315→                    {/* Main row */}
+   316→                    <div
+   317→                      className="p-4 cursor-pointer"
+   318→                      onClick={() => setExpandedId(isExpanded ? null : booking.id)}
+   319→                    >
+   320→                      <div className="flex items-start gap-3">
+   321→                        {/* Sport icon */}
+   322→                        <div className="w-12 h-12 rounded-xl bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+   323→                          <span className="material-symbols-outlined text-cm-primary text-[24px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   324→                            {sportIcons[booking.court.sport] || 'sports'}
+   325→                          </span>
+   326→                        </div>
+   327→
+   328→                        {/* Info */}
+   329→                        <div className="flex-1 min-w-0">
+   330→                          <div className="flex items-start justify-between gap-2">
+   331→                            <div className="min-w-0">
+   332→                              <div className="flex items-center gap-2">
+   333→                                <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">
+   334→                                  {booking.court.name}
+   335→                                </h3>
+   336→                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest text-cm-on-surface-variant border border-cm-outline-variant/50 whitespace-nowrap">
+   337→                                  {sportLabels[booking.court.sport] || booking.court.sport}
+   338→                                </span>
+   339→                              </div>
+   340→                              <div className="flex items-center gap-3 mt-1.5 text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+   341→                                <span className="flex items-center gap-1">
+   342→                                  <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+   343→                                  {fmt(booking.date)}
+   344→                                </span>
+   345→                                <span className="flex items-center gap-1">
+   346→                                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+   347→                                  {booking.startTime} - {booking.endTime}
+   348→                                </span>
+   349→                              </div>
+   350→                            </div>
+   351→                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+   352→                              <p className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
+   353→                                {fmtCurrency(booking.totalPrice)}
+   354→                              </p>
+   355→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${status.color}`}>
+   356→                                <span className="material-symbols-outlined text-[12px]">{status.icon}</span>
+   357→                                {status.label}
+   358→                              </span>
+   359→                            </div>
+   360→                          </div>
+   361→                        </div>
+   362→                      </div>
+   363→
+   364→                      {/* Progress bar (always visible for payment statuses) */}
+   365→                      {['reserved', 'completed'].includes(booking.status) && (
+   366→                        <div className="mt-3 ml-[60px]">
+   367→                          <div className="flex items-center justify-between mb-1">
+   368→                            <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   369→                              Adelanto {fmtCurrency(booking.advanceAmount)}
+   370→                            </span>
+   371→                            <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   372→                              {Math.round(progressPercent)}%
+   373→                            </span>
+   374→                          </div>
+   375→                          <div className="h-1.5 bg-cm-surface-container-highest rounded-full overflow-hidden">
+   376→                            <motion.div
+   377→                              initial={{ width: 0 }}
+   378→                              animate={{ width: `${progressPercent}%` }}
+   379→                              transition={{ duration: 0.6, ease: 'easeOut' }}
+   380→                              className={`h-full rounded-full ${
+   381→                                progressPercent >= 100
+   382→                                  ? 'bg-cm-primary'
+   383→                                  : 'bg-gradient-to-r from-cm-primary to-cm-primary-dim'
+   384→                              }`}
+   385→                            />
+   386→                          </div>
+   387→                        </div>
+   388→                      )}
+   389→
+   390→                      {/* Expand chevron */}
+   391→                      <div className="flex justify-center mt-2">
+   392→                        <motion.span
+   393→                          animate={{ rotate: isExpanded ? 180 : 0 }}
+   394→                          transition={{ duration: 0.2 }}
+   395→                          className="material-symbols-outlined text-cm-on-surface-variant/40 text-[18px]"
+   396→                        >
+   397→                          expand_more
+   398→                        </motion.span>
+   399→                      </div>
+   400→                    </div>
+   401→
+   402→                    {/* Expanded detail */}
+   403→                    <AnimatePresence>
+   404→                      {isExpanded && (
+   405→                        <motion.div
+   406→                          initial={{ height: 0, opacity: 0 }}
+   407→                          animate={{ height: 'auto', opacity: 1 }}
+   408→                          exit={{ height: 0, opacity: 0 }}
+   409→                          transition={{ duration: 0.25 }}
+   410→                          className="overflow-hidden"
+   411→                        >
+   412→                          <div className="px-4 pb-4 pt-1 border-t border-white/5 space-y-3">
+   413→                            {/* Details */}
+   414→                            <div className="grid grid-cols-2 gap-3 text-sm">
+   415→                              <div>
+   416→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Sede</p>
+   417→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">{booking.court.branch.name}</p>
+   418→                              </div>
+   419→                              <div>
+   420→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Método de pago</p>
+   421→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">
+   422→                                  {paymentMethodLabels[booking.paymentMethod || ''] || booking.paymentMethod || 'No definido'}
+   423→                                </p>
+   424→                              </div>
+   425→                              <div>
+   426→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Adelanto</p>
+   427→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">{fmtCurrency(booking.advanceAmount)}</p>
+   428→                              </div>
+   429→                              <div>
+   430→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Restante</p>
+   431→                                <p className={`font-medium font-[family-name:var(--font-sora)] ${booking.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>
+   432→                                  {fmtCurrency(booking.remainingAmount)}
+   433→                                </p>
+   434→                              </div>
+   435→                            </div>
+   436→
+   437→                            {/* Remaining payment warning */}
+   438→                            {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+   439→                              <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+   440→                                <span className="material-symbols-outlined text-orange-400 text-[20px]">warning</span>
+   441→                                <p className="text-sm text-orange-300 font-[family-name:var(--font-inter)]">
+   442→                                  Falta pagar <span className="font-semibold">{fmtCurrency(booking.remainingAmount)}</span>
+   443→                                </p>
+   444→                              </div>
+   445→                            )}
+   446→
+   447→                            {/* Actions */}
+   448→                            <div className="flex gap-2 pt-1">
+   449→                              {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+   450→                                <button type="button"
+   451→                                  onClick={(e) => {
+   452→                                    e.stopPropagation()
+   453→                                    setPayModal(booking)
+   454→                                  }}
+   455→                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-cm-primary text-cm-on-primary rounded-xl text-sm font-semibold hover:brightness-110 transition-all font-[family-name:var(--font-sora)]"
+   456→                                >
+   457→                                  <span className="material-symbols-outlined text-[18px]">payments</span>
+   458→                                  Pagar Restante
+   459→                                </button>
+   460→                              )}
+   461→                              {booking.status === 'reserved' && (
+   462→                                <button type="button"
+   463→                                  onClick={(e) => {
+   464→                                    e.stopPropagation()
+   465→                                    handleCancel(booking.id)
+   466→                                  }}
+   467→                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-500/30 text-red-400 rounded-xl text-sm font-semibold hover:bg-red-500/10 transition-colors font-[family-name:var(--font-sora)]"
+   468→                                >
+   469→                                  <span className="material-symbols-outlined text-[18px]">cancel</span>
+   470→                                  Cancelar
+   471→                                </button>
+   472→                              )}
+   473→                            </div>
+   474→                          </div>
+   475→                        </motion.div>
+   476→                      )}
+   477→                    </AnimatePresence>
+   478→                  </motion.div>
+   479→                )
+   480→              })}
+   481→            </AnimatePresence>
+   482→          </div>
+   483→        )}
+   484→      </div>
+   485→
+   486→      {/* ─── Pay Remaining Modal ─── */}
+   487→      <AnimatePresence>
+   488→        {payModal && (
+   489→          <motion.div
+   490→            initial={{ opacity: 0 }}
+   491→            animate={{ opacity: 1 }}
+   492→            exit={{ opacity: 0 }}
+   493→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   494→            onClick={() => !paying && setPayModal(null)}
+   495→          >
+   496→            <motion.div
+   497→              initial={{ y: 100, opacity: 0 }}
+   498→              animate={{ y: 0, opacity: 1 }}
+   499→              exit={{ y: 100, opacity: 0 }}
+   500→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+   501→              className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20"
+   502→              onClick={(e) => e.stopPropagation()}
+   503→            >
+   504→              {/* Modal header */}
+   505→              <div className="flex items-center justify-between mb-5">
+   506→                <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">
+   507→                  Pagar Restante
+   508→                </h3>
+   509→                {!paying && (
+   510→                  <button type="button"
+   511→                    onClick={() => setPayModal(null)}
+   512→                    className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"
+   513→                  >
+   514→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+   515→                  </button>
+   516→                )}
+   517→              </div>
+   518→
+   519→              {/* Booking summary */}
+   520→              <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-2 mb-5">
+   521→                <div className="flex items-center justify-between">
+   522→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Cancha</span>
+   523→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{payModal.court.name}</span>
+   524→                </div>
+   525→                <div className="flex items-center justify-between">
+   526→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Fecha</span>
+   527→                  <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">{fmt(payModal.date)} · {payModal.startTime} - {payModal.endTime}</span>
+   528→                </div>
+   529→                <div className="border-t border-white/5 pt-2 flex items-center justify-between">
+   530→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+   531→                  <span className="text-lg font-bold text-cm-primary font-[family-name:var(--font-sora)]">{fmtCurrency(payModal.remainingAmount)}</span>
+   532→                </div>
+   533→              </div>
+   534→
+   535→              {/* Tabs: Online / Manual */}
+   536→              <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-4">
+   537→                <button type="button"
+   538→                  onClick={() => setPayModalTab('online')}
+   539→                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
+   540→                    payModalTab === 'online'
+   541→                      ? 'bg-cm-primary text-cm-on-primary shadow-sm'
+   542→                      : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   543→                  }`}
+   544→                >
+   545→                  <span className="material-symbols-outlined text-[16px]">lock</span>
+   546→                  En Linea
+   547→                </button>
+   548→                <button type="button"
+   549→                  onClick={() => setPayModalTab('manual')}
+   550→                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
+   551→                    payModalTab === 'manual'
+   552→                      ? 'bg-cm-primary text-cm-on-primary shadow-sm'
+   553→                      : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   554→                  }`}
+   555→                >
+   556→                  <span className="material-symbols-outlined text-[16px]">storefront</span>
+   557→                  Manual
+   558→                </button>
+   559→              </div>
+   560→
+   561→              {/* Online payment with Culqi */}
+   562→              {payModalTab === 'online' && (
+   563→                <CulqiPayButton
+   564→                  bookingId={payModal.id}
+   565→                  totalAmount={payModal.totalPrice}
+   566→                  remainingAmount={payModal.remainingAmount}
+   567→                  paymentType="remaining"
+   568→                  userEmail={payModal.user.email}
+   569→                  buttonText={`Pagar ${fmtCurrency(payModal.remainingAmount)}`}
+   570→                  onSuccess={() => {
+   571→                    toast({ title: 'Pago exitoso', description: 'Tu reserva ha sido actualizada.' })
+   572→                    setPayModal(null)
+   573→                    fetchBookings()
+   574→                  }}
+   575→                  onError={(error) => {
+   576→                    toast({ title: 'Error en el pago', description: error, variant: 'destructive' })
+   577→                  }}
+   578→                  onClose={() => {}}
+   579→                />
+   580→              )}
+   581→
+   582→              {/* Manual payment method */}
+   583→              {payModalTab === 'manual' && (
+   584→                <div className="space-y-2 mb-4">
+   585→                  <label className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Metodo de pago manual</label>
+   586→                  <div className="grid grid-cols-2 gap-2">
+   587→                    {[
+   588→                      { key: 'yape', label: 'Yape', icon: 'account_balance_wallet' },
+   589→                      { key: 'plin', label: 'Plin', icon: 'phone_android' },
+   590→                      { key: 'cash', label: 'Efectivo', icon: 'payments' },
+   591→                      { key: 'transfer', label: 'Transferencia', icon: 'account_balance' },
+   592→                    ].map((m) => (
+   593→                      <button type="button"
+   594→                        key={m.key}
+   595→                        onClick={() => setPayMethod(m.key)}
+   596→                        className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+   597→                          payMethod === m.key
+   598→                            ? 'bg-cm-primary/10 border-cm-primary/40 text-cm-primary'
+   599→                            : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+   600→                        }`}
+   601→                      >
+   602→                        <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
+   603→                        {m.label}
+   604→                      </button>
+   605→                    ))}
+   606→                  </div>
+   607→                </div>
+   608→              )}
+   609→
+   610→              {/* Confirm button (only for manual) */}
+   611→              {payModalTab === 'manual' && (
+   612→                <button type="button"
+   613→                  onClick={handlePayRemaining}
+   614→                  disabled={paying}
+   615→                  className="w-full py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+   616→                >
+   617→                  {paying ? (
+   618→                    <>
+   619→                      <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
+   620→                      Procesando...
+   621→                    </>
+   622→                  ) : (
+   623→                    <>
+   624→                      <span className="material-symbols-outlined text-[20px]">check_circle</span>
+   625→                      Confirmar Pago {fmtCurrency(payModal.remainingAmount)}
+   626→                    </>
+   627→                  )}
+   628→                </button>
+   629→              )}
+   630→            </motion.div>
+   631→          </motion.div>
+   632→        )}
+   633→      </AnimatePresence>
+   634→    </div>
+   635→  )
+   636→}
+   637→

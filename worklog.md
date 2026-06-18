@@ -383,3 +383,25 @@ Stage Summary:
 - Finanzas muestra: Ingresos Totales, Servicios Completados, Adelantos Activos, Egresos, Adelantos por Cancelaciones (retenidos/devueltos), Balance real
 - Historial completo de adelantos por cancelación con fecha, cliente, cancha, monto, estado, motivo
 
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implementar horas fraccionadas en reservas admin y toggle 12h/24h
+
+Work Log:
+- Created /home/z/my-project/src/lib/timeUtils.ts with shared utilities: formatTime12, formatTime24, formatTimeRange, generateTimeSlots
+- Modified AdminDashboard.tsx: timeSlots now use generateTimeSlots(6, 23, [0, 30]) for :00 and :30 options
+- Added use12hFormat state toggle in AdminDashboard header (next to alarm indicator)
+- Updated all time displays in AdminDashboard (card view, list view, advance modal, schedule tooltip) to use formatTimeRange
+- Updated BookingsTable.tsx: added use12hFormat prop, imported formatTimeRange, updated time column
+- Updated SeriesBookingsTable.tsx: added use12hFormat prop, imported formatTimeRange, updated time column
+- Updated BookingsView.tsx (user view): added use12hFormat state toggle in header, updated both time displays (booking list + pay modal)
+- Updated TodaysSchedule.tsx: delegated formatTime12 to shared utility (supports :30 minutes)
+- Bumped Service Worker to v5 and SW_VERSION to v5-2026-06-18b
+
+Stage Summary:
+- Admins can now create bookings with fractional hours (:00 and :30 intervals, e.g. 18:00-18:30, 18:30-19:00)
+- All booking views now have a 12h/24h toggle button
+- Pricing engine already supported fractional hours (no changes needed)
+- Deployed to https://creard.vercel.app successfully
+

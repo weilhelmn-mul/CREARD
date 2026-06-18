@@ -12,6 +12,7 @@ import UsersTab from '@/components/admin/UsersTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
 import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
 import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
+import { formatTimeRange, generateTimeSlots } from '@/lib/timeUtils'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -2295,6 +2296,9 @@ export default function AdminDashboard() {
   const [expForm, setExpForm] = useState({ description: '', amount: '', category: 'mantenimiento', date: todayStr(), notes: '' })
   const [submittingExpense, setSubmittingExpense] = useState(false)
 
+  /* time display format */
+  const [use12hFormat, setUse12hFormat] = useState(false)
+
   /* loading */
   const [loading, setLoading] = useState(true)
 
@@ -3287,15 +3291,8 @@ export default function AdminDashboard() {
     bookings: scheduleBookings.filter((b) => b.courtId === c.id || (b.courtIds && b.courtIds.includes(c.id))),
   }))
 
-  /* time slots — admin has NO time restrictions, all slots available for any date */
-  const timeSlots: Array<{ value: string; disabled: boolean; label?: string }> = []
-  for (let h = 6; h <= 23; h++) {
-    timeSlots.push({
-      value: `${String(h).padStart(2, '0')}:00`,
-      disabled: false,
-      label: undefined,
-    })
-  }
+  /* time slots — admin has NO time restrictions, all slots available for any date (includes :30 for fractional hours) */
+  const timeSlots = useMemo(() => generateTimeSlots(6, 23, [0, 30]), [])
 
   /* ─── KPIs ─── */
   const kpis = [
@@ -3349,7 +3346,17 @@ export default function AdminDashboard() {
               Gestion integral de CREARD
             </p>
           </div>
-          {/* Live alarm indicator */}
+          {/* Time format toggle + Live alarm indicator */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUse12hFormat(!use12hFormat)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+              title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+            >
+              <span className="material-symbols-outlined text-[16px]">schedule</span>
+              <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+            </button>
           {notifSettings.enabled && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-primary/10 border border-cm-primary/20">
               <span className="relative flex h-2.5 w-2.5">
@@ -3359,6 +3366,7 @@ export default function AdminDashboard() {
               <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">Alarmas activas</span>
             </div>
           )}
+          </div>
         </div>
 
         {/* KPI Cards */}
@@ -3628,6 +3636,7 @@ export default function AdminDashboard() {
                   advanceTarget={advanceTarget}
                   isSuperAdmin={isSuperAdmin}
                   onDeleteBooking={handleDeleteBooking}
+                  use12hFormat={use12hFormat}
                 />
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
@@ -3660,7 +3669,7 @@ export default function AdminDashboard() {
                               )}
                             </div>
                             <p className="font-[family-name:var(--font-sora)] font-bold text-cm-on-surface text-lg mt-0.5">
-                              {b.startTime} - {b.endTime}
+                              {formatTimeRange(b.startTime, b.endTime, use12hFormat)}
                             </p>
                           </div>
                           {/* Court */}
@@ -3787,7 +3796,7 @@ export default function AdminDashboard() {
                                   </button>
                                 )}
                               </div>
-                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.startTime}-{b.endTime}</p>
+                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
                             </div>
                           </div>
                           {/* Court */}
@@ -5181,7 +5190,7 @@ export default function AdminDashboard() {
                   <span className="text-cm-on-surface-variant">•</span>
                   <span>{fmtDate(advanceTarget.date)}</span>
                   <span className="text-cm-on-surface-variant">•</span>
-                  <span>{advanceTarget.startTime}-{advanceTarget.endTime}</span>
+                  <span>{formatTimeRange(advanceTarget.startTime, advanceTarget.endTime, use12hFormat)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                   <span className="material-symbols-outlined text-[14px]">person</span>
@@ -5518,7 +5527,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="overflow-auto flex-1">
-                <SeriesBookingsTable bookings={seriesBookings} onCancelSingle={handleCancelSingleFromSeries} />
+                <SeriesBookingsTable bookings={seriesBookings} onCancelSingle={handleCancelSingleFromSeries} use12hFormat={use12hFormat} />
               </div>
 
               {/* Summary */}
@@ -5602,7 +5611,7 @@ export default function AdminDashboard() {
                                     ? 'bg-cm-surface-container-highest/15 text-cm-on-surface-variant/15 border border-transparent'
                                     : 'bg-cm-surface-container-highest/30 text-cm-on-surface-variant/30 border border-transparent'
                                 }`}
-                                title={booking ? `${booking.user?.name || 'Cliente'} (${booking.startTime}-${booking.endTime})` : ts.label || 'Disponible'}
+                                title={booking ? `${booking.user?.name || 'Cliente'} (${formatTimeRange(booking.startTime, booking.endTime, use12hFormat)})` : ts.label || 'Disponible'}
                               >
                                 {booking && isStart ? (
                                   <span className="truncate px-1">{(booking.user?.name || 'Cliente').split(' ')[0]}</span>

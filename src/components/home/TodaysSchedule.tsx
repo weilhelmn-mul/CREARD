@@ -31,17 +31,15 @@ const sportIcons: Record<string, string> = {
   eventos: 'celebration',
 }
 
+import { formatTime12 as formatTime12Util } from '@/lib/timeUtils'
+
 function getTodayStr(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function formatTime12(time: string): string {
-  const [h] = time.split(':').map(Number)
-  if (h === 0) return '12:00 AM'
-  if (h < 12) return `${h}:00 AM`
-  if (h === 12) return '12:00 PM'
-  return `${h - 12}:00 PM`
+  return formatTime12Util(time)
 }
 
 export default function TodaysSchedule() {

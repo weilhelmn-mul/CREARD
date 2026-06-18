@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
+import { formatTimeRange } from '@/lib/timeUtils'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
 
 /* ─── types ─── */
@@ -97,6 +98,7 @@ export default function BookingsView() {
   const [activeTab, setActiveTab] = useState<TabType>('upcoming')
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [use12hFormat, setUse12hFormat] = useState(false)
 
   /* pay-remaining modal */
   const [payModal, setPayModal] = useState<Booking | null>(null)
@@ -227,6 +229,16 @@ export default function BookingsView() {
               Gestiona tus reservas de canchas
             </p>
           </div>
+          <div className="flex items-center gap-2">
+          <button
+              type="button"
+              onClick={() => setUse12hFormat(!use12hFormat)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+              title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+            >
+              <span className="material-symbols-outlined text-[16px]">schedule</span>
+              <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+            </button>
           <button type="button"
             onClick={() => setView('search')}
             className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
@@ -234,6 +246,7 @@ export default function BookingsView() {
             <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
             <span className="hidden sm:inline">Nueva Reserva</span>
           </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -344,7 +357,7 @@ export default function BookingsView() {
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <span className="material-symbols-outlined text-[14px]">schedule</span>
-                                  {booking.startTime} - {booking.endTime}
+                                  {formatTimeRange(booking.startTime, booking.endTime, use12hFormat)}
                                 </span>
                               </div>
                             </div>
@@ -524,7 +537,7 @@ export default function BookingsView() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Fecha</span>
-                  <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">{fmt(payModal.date)} · {payModal.startTime} - {payModal.endTime}</span>
+                  <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">{fmt(payModal.date)} · {formatTimeRange(payModal.startTime, payModal.endTime, use12hFormat)}</span>
                 </div>
                 <div className="border-t border-white/5 pt-2 flex items-center justify-between">
                   <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>

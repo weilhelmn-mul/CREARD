@@ -43,6 +43,8 @@ const statusConfig: Record<string, { label: string; color: string; dot: string }
   cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
 }
 
+import { formatTimeRange } from '@/lib/timeUtils'
+
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer', voley: 'sports_volleyball', basket: 'sports_basketball',
   tenis: 'sports_tennis', eventos: 'celebration',
@@ -65,6 +67,7 @@ interface BookingsTableProps {
   advanceTarget: Booking | null
   isSuperAdmin?: boolean
   onDeleteBooking?: (bookingId: string) => void
+  use12hFormat?: boolean
 }
 
 export default function BookingsTable({
@@ -78,6 +81,7 @@ export default function BookingsTable({
   advanceTarget,
   isSuperAdmin = false,
   onDeleteBooking,
+  use12hFormat = false,
 }: BookingsTableProps) {
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -121,7 +125,7 @@ export default function BookingsTable({
                   </td>
                   <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
                     <div className="flex items-center gap-2">
-                      {b.startTime}-{b.endTime}
+                      {formatTimeRange(b.startTime, b.endTime, use12hFormat)}
                       {alertLv === 'warning' && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold animate-pulse">
                           <span className="material-symbols-outlined text-[10px]">timer</span>
