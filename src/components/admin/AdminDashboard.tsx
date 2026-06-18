@@ -12,7 +12,7 @@ import UsersTab from '@/components/admin/UsersTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
 import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
 import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
-import { formatTimeRange, generateTimeSlots } from '@/lib/timeUtils'
+import { formatTime12, formatTime24, formatTimeRange, generateTimeSlots } from '@/lib/timeUtils'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -4404,7 +4404,19 @@ export default function AdminDashboard() {
                       />
                       {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:mt-2">
+                      {/* 12h/24h toggle */}
+                      <div className="col-span-2 flex items-center justify-end mb-1">
+                        <button
+                          type="button"
+                          onClick={() => setUse12hFormat(!use12hFormat)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cm-surface-container-highest/40 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all text-[11px]"
+                          title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">schedule</span>
+                          <span className="font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+                        </button>
+                      </div>
                       <div className="relative">
                         <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
                           Hora inicio *
@@ -4413,7 +4425,7 @@ export default function AdminDashboard() {
                           onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
                         >
-                          <span className="text-cm-on-surface">{bookingForm.startTime}</span>
+                          <span className="text-cm-on-surface">{use12hFormat ? formatTime12(bookingForm.startTime) : formatTime24(bookingForm.startTime)}</span>
                           <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
                         </button>
                         {startTimeDrop && (
@@ -4432,7 +4444,7 @@ export default function AdminDashboard() {
                                       : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
                                 }`}
                               >
-                                {ts.value}{ts.label ? ` (${ts.label})` : ''}
+                                {use12hFormat ? formatTime12(ts.value) : formatTime24(ts.value)}{ts.label ? ` (${ts.label})` : ''}
                               </button>
                             ))}
                           </div>
@@ -4444,7 +4456,7 @@ export default function AdminDashboard() {
                           onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
                           className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
                         >
-                          <span className="text-cm-on-surface">{bookingForm.endTime}</span>
+                          <span className="text-cm-on-surface">{use12hFormat ? formatTime12(bookingForm.endTime) : formatTime24(bookingForm.endTime)}</span>
                           <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
                         </button>
                         {endTimeDrop && (
@@ -4463,7 +4475,7 @@ export default function AdminDashboard() {
                                       : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
                                 }`}
                               >
-                                {ts.value}
+                                {use12hFormat ? formatTime12(ts.value) : formatTime24(ts.value)}
                               </button>
                             ))}
                           </div>

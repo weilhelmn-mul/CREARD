@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 
 // Bump this when you need to force all clients to refresh
-const SW_VERSION = 'v5-2026-06-18b'
+const SW_VERSION = 'v5-2026-06-18c'
 
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
