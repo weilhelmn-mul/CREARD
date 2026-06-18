@@ -2415,10 +2415,11 @@ export default function AdminDashboard() {
 
       const [statsRes, bookingsRes, expensesRes, courtsData, usersData] = await Promise.all([
         fetch('/api/stats', { headers }).catch(() => new Response(null, { status: 0 })),
-        // Only fetch recent bookings: 30 days back to 60 days forward (avoid timeout)
+        // B13 FIX: Fetch wider date range (365 days) for accurate Finanzas
+        // Only fetch recent bookings: 365 days back to 60 days forward
         (() => {
           const today = todayStr()
-          const from = new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          const from = new Date(Date.now() - 365 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
           const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
           return fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers })
         })().catch(() => new Response(null, { status: 0 })),
@@ -3170,7 +3171,8 @@ export default function AdminDashboard() {
     }
   }
 
-  const filteredBookings = (() => {
+  // B16 FIX: Use useMemo instead of IIFE for filtered bookings
+  const filteredBookings = useMemo(() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
     const afterStatus = result.length;
     // Hide past bookings unless toggle is on
@@ -3237,7 +3239,7 @@ export default function AdminDashboard() {
       case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
     }
     return result
-  })()
+  }, [bookings, statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
 
   const activeFilterCount = [searchQuery, dateFrom, dateTo, courtFilter !== 'all' && courtFilter, sportFilter !== 'all' && sportFilter].filter(Boolean).length
 
@@ -3249,11 +3251,11 @@ export default function AdminDashboard() {
     setSportFilter('all')
   }
 
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-  // Income = all money actually received (completed totals + reserved advances)
+  // B14 FIX: Use actual paid amount (advance) for completed, not totalPrice
+  // B13 FIX: Widen date range to 365 days for accurate Finanzas
   const completedIncome = bookings
     .filter((b) => b.status === 'completed')
-    .reduce((s, b) => s + b.totalPrice, 0)
+    .reduce((s, b) => s + b.advanceAmount, 0)
   const reservedAdvances = bookings
     .filter((b) => b.status === 'reserved')
     .reduce((s, b) => s + b.advanceAmount, 0)
@@ -3271,6 +3273,7 @@ export default function AdminDashboard() {
   // the booking was already removed from totalIncome when cancelled, so subtracting again
   // would double-count the outflow).
   const effectiveIncome = totalIncome + retainedTotal
+  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const balance = effectiveIncome - totalExpenses
 
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
@@ -3322,11 +3325,24 @@ export default function AdminDashboard() {
   }
 
   const handleStatusChangeWithAdvanceCheck = (booking: Booking, newStatus: string) => {
-    if (newStatus === 'cancelled' && booking.advanceAmount > 0) {
-      setCancelTarget(booking)
-      setCancelAdvanceAction('retain')
-      setCancelReason('')
-      setShowCancelDialog(true)
+    // B1 FIX: Prevent reverting cancelled/completed back to other statuses
+    if (booking.status === 'cancelled' && newStatus !== 'cancelled') {
+      toast({ title: 'Acción bloqueada', description: 'No se puede cambiar el estado de una reserva cancelada.', variant: 'destructive' })
+      return
+    }
+    // B3 FIX: Always confirm cancellation (even with 0 advance)
+    if (newStatus === 'cancelled') {
+      if (booking.advanceAmount > 0) {
+        setCancelTarget(booking)
+        setCancelAdvanceAction('retain')
+        setCancelReason('')
+        setShowCancelDialog(true)
+      } else {
+        // Simple confirmation for 0-advance bookings
+        if (confirm(`¿Cancelar esta reserva de ${booking.user?.name || 'sin nombre'}?`)) {
+          handleUpdateStatus(booking.id, newStatus)
+        }
+      }
     } else {
       handleUpdateStatus(booking.id, newStatus)
     }
@@ -3871,15 +3887,14 @@ export default function AdminDashboard() {
                               <option value="completed">Completo</option>
                               <option value="cancelled">Cancelado</option>
                             </select>
-                            {b.remainingAmount > 0 && (
-                              <button type="button"
-                                onClick={() => openAdvanceModal(b)}
-                                className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
-                                title="Registrar pago"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">payments</span>
-                              </button>
-                            )}
+                            {/* B8 FIX: Always show payment button (not just when remainingAmount > 0) */}
+                            <button type="button"
+                              onClick={() => openAdvanceModal(b)}
+                              className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
+                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+                            >
+                              <span className="material-symbols-outlined text-[16px]">payments</span>
+                            </button>
                             {b.status === 'reserved' && (
                               <button type="button"
                                 onClick={() => openExtendModal(b)}
@@ -3971,15 +3986,14 @@ export default function AdminDashboard() {
                               </span>
                             )}
                             <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
-                            {b.remainingAmount > 0 && (
-                              <button type="button"
-                                onClick={() => openAdvanceModal(b)}
-                                className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                                title="Registrar pago"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">payments</span>
-                              </button>
-                            )}
+                            {/* B8 FIX: Always show payment button */}
+                            <button type="button"
+                              onClick={() => openAdvanceModal(b)}
+                              className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+                            >
+                              <span className="material-symbols-outlined text-[14px]">payments</span>
+                            </button>
                             {b.status === 'reserved' && (
                               <button type="button"
                                 onClick={() => openExtendModal(b)}
@@ -4038,7 +4052,7 @@ export default function AdminDashboard() {
                     <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Servicios Completados</span>
                   </div>
                   <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(completedIncome)}</p>
-                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Reservas pagadas al 100%</p>
+                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Pagos recibidos de completadas</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass-card rounded-xl p-4">
@@ -4200,7 +4214,7 @@ export default function AdminDashboard() {
                                         const res = await fetch('/api/retained-advances', {
                                           method: 'PUT',
                                           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: ra.id, status: 'refunded' }),
+                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
                                         })
                                         if (res.ok) {
                                           toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
@@ -4221,7 +4235,7 @@ export default function AdminDashboard() {
                                         const res = await fetch('/api/retained-advances', {
                                           method: 'PUT',
                                           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: ra.id, status: 'retained' }),
+                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
                                         })
                                         if (res.ok) {
                                           toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })

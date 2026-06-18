@@ -515,6 +515,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // B15 FIX: Re-check conflicts right before creation (optimistic concurrency)
+    for (const cId of allCourtIds) {
+      const recheck = await getBookings({ courtId: cId, date });
+      const stillConflicts = recheck.filter(
+        (b) => {
+          const bCourtIds: string[] = Array.isArray(b.court_ids)
+            ? b.court_ids as string[]
+            : [b.court_id as string];
+          if (!bCourtIds.includes(cId)) return false;
+          return (
+            !['cancelled'].includes(migrateStatus(b.status || '')) &&
+            (b.start_time || '') < endTime &&
+            (b.end_time || '') > startTime
+          );
+        }
+      );
+      if (stillConflicts.length > 0) {
+        let courtName = cId;
+        try {
+          const c = await getCourtById(cId);
+          if (c?.name) courtName = c.name as string;
+        } catch { /* use ID */ }
+        return NextResponse.json(
+          { error: `Horario ocupado en ${courtName}. Alguien reservó mientras completabas el formulario. Intenta de nuevo.`, conflicts: [{ courtId: cId, courtName }] },
+          { status: 409 }
+        );
+      }
+    }
+
     // ── Calculate price ──
     // Frontend sends totalPrice as grand total (court + equipment combined).
     // We compute courtSubtotal and equipmentSubtotal separately for storage/display.
@@ -550,8 +579,11 @@ export async function POST(request: NextRequest) {
 
     const price = courtPriceTotal + equipmentSubtotal;
 
+    // B4 FIX: Validate advance + remaining === total consistency
     const adv = parseFloat(advanceAmount) || price * 0.5;
-    const rem = parseFloat(remainingAmount) || price - adv;
+    let rem = parseFloat(remainingAmount) || price - adv;
+    // Force consistency: remaining must equal total - advance
+    rem = Math.max(0, Math.round((price - adv) * 100) / 100);
     const bookingStatus = migrateStatus(status || 'reserved');
 
     // Resolve client email for denormalized search
@@ -583,17 +615,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`[BOOKINGS] POST: Created booking ${id} for user=${userId} date=${date} ${startTime}-${endTime} courts=${allCourtIds.join(',')} total=${price} advance=${adv} remaining=${rem} method=${normalizedPaymentMethod} email=${clientEmail}`);
 
-    // Create advance payment record
-    try {
-      await createPayment(id, {
-        user_id: userId,
-        amount: adv,
-        type: 'advance',
-        method: normalizedPaymentMethod || 'EFECTIVO',
-        status: 'completed',
-      });
-    } catch (payErr) {
-      console.error('[BOOKINGS] Warning: could not create payment record:', payErr);
+    // B5 FIX: Only create payment record if advance > 0
+    if (adv > 0.01) {
+      try {
+        await createPayment(id, {
+          user_id: userId,
+          amount: adv,
+          type: 'advance',
+          method: normalizedPaymentMethod || 'EFECTIVO',
+          status: 'completed',
+        });
+      } catch (payErr) {
+        console.error('[BOOKINGS] Warning: could not create payment record:', payErr);
+      }
     }
 
     return NextResponse.json({
@@ -684,11 +718,15 @@ export async function PUT(request: NextRequest) {
         const allCourtIds: string[] = Array.isArray(booking.court_ids) ? booking.court_ids : (booking.court_id ? [booking.court_id] : []);
         const bookingDate = booking.date as string;
         if (allCourtIds.length > 0 && bookingDate) {
-          const allBookings = await getBookings();
-          const conflicts = allBookings.filter((ob: Record<string, unknown>) => {
+          // B10 FIX: Filter by date and courts instead of fetching ALL bookings
+          const conflictQueries = allCourtIds.map(cid => getBookings({ courtId: cid, date: bookingDate }));
+          const conflictResults = await Promise.all(conflictQueries);
+          const allConflicting = conflictResults.flat();
+          const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
             const obId = ob.id as string;
             if (obId === id) return false;
-            if (ob.status === 'cancelled') return false;
+            // B9 FIX: Use migrateStatus for legacy status values
+            if (migrateStatus(ob.status || '') === 'cancelled') return false;
             if (ob.date !== bookingDate) return false;
             const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
             if (!obCourtIds.some((cid: string) => allCourtIds.includes(cid))) return false;
@@ -728,37 +766,42 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // B11 FIX: Track if this is a cancellation to skip advance payment record
+    const isCancelling = status === 'cancelled' || (status && migrateStatus(status) === 'cancelled');
+
     // When cancelling a booking with advance, handle retained/refunded advance
     // Only create retained advance records when an admin explicitly provides advanceAction
     // (user-side cancellations should NOT auto-create records — the admin decides later)
     const isAdminCancellation = authUser.role === 'admin' || authUser.role === 'super_admin';
-    if (status === 'cancelled' || (status && migrateStatus(status) === 'cancelled')) {
-      // Bug #13: Prevent cancelling completed bookings
+    if (isCancelling) {
+      // B6 FIX: Fetch booking once, reuse for both checks
+      let bookingForCancel: Record<string, unknown> | null = null;
       try {
-        const booking = await getBookingById(id);
-        if (booking && booking.status === 'completed') {
-          return NextResponse.json({ error: 'No se puede cancelar una reserva completada. Contacta soporte si es necesario.' }, { status: 400 });
-        }
+        bookingForCancel = await getBookingById(id);
       } catch { /* non-blocking */ }
+
+      // Prevent cancelling completed bookings
+      if (bookingForCancel && (bookingForCancel.status === 'completed' || migrateStatus(bookingForCancel.status as string || '') === 'completed')) {
+        return NextResponse.json({ error: 'No se puede cancelar una reserva completada. Contacta soporte si es necesario.' }, { status: 400 });
+      }
 
       if (isAdminCancellation) {
       try {
-        const booking = await getBookingById(id);
-        if (booking && ((booking.advance_amount as number) || 0) > 0) {
+        if (bookingForCancel && ((bookingForCancel.advance_amount as number) || 0) > 0) {
           // Bug #4: Check for duplicate retained advance
           const { getRetainedAdvances } = await import('@/lib/db');
           const existing = await getRetainedAdvances({ bookingId: id });
           if (existing.length > 0) {
             console.warn('[BOOKINGS] Retained advance already exists for booking', id, '- skipping creation');
           } else {
-          const advAmount = (booking.advance_amount as number) || 0;
+          const advAmount = (bookingForCancel.advance_amount as number) || 0;
           const isRetained = advanceAction === 'retain';
           const statusAdvance = isRetained ? 'retained' : 'refunded';
 
           // Get court name for the record
           let courtName = '';
           try {
-            const cId = (booking.court_ids as string[])?.[0] || (booking.court_id as string) || '';
+            const cId = (bookingForCancel.court_ids as string[])?.[0] || (bookingForCancel.court_id as string) || '';
             if (cId) {
               const court = await getCourtById(cId);
               courtName = (court?.name as string) || '';
@@ -768,7 +811,7 @@ export async function PUT(request: NextRequest) {
           // Get user name
           let userName = '';
           try {
-            const uId = booking.user_id as string;
+            const uId = bookingForCancel.user_id as string;
             if (uId) {
               const user = await getUserById(uId);
               userName = (user?.name as string) || '';
@@ -777,14 +820,14 @@ export async function PUT(request: NextRequest) {
 
           await createRetainedAdvance({
             booking_id: id,
-            user_id: (booking.user_id as string) || '',
+            user_id: (bookingForCancel.user_id as string) || '',
             user_name: userName,
-            user_email: (booking.user_email as string) || null,
+            user_email: (bookingForCancel.user_email as string) || null,
             court_name: courtName,
-            booking_date: (booking.date as string) || '',
+            booking_date: (bookingForCancel.date as string) || '',
             amount: advAmount,
-            original_total: (booking.total_price as number) || 0,
-            payment_method: (booking.payment_method as string) || 'EFECTIVO',
+            original_total: (bookingForCancel.total_price as number) || 0,
+            payment_method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
             reason: cancelReason || 'Cancelación de reserva',
             status: statusAdvance,
           });
@@ -792,10 +835,10 @@ export async function PUT(request: NextRequest) {
           // Create a payment record for the refund/retention
           try {
             await createPayment(id, {
-              user_id: (booking.user_id as string) || '',
+              user_id: (bookingForCancel.user_id as string) || '',
               amount: advAmount,
               type: isRetained ? 'retained' : 'refund',
-              method: (booking.payment_method as string) || 'EFECTIVO',
+              method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
               status: 'completed',
             });
           } catch (payErr) {
@@ -809,8 +852,8 @@ export async function PUT(request: NextRequest) {
       } // end isAdminCancellation
     }
 
-    // If advance amount is being updated, create a payment record for the increment
-    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number') {
+    // B11 FIX: Skip advance payment record when cancelling (already handled above)
+    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number' && !isCancelling) {
       try {
         const booking = await getBookingById(id);
         if (booking) {

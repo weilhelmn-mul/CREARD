@@ -4,9 +4,12 @@ import {
   createRetainedAdvance,
   updateRetainedAdvance,
   deleteRetainedAdvance,
+  getPayments,
+  createPayment,
 } from '@/lib/db';
 import { requireAnyAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // GET /api/retained-advances — list retained advances
 export async function GET(request: NextRequest) {
@@ -174,6 +177,38 @@ export async function PUT(request: NextRequest) {
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
     }
+
+    // B17 FIX: Sync payment record when status changes
+    if (updateData.status && updateData.bookingId) {
+      try {
+        const { getAdminDb } = await import('@/lib/firebase-admin');
+        const db = await getAdminDb();
+        // Find the matching payment record for this retained advance
+        const paySnapshot = await db
+          .collection('bookings')
+          .doc(updateData.bookingId as string)
+          .collection('payments')
+          .where('type', 'in', ['retained', 'refund'])
+          .get();
+        for (const payDoc of paySnapshot.docs) {
+          const payData = payDoc.data();
+          // Match: a 'retained' payment should become 'refund' and vice-versa
+          const currentPayType = payData.type as string;
+          const newPayType = updateData.status === 'refunded' ? 'refund' : 'retained';
+          if ((updateData.status === 'refunded' && currentPayType === 'retained') ||
+              (updateData.status === 'retained' && currentPayType === 'refund')) {
+            await payDoc.ref.update({
+              type: newPayType,
+              updated_at: Timestamp.now(),
+            });
+            console.log(`[RETAINED-ADVANCES] Synced payment ${payDoc.id} type to ${newPayType}`);
+          }
+        }
+      } catch (syncErr) {
+        console.error('[RETAINED-ADVANCES] Warning: could not sync payment record:', syncErr);
+      }
+    }
+
     await updateRetainedAdvance(id, data);
     return NextResponse.json({ success: true });
   } catch (error) {

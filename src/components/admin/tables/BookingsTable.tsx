@@ -203,15 +203,14 @@ export default function BookingsTable({
                           <span className="material-symbols-outlined text-[16px]">repeat</span>
                         </button>
                       )}
-                      {b.remainingAmount > 0 && (
-                        <button
-                          onClick={() => openAdvanceModal(b)}
-                          className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                          title={parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto'}
-                        >
-                          <span className="material-symbols-outlined text-[16px]">payments</span>
-                        </button>
-                      )}
+                      {/* B8 FIX: Always show payment button */}
+                      <button
+                        onClick={() => openAdvanceModal(b)}
+                        className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                        title={b.remainingAmount > 0 ? (parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto') : 'Registrar pago adicional'}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">payments</span>
+                      </button>
                       {b.status === 'reserved' && onExtendTime && (
                         <button
                           onClick={() => onExtendTime(b)}
