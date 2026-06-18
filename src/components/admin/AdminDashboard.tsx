@@ -2462,7 +2462,7 @@ export default function AdminDashboard() {
           const raData = await raRes.json()
           setRetainedAdvances(Array.isArray(raData.advances) ? raData.advances : [])
         }
-      } catch { /* silent */ }
+      } catch (err) { console.error('[AdminDashboard] Error loading retained advances:', err) }
       setAllCourts(courtsData)
       setBookingUsers(usersData)
 
@@ -3267,8 +3267,10 @@ export default function AdminDashboard() {
     .filter((ra) => ra.status === 'refunded')
     .reduce((s, ra) => s + ra.amount, 0)
 
-  // Real money in box = normal income + retained advances - refunded advances
-  const effectiveIncome = totalIncome + retainedTotal - refundedTotal
+  // Real money in box = normal income + retained advances (refunded is informational only —
+  // the booking was already removed from totalIncome when cancelled, so subtracting again
+  // would double-count the outflow).
+  const effectiveIncome = totalIncome + retainedTotal
   const balance = effectiveIncome - totalExpenses
 
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
@@ -3291,7 +3293,7 @@ export default function AdminDashboard() {
   const rankedUsers = Object.values(userStats).sort((a, b) => b.totalSpent - a.totalSpent)
 
   /* ─── actions ─── */
-  const handleUpdateStatus = async (id: string, status: string, advanceAction?: 'retain' | 'refund', cancelReason?: string) => {
+  const handleUpdateStatus = async (id: string, status: string, advanceAction?: 'retain' | 'refund', cancelReason?: string): Promise<boolean> => {
     try {
       const body: Record<string, unknown> = { id, status }
       if (status === 'cancelled' && advanceAction) {
@@ -3307,9 +3309,15 @@ export default function AdminDashboard() {
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)))
         toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
         fetchData()
+        return true
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar el estado', variant: 'destructive' })
+        return false
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudo actualizar el estado', variant: 'destructive' })
+      return false
     }
   }
 
@@ -3327,9 +3335,11 @@ export default function AdminDashboard() {
   const handleConfirmCancel = async () => {
     if (!cancelTarget) return
     setCancellingBooking(true)
-    await handleUpdateStatus(cancelTarget.id, 'cancelled', cancelAdvanceAction, cancelReason)
-    setShowCancelDialog(false)
-    setCancelTarget(null)
+    const success = await handleUpdateStatus(cancelTarget.id, 'cancelled', cancelAdvanceAction, cancelReason)
+    if (success) {
+      setShowCancelDialog(false)
+      setCancelTarget(null)
+    }
     setCancellingBooking(false)
   }
 
@@ -4071,7 +4081,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="p-2.5 rounded-lg bg-cm-surface-container-highest/40 flex items-center justify-between">
                     <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Neto retenido</span>
-                    <span className="font-[family-name:var(--font-sora)] text-sm font-bold text-orange-400">{fmtCurrency(retainedTotal - refundedTotal)}</span>
+                    <span className="font-[family-name:var(--font-sora)] text-sm font-bold text-orange-400">{fmtCurrency(retainedTotal)}</span>
                   </div>
                 </motion.div>
 
@@ -4096,8 +4106,8 @@ export default function AdminDashboard() {
                     )}
                     {refundedTotal > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">- Adelantos devueltos</span>
-                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">-{fmtCurrency(refundedTotal)}</span>
+                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">~ Devueltos (info)</span>
+                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">{fmtCurrency(refundedTotal)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-xs">
@@ -4154,13 +4164,14 @@ export default function AdminDashboard() {
                           <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Total Reserva</th>
                           <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Estado</th>
                           <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Motivo</th>
+                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
                         {retainedAdvances.map((ra) => (
                           <tr key={ra.id} className="border-b border-white/5 last:border-0">
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
-                              {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es') : '-')}
+                              {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}
                             </td>
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
@@ -4179,6 +4190,74 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px] truncate">{ra.reason || '-'}</td>
+                            <td className="py-2 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {ra.status === 'retained' ? (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/retained-advances', {
+                                          method: 'PUT',
+                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ id: ra.id, status: 'refunded' }),
+                                        })
+                                        if (res.ok) {
+                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
+                                          fetchData()
+                                        }
+                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                    }}
+                                    className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                    title="Marcar como devuelto"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/retained-advances', {
+                                          method: 'PUT',
+                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ id: ra.id, status: 'retained' }),
+                                        })
+                                        if (res.ok) {
+                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
+                                          fetchData()
+                                        }
+                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                    }}
+                                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+                                    title="Marcar como retenido"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">lock</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!confirm('Eliminar este registro de adelanto?')) return
+                                    try {
+                                      const res = await fetch('/api/retained-advances', {
+                                        method: 'PUT',
+                                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ id: ra.id, action: 'delete' }),
+                                      })
+                                      if (res.ok) {
+                                        toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+                                        fetchData()
+                                      }
+                                    } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+                                  }}
+                                  className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                  title="Eliminar registro"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

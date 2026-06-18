@@ -525,11 +525,13 @@ export async function getRetainedAdvances(filters?: {
   startDate?: string;
   endDate?: string;
   status?: string;
+  bookingId?: string;
 }): Promise<Partial<RetainedAdvance>[]> {
   const constraints: Array<{ field: string; op: string; value: unknown }> = [];
   if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
-  if (filters?.startDate) constraints.push({ field: 'created_at', op: '>=', value: filters.startDate });
-  if (filters?.endDate) constraints.push({ field: 'created_at', op: '<=', value: filters.endDate });
+  if (filters?.bookingId) constraints.push({ field: 'booking_id', op: '==', value: filters.bookingId });
+  // Note: startDate/endDate filters removed — Firestore Timestamp vs string comparison
+  // causes unreliable results. Date filtering should be done client-side.
   return queryDocs('retained_advances', constraints, 'created_at', 'desc');
 }
 

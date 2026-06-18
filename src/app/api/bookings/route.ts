@@ -729,10 +729,28 @@ export async function PUT(request: NextRequest) {
     }
 
     // When cancelling a booking with advance, handle retained/refunded advance
+    // Only create retained advance records when an admin explicitly provides advanceAction
+    // (user-side cancellations should NOT auto-create records — the admin decides later)
+    const isAdminCancellation = authUser.role === 'admin' || authUser.role === 'super_admin';
     if (status === 'cancelled' || (status && migrateStatus(status) === 'cancelled')) {
+      // Bug #13: Prevent cancelling completed bookings
+      try {
+        const booking = await getBookingById(id);
+        if (booking && booking.status === 'completed') {
+          return NextResponse.json({ error: 'No se puede cancelar una reserva completada. Contacta soporte si es necesario.' }, { status: 400 });
+        }
+      } catch { /* non-blocking */ }
+
+      if (isAdminCancellation) {
       try {
         const booking = await getBookingById(id);
         if (booking && ((booking.advance_amount as number) || 0) > 0) {
+          // Bug #4: Check for duplicate retained advance
+          const { getRetainedAdvances } = await import('@/lib/db');
+          const existing = await getRetainedAdvances({ bookingId: id });
+          if (existing.length > 0) {
+            console.warn('[BOOKINGS] Retained advance already exists for booking', id, '- skipping creation');
+          } else {
           const advAmount = (booking.advance_amount as number) || 0;
           const isRetained = advanceAction === 'retain';
           const statusAdvance = isRetained ? 'retained' : 'refunded';
@@ -783,10 +801,12 @@ export async function PUT(request: NextRequest) {
           } catch (payErr) {
             console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
           }
+          }
         }
       } catch (err) {
-        console.error('[BOOKINGS] Warning: could not create retained advance record:', err);
+        console.error('[BOOKINGS] Warning: could not process retained advance on cancellation:', err);
       }
+      } // end isAdminCancellation
     }
 
     // If advance amount is being updated, create a payment record for the increment
@@ -852,6 +872,20 @@ export async function DELETE(request: NextRequest) {
       }
     } catch (err) {
       console.error('[BOOKINGS] Warning: could not delete payments subcollection:', err);
+    }
+
+    // Delete associated retained advance record (Bug #12 fix)
+    try {
+      const { getRetainedAdvances, deleteRetainedAdvance } = await import('@/lib/db');
+      const retained = await getRetainedAdvances({ bookingId: id });
+      for (const ra of retained) {
+        if (ra.id) {
+          await deleteRetainedAdvance(ra.id);
+          console.log('[BOOKINGS] Deleted orphaned retained advance:', ra.id);
+        }
+      }
+    } catch (err) {
+      console.error('[BOOKINGS] Warning: could not delete retained advance for booking:', id, err);
     }
 
     // Delete the booking document itself

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBookings, createBooking, updateBooking, getUserById } from '@/lib/db';
+import { getBookings, createBooking, updateBooking, getUserById, getBookingById, getCourtById, createRetainedAdvance, createPayment } from '@/lib/db';
 import { requireAnyAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
@@ -319,9 +319,6 @@ export async function PUT(request: NextRequest) {
     }
 
     if (action === 'cancel_series') {
-      // Find ALL bookings with this group ID (we need to query without the field constraint)
-      // Firestore doesn't support querying by arbitrary field easily in our helper,
-      // so we'll use the adminDb directly
       const { adminDb } = await import('@/lib/firebase-admin');
       const snapshot = await adminDb
         .collection('bookings')
@@ -332,9 +329,46 @@ export async function PUT(request: NextRequest) {
       for (const doc of snapshot.docs) {
         const data = doc.data();
         if (migrateStatus(data.status || '') !== 'cancelled') {
-          await updateBooking(doc.id, {
-            status: 'cancelled',
-          } as any);
+          // Handle retained advance for bookings with advance > 0
+          const advAmount = data.advance_amount || 0;
+          if (advAmount > 0) {
+            try {
+              let courtName = '';
+              try {
+                const cId = (data.court_ids as string[])?.[0] || (data.court_id as string) || '';
+                if (cId) { const court = await getCourtById(cId); courtName = (court?.name as string) || ''; }
+              } catch { /* non-critical */ }
+              let userName = '';
+              try {
+                const uId = data.user_id as string;
+                if (uId) { const user = await getUserById(uId); userName = (user?.name as string) || ''; }
+              } catch { /* non-critical */ }
+
+              await createRetainedAdvance({
+                booking_id: doc.id,
+                user_id: (data.user_id as string) || '',
+                user_name: userName,
+                user_email: (data.user_email as string) || null,
+                court_name: courtName,
+                booking_date: (data.date as string) || '',
+                amount: advAmount,
+                original_total: (data.total_price as number) || 0,
+                payment_method: (data.payment_method as string) || 'EFECTIVO',
+                reason: reason || 'Cancelación de serie recurrente',
+                status: 'retained',
+              });
+              await createPayment(doc.id, {
+                user_id: (data.user_id as string) || '',
+                amount: advAmount,
+                type: 'retained',
+                method: (data.payment_method as string) || 'EFECTIVO',
+                status: 'completed',
+              });
+            } catch (raErr) {
+              console.error('[RECURRING] Warning: could not create retained advance for booking', doc.id, raErr);
+            }
+          }
+          await updateBooking(doc.id, { status: 'cancelled' } as any);
           cancelledCount++;
         }
       }
@@ -347,6 +381,49 @@ export async function PUT(request: NextRequest) {
     } else if (action === 'cancel_single') {
       if (!bookingId) {
         return NextResponse.json({ error: 'Se requiere bookingId para cancel_single.' }, { status: 400 });
+      }
+
+      // Handle retained advance for this booking
+      const booking = await getBookingById(bookingId);
+      if (booking) {
+        const advAmount = (booking.advance_amount as number) || 0;
+        if (advAmount > 0) {
+          try {
+            let courtName = '';
+            try {
+              const cId = (booking.court_ids as string[])?.[0] || (booking.court_id as string) || '';
+              if (cId) { const court = await getCourtById(cId); courtName = (court?.name as string) || ''; }
+            } catch { /* non-critical */ }
+            let userName = '';
+            try {
+              const uId = booking.user_id as string;
+              if (uId) { const user = await getUserById(uId); userName = (user?.name as string) || ''; }
+            } catch { /* non-critical */ }
+
+            await createRetainedAdvance({
+              booking_id: bookingId,
+              user_id: (booking.user_id as string) || '',
+              user_name: userName,
+              user_email: (booking.user_email as string) || null,
+              court_name: courtName,
+              booking_date: (booking.date as string) || '',
+              amount: advAmount,
+              original_total: (booking.total_price as number) || 0,
+              payment_method: (booking.payment_method as string) || 'EFECTIVO',
+              reason: reason || 'Cancelación de reserva recurrente',
+              status: 'retained',
+            });
+            await createPayment(bookingId, {
+              user_id: (booking.user_id as string) || '',
+              amount: advAmount,
+              type: 'retained',
+              method: (booking.payment_method as string) || 'EFECTIVO',
+              status: 'completed',
+            });
+          } catch (raErr) {
+            console.error('[RECURRING] Warning: could not create retained advance for single booking', bookingId, raErr);
+          }
+        }
       }
 
       await updateBooking(bookingId, { status: 'cancelled' } as any);

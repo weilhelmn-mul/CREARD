@@ -28,6 +28,15 @@ export async function GET(request: NextRequest) {
     const advances = await getRetainedAdvances({ startDate, endDate, status });
 
     // Transform Firestore timestamps to strings for JSON
+    const tsToStr = (ts: unknown): string => {
+      if (!ts) return ''
+      if (ts instanceof Date) return ts.toISOString()
+      if (typeof ts === 'object' && ts !== null && 'toDate' in (ts as Record<string, unknown>)) {
+        try { return ((ts as { toDate: () => Date }).toDate()).toISOString() } catch { return '' }
+      }
+      if (typeof ts === 'string') return ts
+      return String(ts)
+    }
     const result = advances.map((a) => ({
       id: a.id,
       bookingId: a.booking_id,
@@ -41,12 +50,8 @@ export async function GET(request: NextRequest) {
       paymentMethod: a.payment_method,
       reason: a.reason,
       status: a.status,
-      createdAt: a.created_at instanceof Date
-        ? a.created_at.toISOString()
-        : String(a.created_at || ''),
-      updatedAt: a.updated_at instanceof Date
-        ? a.updated_at.toISOString()
-        : String(a.updated_at || ''),
+      createdAt: tsToStr(a.created_at),
+      updatedAt: tsToStr(a.updated_at),
     }));
 
     // Compute totals
@@ -150,11 +155,25 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // Regular update
+    // Regular update — with validation
     const data: Record<string, unknown> = {};
-    if (updateData.status) data.status = updateData.status;
+    if (updateData.status) {
+      if (!['retained', 'refunded'].includes(updateData.status)) {
+        return NextResponse.json({ error: 'Estado inválido. Use "retained" o "refunded".' }, { status: 400 });
+      }
+      data.status = updateData.status;
+    }
     if (updateData.reason !== undefined) data.reason = updateData.reason;
-    if (updateData.amount !== undefined) data.amount = updateData.amount;
+    if (updateData.amount !== undefined) {
+      const amt = Number(updateData.amount);
+      if (isNaN(amt) || amt < 0) {
+        return NextResponse.json({ error: 'Monto inválido. Debe ser un número >= 0.' }, { status: 400 });
+      }
+      data.amount = amt;
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+    }
     await updateRetainedAdvance(id, data);
     return NextResponse.json({ success: true });
   } catch (error) {
