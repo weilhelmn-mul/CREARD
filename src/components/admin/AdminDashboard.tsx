@@ -2297,7 +2297,7 @@ export default function AdminDashboard() {
   const [submittingExpense, setSubmittingExpense] = useState(false)
 
   /* time display format */
-  const [use12hFormat, setUse12hFormat] = useState(false)
+  const [use12hFormat, setUse12hFormat] = useState(true)
 
   /* loading */
   const [loading, setLoading] = useState(true)
@@ -2372,6 +2372,19 @@ export default function AdminDashboard() {
   const [extendMethod, setExtendMethod] = useState('EFECTIVO')
   const [extendPaidNow, setExtendPaidNow] = useState('')
   const [submittingExtend, setSubmittingExtend] = useState(false)
+
+  /* edit booking modal (super_admin only) */
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editTarget, setEditTarget] = useState<Booking | null>(null)
+  const [editForm, setEditForm] = useState({
+    courtId: '', courtIds: [] as string[], userId: '', date: '', startTime: '', endTime: '',
+    totalPrice: '', advanceAmount: '', paymentMethod: 'EFECTIVO', notes: '', status: 'reserved' as string,
+  })
+  const [editEquipItems, setEditEquipItems] = useState<Array<{ equipmentId: string; name: string; quantity: number; unitPrice: number; subtotal: number }>>([])
+  const [editPriceManual, setEditPriceManual] = useState(false)
+  const [editClientSearch, setEditClientSearch] = useState('')
+  const [editEquipOpen, setEditEquipOpen] = useState(false)
+  const [submittingEdit, setSubmittingEdit] = useState(false)
 
   /* notification alarm system */
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS)
@@ -3171,6 +3184,184 @@ export default function AdminDashboard() {
     }
   }
 
+  /* ─── edit booking handlers (super_admin only) ─── */
+  const allTimeSlots = useMemo(() => {
+    const slots: string[] = []
+    for (let h = 6; h <= 23; h++) {
+      for (const m of [0, 30]) {
+        if (h === 23 && m > 0) continue
+        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+      }
+    }
+    return slots
+  }, [])
+
+  const editEndSlots = useMemo(() => {
+    if (!editForm.startTime) return allTimeSlots
+    return allTimeSlots.filter(s => s > editForm.startTime)
+  }, [editForm.startTime, allTimeSlots])
+
+  const recalcEditCourtPrice = () => {
+    if (editPriceManual) return
+    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    if (grandTotal > 0) {
+      setEditForm(prev => ({ ...prev, totalPrice: String(grandTotal) }))
+    }
+  }
+
+  const handleEditFormChange = (field: string, value: string | string[]) => {
+    if (field === 'totalPrice') setEditPriceManual(true)
+    setEditForm(prev => {
+      const updated = { ...prev, [field]: value }
+      if (!editPriceManual && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
+        const ids = Array.isArray(value) ? value : (updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : []))
+        if (ids.length > 0 && updated.startTime && updated.endTime) {
+          const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+          const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+          const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+          updated.totalPrice = String(grandTotal)
+        }
+      }
+      return updated
+    })
+    if (field === 'startTime' || field === 'endTime' || field === 'courtId' || field === 'courtIds') {
+      setEditPriceManual(false)
+    }
+  }
+
+  const toggleEditCourt = (cId: string) => {
+    const ids = editForm.courtIds
+    const isSelected = ids.includes(cId)
+    const newIds = isSelected ? ids.filter(id => id !== cId) : [...ids, cId]
+    handleEditFormChange('courtIds', newIds)
+    handleEditFormChange('courtId', newIds[0] || '')
+  }
+
+  const addEditEquip = (eq: Equipment) => {
+    const existing = editEquipItems.find(i => i.equipmentId === eq.id)
+    if (existing) {
+      if (existing.quantity < eq.stock) {
+        setEditEquipItems(editEquipItems.map(i =>
+          i.equipmentId === eq.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice } : i
+        ))
+      }
+    } else if (eq.stock > 0) {
+      setEditEquipItems([...editEquipItems, { equipmentId: eq.id, name: eq.name, quantity: 1, unitPrice: eq.pricePerRental, subtotal: eq.pricePerRental }])
+    }
+  }
+
+  const removeEditEquip = (eqId: string) => {
+    setEditEquipItems(editEquipItems.filter(i => i.equipmentId !== eqId))
+  }
+
+  const updateEditEquipQty = (eqId: string, qty: number, stock: number) => {
+    const clamped = Math.max(1, Math.min(qty, stock))
+    setEditEquipItems(editEquipItems.map(i =>
+      i.equipmentId === eqId ? { ...i, quantity: clamped, subtotal: clamped * i.unitPrice } : i
+    ))
+  }
+
+  // Recalc price when equipment changes
+  useEffect(() => {
+    if (editPriceManual || !showEditModal) return
+    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    if (grandTotal > 0) {
+      setEditForm(prev => {
+        if (editPriceManual) return prev
+        return { ...prev, totalPrice: String(grandTotal) }
+      })
+    }
+  }, [editEquipItems])
+
+  const filteredEditUsers = useMemo(() => {
+    if (!editClientSearch) return bookingUsers
+    const q = editClientSearch.toLowerCase()
+    return bookingUsers.filter(u =>
+      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+    )
+  }, [editClientSearch, bookingUsers])
+
+  const openEditModal = (booking: Booking) => {
+    setEditTarget(booking)
+    const cIds = booking.courtIds && booking.courtIds.length > 0 ? booking.courtIds : [booking.courtId]
+    setEditForm({
+      courtId: booking.courtId,
+      courtIds: cIds,
+      userId: booking.userId,
+      date: booking.date,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      totalPrice: String(booking.totalPrice),
+      advanceAmount: String(booking.advanceAmount),
+      paymentMethod: booking.paymentMethod || 'EFECTIVO',
+      notes: (booking as Record<string, unknown>).notes as string || '',
+      status: booking.status || 'reserved',
+    })
+    setEditEquipItems((booking.equipmentItems || []).map(e => ({ equipmentId: e.equipmentId, name: e.name, quantity: e.quantity, unitPrice: e.unitPrice, subtotal: e.subtotal })))
+    setEditPriceManual(false)
+    setEditClientSearch('')
+    setEditEquipOpen(false)
+    setShowEditModal(true)
+  }
+
+  const handleSubmitEdit = async () => {
+    if (!editTarget) return
+    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    if (ids.length === 0) { toast({ title: 'Error', description: 'Selecciona al menos una cancha', variant: 'destructive' }); return }
+    if (!editForm.userId) { toast({ title: 'Error', description: 'Selecciona un cliente', variant: 'destructive' }); return }
+    if (!editForm.date) { toast({ title: 'Error', description: 'Selecciona una fecha', variant: 'destructive' }); return }
+    if (!editForm.startTime || !editForm.endTime) { toast({ title: 'Error', description: 'Selecciona hora de inicio y fin', variant: 'destructive' }); return }
+    if (editForm.startTime >= editForm.endTime) { toast({ title: 'Error', description: 'La hora de fin debe ser posterior a la de inicio', variant: 'destructive' }); return }
+    const parsedTotal = parseFloat(editForm.totalPrice) || 0
+    if (parsedTotal <= 0) { toast({ title: 'Error', description: 'El total debe ser mayor a 0', variant: 'destructive' }); return }
+    const parsedAdvance = parseFloat(editForm.advanceAmount) || 0
+
+    setSubmittingEdit(true)
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editTarget.id,
+          courtIds: ids,
+          userId: editForm.userId,
+          date: editForm.date,
+          startTime: editForm.startTime,
+          endTime: editForm.endTime,
+          totalPrice: parsedTotal,
+          advanceAmount: parsedAdvance,
+          remainingAmount: Math.max(0, parsedTotal - parsedAdvance),
+          paymentMethod: editForm.paymentMethod,
+          status: editForm.status,
+          notes: editForm.notes || null,
+          equipmentItems: editEquipItems.map(i => ({ equipment_id: i.equipmentId, name: i.name, quantity: i.quantity, unit_price: i.unitPrice })),
+          editBooking: true,
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Reserva actualizada', description: 'Todos los cambios fueron guardados correctamente.' })
+        setShowEditModal(false)
+        setEditTarget(null)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error', description: err.error || 'No se pudo actualizar la reserva', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo actualizar la reserva', variant: 'destructive' })
+    } finally {
+      setSubmittingEdit(false)
+    }
+  }
+
   // B16 FIX: Use useMemo instead of IIFE for filtered bookings
   const filteredBookings = useMemo(() => {
     let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
@@ -3449,9 +3640,6 @@ export default function AdminDashboard() {
       <div className="px-4 py-6">
         <div className="max-w-7xl mx-auto animate-pulse space-y-4">
           <div className="h-8 bg-cm-surface-container-highest rounded w-1/4" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-28 bg-cm-surface-container-highest rounded-xl" />)}
-          </div>
           <div className="h-10 bg-cm-surface-container-highest rounded-xl" />
           <div className="h-64 bg-cm-surface-container-highest rounded-xl" />
         </div>
@@ -3509,34 +3697,6 @@ export default function AdminDashboard() {
             </div>
           )}
           </div>
-        </div>
-
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          {kpis.map((kpi, i) => (
-            <motion.div
-              key={kpi.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="glass-card rounded-xl p-4"
-            >
-              <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center mb-3`}>
-                <span className={`material-symbols-outlined ${kpi.color} text-[22px]`} style={{ fontVariationSettings: '"FILL" 1' }}>
-                  {kpi.icon}
-                </span>
-              </div>
-              <p className={`font-[family-name:var(--font-sora)] text-xl lg:text-2xl font-bold ${kpi.color}`}>
-                {kpi.value}
-              </p>
-              <p className="text-cm-on-surface text-xs mt-0.5 font-[family-name:var(--font-sora)] font-medium">
-                {kpi.label}
-              </p>
-              <p className="text-cm-on-surface-variant text-[11px] mt-0.5 font-[family-name:var(--font-inter)]">
-                {kpi.sub}
-              </p>
-            </motion.div>
-          ))}
         </div>
 
         {/* Tabs */}
@@ -3780,25 +3940,32 @@ export default function AdminDashboard() {
                   onDeleteBooking={handleDeleteBooking}
                   use12hFormat={use12hFormat}
                   onExtendTime={openExtendModal}
+                  onEditTime={isSuperAdmin ? openEditModal : undefined}
                 />
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
-                    const statusAccent = b.status === 'completed' ? 'bg-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
+                    const isGCompleted = b.status === 'completed'
+                    const statusAccent = isGCompleted ? 'bg-gradient-to-r from-green-400 via-emerald-400 to-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
                     const galertLv = getAlertLevel(b.id)
-                    const cardBorder = galertLv === 'expired' ? 'border-red-500/60 animate-pulse' : galertLv === 'warning' ? 'border-amber-500/60' : ''
+                    const cardBorder = isGCompleted
+                      ? 'border-green-400/40 shadow-[0_0_15px_rgba(34,197,94,0.12),0_0_3px_rgba(34,197,94,0.3)] animate-glow-green-row'
+                      : galertLv === 'expired' ? 'border-red-500/60 animate-pulse' : galertLv === 'warning' ? 'border-amber-500/60' : ''
                     return (
                       <motion.div
                         key={b.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-                        className={`glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group ${cardBorder}`}
+                        className={`glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group relative ${cardBorder}`}
                       >
                         {/* Top accent bar */}
                         <div className={`h-1 ${statusAccent}`} />
+                        {isGCompleted && (
+                          <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none rounded-t-xl" />
+                        )}
                         <div className="p-4 space-y-3">
                           {/* Date & Time */}
                           <div>
@@ -3841,10 +4008,17 @@ export default function AdminDashboard() {
                           </div>
                           {/* Status badge + Payment method */}
                           <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                              {st.label}
-                            </span>
+                            {isGCompleted ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                                {st.label}
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                                {st.label}
+                              </span>
+                            )}
                             {b.paymentMethod && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
                                 {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
@@ -3906,6 +4080,15 @@ export default function AdminDashboard() {
                             )}
                             {isSuperAdmin && (
                               <button type="button"
+                                onClick={() => openEditModal(b)}
+                                className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-400/20 transition-colors flex-shrink-0"
+                                title="Editar reserva"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button type="button"
                                 onClick={() => handleDeleteBooking(b.id)}
                                 className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-400/20 transition-colors flex-shrink-0"
                                 title="Eliminar permanentemente"
@@ -3924,8 +4107,11 @@ export default function AdminDashboard() {
                 <div className="space-y-2">
                   {filteredBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
+                    const isCCompleted = b.status === 'completed'
                     const calertLv = getAlertLevel(b.id)
-                    const compactBorder = calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
+                    const compactBorder = isCCompleted
+                      ? 'border-green-400/40 shadow-[0_0_12px_rgba(34,197,94,0.1),0_0_3px_rgba(34,197,94,0.25)] animate-glow-green-row relative overflow-hidden'
+                      : calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
                     return (
                       <motion.div
                         key={b.id}
@@ -3934,6 +4120,9 @@ export default function AdminDashboard() {
                         transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
                         className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
                       >
+                        {isCCompleted && (
+                          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
+                        )}
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                           {/* Date & Time */}
                           <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
@@ -3975,10 +4164,17 @@ export default function AdminDashboard() {
                                 <span className="material-symbols-outlined text-[14px]">repeat</span>
                               </button>
                             )}
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                              {st.label}
-                            </span>
+                            {b.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                                {st.label}
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                                {st.label}
+                              </span>
+                            )}
                             {b.paymentMethod && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex">
                                 {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
@@ -4001,6 +4197,15 @@ export default function AdminDashboard() {
                                 title="Extender tiempo"
                               >
                                 <span className="material-symbols-outlined text-[14px]">schedule</span>
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button type="button"
+                                onClick={() => openEditModal(b)}
+                                className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                title="Editar reserva"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">edit</span>
                               </button>
                             )}
                             <select
@@ -5699,6 +5904,286 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
+      {/* ─── Edit Booking Modal (super_admin only) ─── */}
+      <AnimatePresence>
+        {showEditModal && editTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+            onClick={() => !submittingEdit && setShowEditModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-lg glass-card border border-purple-500/20 rounded-2xl overflow-hidden my-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/5 bg-purple-500/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-purple-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>edit</span>
+                  </div>
+                  <div>
+                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-base text-cm-on-surface">Editar Reserva</h3>
+                    <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Super Admin — Modifica cualquier campo</p>
+                  </div>
+                </div>
+                {!submittingEdit && (
+                  <button type="button" onClick={() => setShowEditModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                {/* ── Fecha y Hora ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">event</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Fecha y Hora</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => handleEditFormChange('date', e.target.value)}
+                    disabled={submittingEdit}
+                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] mb-2"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Inicio</label>
+                      <select
+                        value={editForm.startTime}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          handleEditFormChange('startTime', v)
+                          if (v >= editForm.endTime) {
+                            const [h, m] = v.split(':').map(Number)
+                            let nm = h * 60 + m + 30
+                            if (nm <= 23 * 60) {
+                              const autoEnd = `${String(Math.floor(nm / 60)).padStart(2, '0')}:${String(nm % 60).padStart(2, '0')}`
+                              handleEditFormChange('endTime', autoEnd)
+                            }
+                          }
+                        }}
+                        disabled={submittingEdit}
+                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+                      >
+                        {allTimeSlots.map(s => {
+                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
+                          return <option key={`s-${s}`} value={s}>{fmt}</option>
+                        })}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Fin</label>
+                      <select
+                        value={editForm.endTime}
+                        onChange={(e) => handleEditFormChange('endTime', e.target.value)}
+                        disabled={submittingEdit}
+                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+                      >
+                        {editEndSlots.map(s => {
+                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
+                          return <option key={`e-${s}`} value={s}>{fmt}</option>
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Cancha ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">sports</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cancha</span>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {bookingCourtDetails.map(c => {
+                      const sel = editForm.courtIds.includes(c.id)
+                      return (
+                        <button key={c.id} type="button" onClick={() => toggleEditCourt(c.id)} disabled={submittingEdit}
+                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${sel ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface border border-white/10 hover:border-white/20'}`}
+                        >
+                          <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${sel ? 'border-purple-400 bg-purple-400' : 'border-white/20'}`}>
+                            {sel && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
+                          </span>
+                          <span className="material-symbols-outlined text-[14px]">{sportIcons[c.sport] || 'sports'}</span>
+                          <span className="font-medium font-[family-name:var(--font-sora)]">{c.name}</span>
+                          <span className="text-cm-on-surface-variant ml-auto">S/ {c.pricePerHour.toFixed(2)}/h</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* ── Cliente ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">person</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cliente</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, email o telefono..."
+                    value={editClientSearch}
+                    onChange={(e) => setEditClientSearch(e.target.value)}
+                    disabled={submittingEdit}
+                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] mb-1.5"
+                  />
+                  <div className="max-h-28 overflow-y-auto space-y-0.5">
+                    {filteredEditUsers.slice(0, 20).map(u => {
+                      const sel = editForm.userId === u.id
+                      return (
+                        <button key={u.id} type="button" onClick={() => { handleEditFormChange('userId', u.id); setEditClientSearch('') }} disabled={submittingEdit}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] transition-all ${sel ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'hover:bg-cm-surface-container-highest/60 text-cm-on-surface'}`}
+                        >
+                          <span className="font-medium font-[family-name:var(--font-sora)]">{u.name}</span>
+                          <span className="text-cm-on-surface-variant">{u.email}</span>
+                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+                        </button>
+                      )
+                    })}
+                    {filteredEditUsers.length === 0 && <p className="text-[10px] text-cm-on-surface-variant px-3 py-2">Sin resultados</p>}
+                  </div>
+                </div>
+
+                {/* ── Equipamiento ── */}
+                <div>
+                  <button type="button" onClick={() => setEditEquipOpen(!editEquipOpen)} className="flex items-center gap-2 mb-2 w-full text-left">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">sports_tennis</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Equipamiento</span>
+                    {editEquipItems.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[9px] font-bold">{editEquipItems.length}</span>
+                    )}
+                    <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px] ml-auto transition-transform" style={{ transform: editEquipOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+                  </button>
+                  {editEquipOpen && (
+                    <div className="space-y-2">
+                      {editEquipItems.length > 0 && (
+                        <div className="space-y-1">
+                          {editEquipItems.map(eq => {
+                            const eqData = equipmentList.find(e => e.id === eq.equipmentId)
+                            return (
+                              <div key={eq.equipmentId} className="flex items-center gap-2 px-2 py-1.5 bg-cm-surface-container-highest/40 rounded-lg">
+                                <span className="text-[11px] text-cm-on-surface font-medium flex-1 font-[family-name:var(--font-sora)]">{eq.name}</span>
+                                <div className="flex items-center gap-1">
+                                  <button type="button" onClick={() => updateEditEquipQty(eq.equipmentId, eq.quantity - 1, eqData?.stock || 99)} disabled={submittingEdit || eq.quantity <= 1} className="w-6 h-6 rounded bg-white/10 text-cm-on-surface text-xs flex items-center justify-center hover:bg-white/20">-</button>
+                                  <span className="text-[11px] text-cm-on-surface w-6 text-center font-mono">{eq.quantity}</span>
+                                  <button type="button" onClick={() => updateEditEquipQty(eq.equipmentId, eq.quantity + 1, eqData?.stock || 99)} disabled={submittingEdit} className="w-6 h-6 rounded bg-white/10 text-cm-on-surface text-xs flex items-center justify-center hover:bg-white/20">+</button>
+                                </div>
+                                <span className="text-[10px] text-cm-on-surface-variant">{fmtCurrency(eq.subtotal)}</span>
+                                <button type="button" onClick={() => removeEditEquip(eq.equipmentId)} disabled={submittingEdit} className="p-0.5 rounded text-red-400 hover:bg-red-400/10">
+                                  <span className="material-symbols-outlined text-[14px]">close</span>
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div className="max-h-24 overflow-y-auto space-y-0.5">
+                        {equipmentList.filter(e => e.active && e.stock > 0 && !editEquipItems.find(ie => ie.equipmentId === e.id)).map(eq => (
+                          <button key={eq.id} type="button" onClick={() => addEditEquip(eq)} disabled={submittingEdit}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] hover:bg-cm-surface-container-highest/60 text-cm-on-surface transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">add</span>
+                            <span className="font-medium">{eq.name}</span>
+                            <span className="text-cm-on-surface-variant ml-auto">S/ {eq.pricePerRental.toFixed(2)} (stock: {eq.stock})</span>
+                          </button>
+                        ))}
+                        {equipmentList.filter(e => e.active && e.stock > 0 && !editEquipItems.find(ie => ie.equipmentId === e.id)).length === 0 && (
+                          <p className="text-[10px] text-cm-on-surface-variant px-2">Todo el equipamiento disponible ya fue agregado</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Pagos ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">payments</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagos</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Total (S/)</label>
+                      <input type="number" step="0.01" min="0" value={editForm.totalPrice} onChange={(e) => handleEditFormChange('totalPrice', e.target.value)} disabled={submittingEdit}
+                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Adelanto (S/)</label>
+                      <input type="number" step="0.01" min="0" value={editForm.advanceAmount} onChange={(e) => handleEditFormChange('advanceAmount', e.target.value)} disabled={submittingEdit}
+                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-cm-on-surface-variant mb-2 px-1">
+                    <span>Restante: <span className={`font-semibold ${Math.max(0, (parseFloat(editForm.totalPrice) || 0) - (parseFloat(editForm.advanceAmount) || 0)) > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(Math.max(0, (parseFloat(editForm.totalPrice) || 0) - (parseFloat(editForm.advanceAmount) || 0)))}</span></span>
+                    <span>Equip: {fmtCurrency(editEquipItems.reduce((s, i) => s + i.subtotal, 0))}</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Metodo de pago</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['EFECTIVO', 'YAPE', 'PLIN'].map(m => (
+                        <button key={m} type="button" onClick={() => handleEditFormChange('paymentMethod', m)} disabled={submittingEdit}
+                          className={`py-1.5 rounded-lg text-[10px] font-semibold transition-all ${editForm.paymentMethod === m ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'}`}
+                        >{m === 'YAPE' ? '📱 ' : m === 'PLIN' ? '💜 ' : '💵 '}{m}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Estado ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">toggle_on</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Estado</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'reserved', label: 'Reservado', icon: 'calendar_month', color: 'text-blue-400' },
+                      { value: 'completed', label: 'Completado', icon: 'check_circle', color: 'text-green-400' },
+                      { value: 'cancelled', label: 'Cancelado', icon: 'cancel', color: 'text-red-400' },
+                    ].map(s => (
+                      <button key={s.value} type="button" onClick={() => handleEditFormChange('status', s.value)} disabled={submittingEdit}
+                        className={`py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1 ${editForm.status === s.value ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'}`}
+                      >
+                        <span className="material-symbols-outlined text-[12px]">{s.icon}</span>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Notas ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-purple-400 text-[14px]">notes</span>
+                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Notas</span>
+                  </div>
+                  <textarea value={editForm.notes} onChange={(e) => handleEditFormChange('notes', e.target.value)} disabled={submittingEdit} rows={2} placeholder="Notas opcionales..."
+                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] resize-none"
+                  />
+                </div>
+
+                {/* Submit */}
+                <button type="button" onClick={handleSubmitEdit} disabled={submittingEdit}
+                  className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 font-[family-name:var(--font-sora)]"
+                >
+                  {submittingEdit ? (<><span className="animate-spin"><Loader2 size={18} /></span> Guardando...</>) : (<><span className="material-symbols-outlined text-[18px]">save</span> Guardar Cambios</>)}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ─── Equipment Detail Modal (delivered/returned) ─── */}
       <AnimatePresence>
         {showEquipDetail && (
@@ -6042,6 +6527,33 @@ export default function AdminDashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+        {/* KPI Cards — compact, bottom */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-6">
+          {kpis.map((kpi, i) => (
+            <motion.div
+              key={kpi.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.04 }}
+              className="glass-card rounded-lg px-3 py-2 flex items-center gap-2.5"
+            >
+              <div className={`w-8 h-8 rounded-md ${kpi.bg} flex items-center justify-center flex-shrink-0`}>
+                <span className={`material-symbols-outlined ${kpi.color} text-[16px]`} style={{ fontVariationSettings: '"FILL" 1' }}>
+                  {kpi.icon}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className={`font-[family-name:var(--font-sora)] text-sm lg:text-base font-bold ${kpi.color} leading-tight`}>
+                  {kpi.value}
+                </p>
+                <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)] truncate">
+                  {kpi.label}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
     </div>
   )
 }

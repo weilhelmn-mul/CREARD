@@ -667,7 +667,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -766,6 +766,112 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // Edit booking (super_admin only): change any field
+    if (editBooking) {
+      if (authUser.role !== 'super_admin') {
+        return NextResponse.json({ error: 'Solo el super administrador puede editar reservas.' }, { status: 403 });
+      }
+
+      const booking = await getBookingById(id);
+      if (!booking) {
+        return NextResponse.json({ error: 'Reserva no encontrada.' }, { status: 404 });
+      }
+
+      // Don't allow editing completed or cancelled bookings (unless only changing notes/status)
+      const bStatus = migrateStatus(booking.status || 'reserved');
+      const hasTimeOrCourtChange = reqStartTime || reqEndTime || reqDate || (reqCourtIds && reqCourtIds.length > 0);
+      if ((bStatus === 'completed' || bStatus === 'cancelled') && hasTimeOrCourtChange) {
+        return NextResponse.json({ error: 'No se puede editar el horario/cancha de una reserva completada o cancelada.' }, { status: 400 });
+      }
+
+      // Validate time if provided
+      if (reqStartTime && reqEndTime) {
+        if (reqStartTime >= reqEndTime) {
+          return NextResponse.json({ error: 'La hora de inicio debe ser anterior a la hora de fin.' }, { status: 400 });
+        }
+      }
+
+      // Date & time
+      if (reqDate) updateData.date = reqDate;
+      if (reqStartTime) updateData.start_time = reqStartTime;
+      if (reqEndTime) updateData.end_time = reqEndTime;
+
+      // Court change
+      if (reqCourtIds && Array.isArray(reqCourtIds) && reqCourtIds.length > 0) {
+        updateData.court_ids = reqCourtIds;
+        updateData.court_id = reqCourtIds[0]; // backward compat
+      }
+
+      // Client change
+      if (reqUserId) {
+        updateData.user_id = reqUserId;
+      }
+
+      // Notes
+      if (reqNotes !== undefined) {
+        updateData.notes = reqNotes;
+      }
+
+      // Equipment items
+      if (reqEquipmentItems && Array.isArray(reqEquipmentItems)) {
+        const equipSub = reqEquipmentItems.reduce((s: number, eq: Record<string, unknown>) => s + ((eq.quantity as number) || 0) * ((eq.unit_price as number) || 0), 0);
+        updateData.equipment_items = reqEquipmentItems;
+        updateData.equipment_subtotal = Math.round(equipSub * 100) / 100;
+      }
+
+      // Price fields
+      if (typeof reqTotalPrice === 'number' && reqTotalPrice > 0) {
+        updateData.total_price = reqTotalPrice;
+        const currentAdvance = typeof reqAdvance === 'number' ? reqAdvance : (booking.advance_amount as number) || 0;
+        updateData.advance_amount = Math.min(currentAdvance, reqTotalPrice);
+        updateData.remaining_amount = Math.max(0, Math.round((reqTotalPrice - currentAdvance) * 100) / 100);
+        // Recalc court_subtotal
+        const equipSub = (updateData.equipment_subtotal as number) || (booking.equipment_subtotal as number) || 0;
+        updateData.court_subtotal = Math.max(0, Math.round((reqTotalPrice - equipSub) * 100) / 100);
+      } else if (typeof reqAdvance === 'number') {
+        // Only advance changed, not total
+        const currentTotal = (booking.total_price as number) || 0;
+        updateData.advance_amount = reqAdvance;
+        updateData.remaining_amount = Math.max(0, Math.round((currentTotal - reqAdvance) * 100) / 100);
+      }
+
+      // Payment method
+      if (reqPaymentMethod) {
+        const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
+        updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+      }
+
+      // Conflict check (only if time or court or date changed)
+      const finalCourtIds: string[] = (updateData.court_ids as string[]) || (Array.isArray(booking.court_ids) ? booking.court_ids : (booking.court_id ? [booking.court_id] : []));
+      const finalDate = (updateData.date as string) || (booking.date as string);
+      const finalStart = (updateData.start_time as string) || (booking.start_time as string);
+      const finalEnd = (updateData.end_time as string) || (booking.end_time as string);
+
+      if (finalCourtIds.length > 0 && finalDate && finalStart && finalEnd) {
+        const conflictQueries = finalCourtIds.map(cid => getBookings({ courtId: cid, date: finalDate }));
+        const conflictResults = await Promise.all(conflictQueries);
+        const allConflicting = conflictResults.flat();
+        const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
+          const obId = ob.id as string;
+          if (obId === id) return false;
+          if (migrateStatus(ob.status || '') === 'cancelled') return false;
+          const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
+          if (!obCourtIds.some((cid: string) => finalCourtIds.includes(cid))) return false;
+          return (ob.start_time as string) < finalEnd && (ob.end_time as string) > finalStart;
+        });
+        if (conflicts.length > 0) {
+          const c = conflicts[0];
+          return NextResponse.json({
+            error: 'Hay una reserva que ocupa ese horario.',
+            detail: `Conflicto con reserva: ${(c.start_time as string)} - ${(c.end_time as string)}`,
+          }, { status: 409 });
+        }
+      }
+
+      // Skip the generic advance payment record creation below — we handle it here
+      // (prevent double payment records)
+    }
+
     // B11 FIX: Track if this is a cancellation to skip advance payment record
     const isCancelling = status === 'cancelled' || (status && migrateStatus(status) === 'cancelled');
 
@@ -852,8 +958,8 @@ export async function PUT(request: NextRequest) {
       } // end isAdminCancellation
     }
 
-    // B11 FIX: Skip advance payment record when cancelling (already handled above)
-    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number' && !isCancelling) {
+    // B11 FIX: Skip advance payment record when cancelling or editBooking (handled above / no record needed)
+    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number' && !isCancelling && !editBooking) {
       try {
         const booking = await getBookingById(id);
         if (booking) {

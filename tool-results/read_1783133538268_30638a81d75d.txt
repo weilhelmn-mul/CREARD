@@ -1,0 +1,602 @@
+     1→  3160→          totalPrice: newTotalPrice,
+     2→  3161→          advanceAmount: newAdvance,
+     3→  3162→          remainingAmount: Math.max(0, newRemaining),
+     4→  3163→          paymentMethod: extendMethod,
+     5→  3164→          extendTime: true,
+     6→  3165→        }),
+     7→  3166→      })
+     8→  3167→      if (res.ok) {
+     9→  3168→        const hoursAdded = calculateHours(extendTarget.endTime, extendNewEnd)
+    10→  3169→        toast({
+    11→  3170→          title: 'Tiempo extendido',
+    12→  3171→          description: `Se agregó ${hoursAdded}h extra a la reserva. Costo adicional: ${fmtCurrency(extendExtraCost)}${paidNow > 0 ? ` (Pagado: ${fmtCurrency(paidNow)})` : ''}`,
+    13→  3172→        })
+    14→  3173→        setShowExtendModal(false)
+    15→  3174→        setExtendTarget(null)
+    16→  3175→        fetchData()
+    17→  3176→      } else {
+    18→  3177→        const err = await res.json()
+    19→  3178→        toast({ title: 'Error', description: err.error || 'No se pudo extender el tiempo', variant: 'destructive' })
+    20→  3179→      }
+    21→  3180→    } catch {
+    22→  3181→      toast({ title: 'Error', description: 'No se pudo extender el tiempo', variant: 'destructive' })
+    23→  3182→    } finally {
+    24→  3183→      setSubmittingExtend(false)
+    25→  3184→    }
+    26→  3185→  }
+    27→  3186→
+    28→  3187→  /* ─── edit booking handlers (super_admin only) ─── */
+    29→  3188→  const allTimeSlots = useMemo(() => {
+    30→  3189→    const slots: string[] = []
+    31→  3190→    for (let h = 6; h <= 23; h++) {
+    32→  3191→      for (const m of [0, 30]) {
+    33→  3192→        if (h === 23 && m > 0) continue
+    34→  3193→        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    35→  3194→      }
+    36→  3195→    }
+    37→  3196→    return slots
+    38→  3197→  }, [])
+    39→  3198→
+    40→  3199→  const editEndSlots = useMemo(() => {
+    41→  3200→    if (!editForm.startTime) return allTimeSlots
+    42→  3201→    return allTimeSlots.filter(s => s > editForm.startTime)
+    43→  3202→  }, [editForm.startTime, allTimeSlots])
+    44→  3203→
+    45→  3204→  const recalcEditCourtPrice = () => {
+    46→  3205→    if (editPriceManual) return
+    47→  3206→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    48→  3207→    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+    49→  3208→    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+    50→  3209→    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    51→  3210→    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    52→  3211→    if (grandTotal > 0) {
+    53→  3212→      setEditForm(prev => ({ ...prev, totalPrice: String(grandTotal) }))
+    54→  3213→    }
+    55→  3214→  }
+    56→  3215→
+    57→  3216→  const handleEditFormChange = (field: string, value: string | string[]) => {
+    58→  3217→    if (field === 'totalPrice') setEditPriceManual(true)
+    59→  3218→    setEditForm(prev => {
+    60→  3219→      const updated = { ...prev, [field]: value }
+    61→  3220→      if (!editPriceManual && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
+    62→  3221→        const ids = Array.isArray(value) ? value : (updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : []))
+    63→  3222→        if (ids.length > 0 && updated.startTime && updated.endTime) {
+    64→  3223→          const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+    65→  3224→          const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    66→  3225→          const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    67→  3226→          updated.totalPrice = String(grandTotal)
+    68→  3227→        }
+    69→  3228→      }
+    70→  3229→      return updated
+    71→  3230→    })
+    72→  3231→    if (field === 'startTime' || field === 'endTime' || field === 'courtId' || field === 'courtIds') {
+    73→  3232→      setEditPriceManual(false)
+    74→  3233→    }
+    75→  3234→  }
+    76→  3235→
+    77→  3236→  const toggleEditCourt = (cId: string) => {
+    78→  3237→    const ids = editForm.courtIds
+    79→  3238→    const isSelected = ids.includes(cId)
+    80→  3239→    const newIds = isSelected ? ids.filter(id => id !== cId) : [...ids, cId]
+    81→  3240→    handleEditFormChange('courtIds', newIds)
+    82→  3241→    handleEditFormChange('courtId', newIds[0] || '')
+    83→  3242→  }
+    84→  3243→
+    85→  3244→  const addEditEquip = (eq: Equipment) => {
+    86→  3245→    const existing = editEquipItems.find(i => i.equipmentId === eq.id)
+    87→  3246→    if (existing) {
+    88→  3247→      if (existing.quantity < eq.stock) {
+    89→  3248→        setEditEquipItems(editEquipItems.map(i =>
+    90→  3249→          i.equipmentId === eq.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice } : i
+    91→  3250→        ))
+    92→  3251→      }
+    93→  3252→    } else if (eq.stock > 0) {
+    94→  3253→      setEditEquipItems([...editEquipItems, { equipmentId: eq.id, name: eq.name, quantity: 1, unitPrice: eq.pricePerRental, subtotal: eq.pricePerRental }])
+    95→  3254→    }
+    96→  3255→  }
+    97→  3256→
+    98→  3257→  const removeEditEquip = (eqId: string) => {
+    99→  3258→    setEditEquipItems(editEquipItems.filter(i => i.equipmentId !== eqId))
+   100→  3259→  }
+   101→  3260→
+   102→  3261→  const updateEditEquipQty = (eqId: string, qty: number, stock: number) => {
+   103→  3262→    const clamped = Math.max(1, Math.min(qty, stock))
+   104→  3263→    setEditEquipItems(editEquipItems.map(i =>
+   105→  3264→      i.equipmentId === eqId ? { ...i, quantity: clamped, subtotal: clamped * i.unitPrice } : i
+   106→  3265→    ))
+   107→  3266→  }
+   108→  3267→
+   109→  3268→  // Recalc price when equipment changes
+   110→  3269→  useEffect(() => {
+   111→  3270→    if (editPriceManual || !showEditModal) return
+   112→  3271→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+   113→  3272→    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+   114→  3273→    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+   115→  3274→    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+   116→  3275→    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+   117→  3276→    if (grandTotal > 0) {
+   118→  3277→      setEditForm(prev => {
+   119→  3278→        if (editPriceManual) return prev
+   120→  3279→        return { ...prev, totalPrice: String(grandTotal) }
+   121→  3280→      })
+   122→  3281→    }
+   123→  3282→  }, [editEquipItems])
+   124→  3283→
+   125→  3284→  const filteredEditUsers = useMemo(() => {
+   126→  3285→    if (!editClientSearch) return bookingUsers
+   127→  3286→    const q = editClientSearch.toLowerCase()
+   128→  3287→    return bookingUsers.filter(u =>
+   129→  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+   130→  3289→    )
+   131→  3290→  }, [editClientSearch, bookingUsers])
+   132→  3291→
+   133→  3292→  const openEditModal = (booking: Booking) => {
+   134→  3293→    setEditTarget(booking)
+   135→  3294→    const cIds = booking.courtIds && booking.courtIds.length > 0 ? booking.courtIds : [booking.courtId]
+   136→  3295→    setEditForm({
+   137→  3296→      courtId: booking.courtId,
+   138→  3297→      courtIds: cIds,
+   139→  3298→      userId: booking.userId,
+   140→  3299→      date: booking.date,
+   141→  3300→      startTime: booking.startTime,
+   142→  3301→      endTime: booking.endTime,
+   143→  3302→      totalPrice: String(booking.totalPrice),
+   144→  3303→      advanceAmount: String(booking.advanceAmount),
+   145→  3304→      paymentMethod: booking.paymentMethod || 'EFECTIVO',
+   146→  3305→      notes: (booking as Record<string, unknown>).notes as string || '',
+   147→  3306→      status: booking.status || 'reserved',
+   148→  3307→    })
+   149→  3308→    setEditEquipItems((booking.equipmentItems || []).map(e => ({ equipmentId: e.equipmentId, name: e.name, quantity: e.quantity, unitPrice: e.unitPrice, subtotal: e.subtotal })))
+   150→  3309→    setEditPriceManual(false)
+   151→  3310→    setEditClientSearch('')
+   152→  3311→    setEditEquipOpen(false)
+   153→  3312→    setShowEditModal(true)
+   154→  3313→  }
+   155→  3314→
+   156→  3315→  const handleSubmitEdit = async () => {
+   157→  3316→    if (!editTarget) return
+   158→  3317→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+   159→  3318→    if (ids.length === 0) { toast({ title: 'Error', description: 'Selecciona al menos una cancha', variant: 'destructive' }); return }
+   160→  3319→    if (!editForm.userId) { toast({ title: 'Error', description: 'Selecciona un cliente', variant: 'destructive' }); return }
+   161→  3320→    if (!editForm.date) { toast({ title: 'Error', description: 'Selecciona una fecha', variant: 'destructive' }); return }
+   162→  3321→    if (!editForm.startTime || !editForm.endTime) { toast({ title: 'Error', description: 'Selecciona hora de inicio y fin', variant: 'destructive' }); return }
+   163→  3322→    if (editForm.startTime >= editForm.endTime) { toast({ title: 'Error', description: 'La hora de fin debe ser posterior a la de inicio', variant: 'destructive' }); return }
+   164→  3323→    const parsedTotal = parseFloat(editForm.totalPrice) || 0
+   165→  3324→    if (parsedTotal <= 0) { toast({ title: 'Error', description: 'El total debe ser mayor a 0', variant: 'destructive' }); return }
+   166→  3325→    const parsedAdvance = parseFloat(editForm.advanceAmount) || 0
+   167→  3326→
+   168→  3327→    setSubmittingEdit(true)
+   169→  3328→    try {
+   170→  3329→      const res = await fetch('/api/bookings', {
+   171→  3330→        method: 'PUT',
+   172→  3331→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   173→  3332→        body: JSON.stringify({
+   174→  3333→          id: editTarget.id,
+   175→  3334→          courtIds: ids,
+   176→  3335→          userId: editForm.userId,
+   177→  3336→          date: editForm.date,
+   178→  3337→          startTime: editForm.startTime,
+   179→  3338→          endTime: editForm.endTime,
+   180→  3339→          totalPrice: parsedTotal,
+   181→  3340→          advanceAmount: parsedAdvance,
+   182→  3341→          remainingAmount: Math.max(0, parsedTotal - parsedAdvance),
+   183→  3342→          paymentMethod: editForm.paymentMethod,
+   184→  3343→          status: editForm.status,
+   185→  3344→          notes: editForm.notes || null,
+   186→  3345→          equipmentItems: editEquipItems.map(i => ({ equipment_id: i.equipmentId, name: i.name, quantity: i.quantity, unit_price: i.unitPrice })),
+   187→  3346→          editBooking: true,
+   188→  3347→        }),
+   189→  3348→      })
+   190→  3349→      if (res.ok) {
+   191→  3350→        toast({ title: 'Reserva actualizada', description: 'Todos los cambios fueron guardados correctamente.' })
+   192→  3351→        setShowEditModal(false)
+   193→  3352→        setEditTarget(null)
+   194→  3353→        fetchData()
+   195→  3354→      } else {
+   196→  3355→        const err = await res.json()
+   197→  3356→        toast({ title: 'Error', description: err.error || 'No se pudo actualizar la reserva', variant: 'destructive' })
+   198→  3357→      }
+   199→  3358→    } catch {
+   200→  3359→      toast({ title: 'Error', description: 'No se pudo actualizar la reserva', variant: 'destructive' })
+   201→  3360→    } finally {
+   202→  3361→      setSubmittingEdit(false)
+   203→  3362→    }
+   204→  3363→  }
+   205→  3364→
+   206→  3365→  // B16 FIX: Use useMemo instead of IIFE for filtered bookings
+   207→  3366→  const filteredBookings = useMemo(() => {
+   208→  3367→    let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
+   209→  3368→    const afterStatus = result.length;
+   210→  3369→    // Hide past bookings unless toggle is on
+   211→  3370→    if (!showPastBookings) {
+   212→  3371→      const today = todayStr();
+   213→  3372→      const beforeDate = result.length;
+   214→  3373→      result = result.filter((b) => {
+   215→  3374→        const ok = typeof b.date === 'string' && b.date >= today;
+   216→  3375→        if (!ok) console.debug('[Filter] Excluded past booking:', b.id, 'date=', b.date, 'typeof=', typeof b.date, 'today=', today);
+   217→  3376→        return ok;
+   218→  3377→      });
+   219→  3378→      if (beforeDate > 0 && result.length === 0) {
+   220→  3379→        console.warn(`[Filter] showPastBookings=false removed ALL ${beforeDate} bookings. Today(Lima)=`, today)
+   221→  3380→      }
+   222→  3381→    }
+   223→  3382→    if (searchQuery.trim()) {
+   224→  3383→      const q = searchQuery.toLowerCase()
+   225→  3384→      result = result.filter((b) =>
+   226→  3385→        b.user?.name?.toLowerCase().includes(q) ||
+   227→  3386→        b.user?.email?.toLowerCase().includes(q) ||
+   228→  3387→        b.court?.name?.toLowerCase().includes(q) ||
+   229→  3388→        b.id.toLowerCase().includes(q) ||
+   230→  3389→        (b.courts && b.courts.some((c) => c.name?.toLowerCase().includes(q)))
+   231→  3390→      )
+   232→  3391→    }
+   233→  3392→    if (dateFrom) result = result.filter((b) => b.date >= dateFrom)
+   234→  3393→    if (dateTo) result = result.filter((b) => b.date <= dateTo)
+   235→  3394→    if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter || (b.courtIds && b.courtIds.includes(courtFilter)))
+   236→  3395→    if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter || (b.courts && b.courts.some((c) => c.sport === sportFilter)))
+   237→  3396→    switch (sortBy) {
+   238→  3397→      case 'date_desc': {
+   239→  3398→        const today = todayStr();
+   240→  3399→        result.sort((a, b) => {
+   241→  3400→          const aIsToday = a.date === today, bIsToday = b.date === today;
+   242→  3401→          const aFuture = a.date > today, bFuture = b.date > today;
+   243→  3402→          const aPast = a.date < today, bPast = b.date < today;
+   244→  3403→          // 1) Today always first
+   245→  3404→          if (aIsToday && !bIsToday) return -1;
+   246→  3405→          if (!aIsToday && bIsToday) return 1;
+   247→  3406→          // 2) Both on same side of today
+   248→  3407→          if (aFuture && bFuture) {
+   249→  3408→            const dc = a.date.localeCompare(b.date);
+   250→  3409→            if (dc !== 0) return dc;
+   251→  3410→          } else if (aPast && bPast) {
+   252→  3411→            const dc = b.date.localeCompare(a.date);
+   253→  3412→            if (dc !== 0) return dc;
+   254→  3413→          }
+   255→  3414→          // Same date: chronological by start time
+   256→  3415→          return a.startTime.localeCompare(b.startTime);
+   257→  3416→        });
+   258→  3417→        break;
+   259→  3418→      }
+   260→  3419→      case 'date_asc': {
+   261→  3420→        // Strict ascending date order (correlativo)
+   262→  3421→        result.sort((a, b) => {
+   263→  3422→          const dc = a.date.localeCompare(b.date);
+   264→  3423→          if (dc !== 0) return dc;
+   265→  3424→          return a.startTime.localeCompare(b.startTime);
+   266→  3425→        });
+   267→  3426→        break;
+   268→  3427→      }
+   269→  3428→      case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
+   270→  3429→      case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
+   271→  3430→      case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
+   272→  3431→    }
+   273→  3432→    return result
+   274→  3433→  }, [bookings, statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
+   275→  3434→
+   276→  3435→  const activeFilterCount = [searchQuery, dateFrom, dateTo, courtFilter !== 'all' && courtFilter, sportFilter !== 'all' && sportFilter].filter(Boolean).length
+   277→  3436→
+   278→  3437→  const clearAllFilters = () => {
+   279→  3438→    setSearchQuery('')
+   280→  3439→    setDateFrom('')
+   281→  3440→    setDateTo('')
+   282→  3441→    setCourtFilter('all')
+   283→  3442→    setSportFilter('all')
+   284→  3443→  }
+   285→  3444→
+   286→  3445→  // B14 FIX: Use actual paid amount (advance) for completed, not totalPrice
+   287→  3446→  // B13 FIX: Widen date range to 365 days for accurate Finanzas
+   288→  3447→  const completedIncome = bookings
+   289→  3448→    .filter((b) => b.status === 'completed')
+   290→  3449→    .reduce((s, b) => s + b.advanceAmount, 0)
+   291→  3450→  const reservedAdvances = bookings
+   292→  3451→    .filter((b) => b.status === 'reserved')
+   293→  3452→    .reduce((s, b) => s + b.advanceAmount, 0)
+   294→  3453→  const totalIncome = completedIncome + reservedAdvances
+   295→  3454→
+   296→  3455→  // Retained advances (adelantos de reservas canceladas que se quedaron en caja)
+   297→  3456→  const retainedTotal = retainedAdvances
+   298→  3457→    .filter((ra) => ra.status === 'retained')
+   299→  3458→    .reduce((s, ra) => s + ra.amount, 0)
+   300→  3459→  const refundedTotal = retainedAdvances
+   301→  3460→    .filter((ra) => ra.status === 'refunded')
+   302→  3461→    .reduce((s, ra) => s + ra.amount, 0)
+   303→  3462→
+   304→  3463→  // Real money in box = normal income + retained advances (refunded is informational only —
+   305→  3464→  // the booking was already removed from totalIncome when cancelled, so subtracting again
+   306→  3465→  // would double-count the outflow).
+   307→  3466→  const effectiveIncome = totalIncome + retainedTotal
+   308→  3467→  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
+   309→  3468→  const balance = effectiveIncome - totalExpenses
+   310→  3469→
+   311→  3470→  const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
+   312→  3471→    acc[e.category] = (acc[e.category] || 0) + e.amount
+   313→  3472→    return acc
+   314→  3473→  }, {})
+   315→  3474→
+   316→  3475→  /* user stats from bookings */
+   317→  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+   318→  3477→    if (!b.user || !b.user.id) return acc
+   319→  3478→    if (!acc[b.user.id]) {
+   320→  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+   321→  3480→    }
+   322→  3481→    acc[b.user.id].bookingCount++
+   323→  3482→    if (b.status === 'completed') {
+   324→  3483→      acc[b.user.id].totalSpent += b.totalPrice
+   325→  3484→    }
+   326→  3485→    return acc
+   327→  3486→  }, {})
+   328→  3487→  const rankedUsers = Object.values(userStats).sort((a, b) => b.totalSpent - a.totalSpent)
+   329→  3488→
+   330→  3489→  /* ─── actions ─── */
+   331→  3490→  const handleUpdateStatus = async (id: string, status: string, advanceAction?: 'retain' | 'refund', cancelReason?: string): Promise<boolean> => {
+   332→  3491→    try {
+   333→  3492→      const body: Record<string, unknown> = { id, status }
+   334→  3493→      if (status === 'cancelled' && advanceAction) {
+   335→  3494→        body.advanceAction = advanceAction
+   336→  3495→        body.cancelReason = cancelReason || ''
+   337→  3496→      }
+   338→  3497→      const res = await fetch('/api/bookings', {
+   339→  3498→        method: 'PUT',
+   340→  3499→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   341→  3500→        body: JSON.stringify(body),
+   342→  3501→      })
+   343→  3502→      if (res.ok) {
+   344→  3503→        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)))
+   345→  3504→        toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
+   346→  3505→        fetchData()
+   347→  3506→        return true
+   348→  3507→      } else {
+   349→  3508→        const err = await res.json().catch(() => ({}))
+   350→  3509→        toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar el estado', variant: 'destructive' })
+   351→  3510→        return false
+   352→  3511→      }
+   353→  3512→    } catch {
+   354→  3513→      toast({ title: 'Error', description: 'No se pudo actualizar el estado', variant: 'destructive' })
+   355→  3514→      return false
+   356→  3515→    }
+   357→  3516→  }
+   358→  3517→
+   359→  3518→  const handleStatusChangeWithAdvanceCheck = (booking: Booking, newStatus: string) => {
+   360→  3519→    // B1 FIX: Prevent reverting cancelled/completed back to other statuses
+   361→  3520→    if (booking.status === 'cancelled' && newStatus !== 'cancelled') {
+   362→  3521→      toast({ title: 'Acción bloqueada', description: 'No se puede cambiar el estado de una reserva cancelada.', variant: 'destructive' })
+   363→  3522→      return
+   364→  3523→    }
+   365→  3524→    // B3 FIX: Always confirm cancellation (even with 0 advance)
+   366→  3525→    if (newStatus === 'cancelled') {
+   367→  3526→      if (booking.advanceAmount > 0) {
+   368→  3527→        setCancelTarget(booking)
+   369→  3528→        setCancelAdvanceAction('retain')
+   370→  3529→        setCancelReason('')
+   371→  3530→        setShowCancelDialog(true)
+   372→  3531→      } else {
+   373→  3532→        // Simple confirmation for 0-advance bookings
+   374→  3533→        if (confirm(`¿Cancelar esta reserva de ${booking.user?.name || 'sin nombre'}?`)) {
+   375→  3534→          handleUpdateStatus(booking.id, newStatus)
+   376→  3535→        }
+   377→  3536→      }
+   378→  3537→    } else {
+   379→  3538→      handleUpdateStatus(booking.id, newStatus)
+   380→  3539→    }
+   381→  3540→  }
+   382→  3541→
+   383→  3542→  const handleConfirmCancel = async () => {
+   384→  3543→    if (!cancelTarget) return
+   385→  3544→    setCancellingBooking(true)
+   386→  3545→    const success = await handleUpdateStatus(cancelTarget.id, 'cancelled', cancelAdvanceAction, cancelReason)
+   387→  3546→    if (success) {
+   388→  3547→      setShowCancelDialog(false)
+   389→  3548→      setCancelTarget(null)
+   390→  3549→    }
+   391→  3550→    setCancellingBooking(false)
+   392→  3551→  }
+   393→  3552→
+   394→  3553→  const handleToggleEquipment = async (bookingId: string, field: 'equipmentDelivered' | 'equipmentReturned', value: boolean) => {
+   395→  3554→    try {
+   396→  3555→      const res = await fetch('/api/bookings', {
+   397→  3556→        method: 'PUT',
+   398→  3557→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   399→  3558→        body: JSON.stringify({ id: bookingId, [field]: value }),
+   400→  3559→      })
+   401→  3560→      if (res.ok) {
+   402→  3561→        setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, [field]: value } : b)))
+   403→  3562→        if (showEquipDetail?.id === bookingId) {
+   404→  3563→          setShowEquipDetail((prev) => prev ? { ...prev, [field]: value } : null)
+   405→  3564→        }
+   406→  3565→      }
+   407→  3566→    } catch {
+   408→  3567→      toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' })
+   409→  3568→    }
+   410→  3569→  }
+   411→  3570→
+   412→  3571→  const handleDeleteBooking = async (bookingId: string) => {
+   413→  3572→    if (!confirm('Eliminar permanentemente esta reserva? Se borrara de la base de datos y no se podra recuperar.')) return
+   414→  3573→    try {
+   415→  3574→      const res = await fetch(`/api/bookings?id=${bookingId}`, {
+   416→  3575→        method: 'DELETE',
+   417→  3576→        headers: getAuthHeaders(),
+   418→  3577→      })
+   419→  3578→      if (res.ok) {
+   420→  3579→        toast({ title: 'Reserva eliminada', description: 'La reserva fue eliminada permanentemente de la base de datos.' })
+   421→  3580→        setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+   422→  3581→        fetchData()
+   423→  3582→      } else {
+   424→  3583→        const err = await res.json()
+   425→  3584→        toast({ title: 'Error', description: err.error || 'No se pudo eliminar la reserva.', variant: 'destructive' })
+   426→  3585→      }
+   427→  3586→    } catch {
+   428→  3587→      toast({ title: 'Error', description: 'No se pudo eliminar la reserva.', variant: 'destructive' })
+   429→  3588→    }
+   430→  3589→  }
+   431→  3590→
+   432→  3591→  const handleAddExpense = async () => {
+   433→  3592→    if (!expForm.description || !expForm.amount || !expForm.category || !expForm.date) {
+   434→  3593→      toast({ title: 'Error', description: 'Completa todos los campos requeridos', variant: 'destructive' })
+   435→  3594→      return
+   436→  3595→    }
+   437→  3596→    setSubmittingExpense(true)
+   438→  3597→    try {
+   439→  3598→      const res = await fetch('/api/expenses', {
+   440→  3599→        method: 'POST',
+   441→  3600→        headers: getAuthHeaders(),
+   442→  3601→        body: JSON.stringify(expForm),
+   443→  3602→      })
+   444→  3603→      if (res.ok) {
+   445→  3604→        toast({ title: 'Gasto registrado', description: `${expForm.description} - ${fmtCurrency(parseFloat(expForm.amount))}` })
+   446→  3605→        setExpForm({ description: '', amount: '', category: 'mantenimiento', date: todayStr(), notes: '' })
+   447→  3606→        setShowExpenseForm(false)
+   448→  3607→        fetchData()
+   449→  3608→      } else {
+   450→  3609→        const err = await res.json()
+   451→  3610→        toast({ title: 'Error', description: err.error || 'No se pudo registrar', variant: 'destructive' })
+   452→  3611→      }
+   453→  3612→    } catch {
+   454→  3613→      toast({ title: 'Error', description: 'No se pudo registrar el gasto', variant: 'destructive' })
+   455→  3614→    } finally {
+   456→  3615→      setSubmittingExpense(false)
+   457→  3616→    }
+   458→  3617→  }
+   459→  3618→
+   460→  3619→  /* schedule bookings for a given date */
+   461→  3620→  const scheduleBookings = bookings.filter((b) => b.date === scheduleDate && b.status !== 'cancelled')
+   462→  3621→    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+   463→  3622→  const scheduleCourts = allCourts.map((c) => ({
+   464→  3623→    ...c,
+   465→  3624→    bookings: scheduleBookings.filter((b) => b.courtId === c.id || (b.courtIds && b.courtIds.includes(c.id))),
+   466→  3625→  }))
+   467→  3626→
+   468→  3627→  /* time slots — admin has NO time restrictions, all slots available for any date (includes :30 for fractional hours) */
+   469→  3628→  const timeSlots = useMemo(() => generateTimeSlots(6, 23, [0, 30]), [])
+   470→  3629→
+   471→  3630→  /* ─── KPIs ─── */
+   472→  3631→  const kpis = [
+   473→  3632→    { label: 'Canchas Ocupadas Hoy', value: todayBookings.length, icon: 'sports_soccer', color: 'text-cm-primary', bg: 'bg-cm-primary/10', sub: `de ${allCourts.length} canchas` },
+   474→  3633→    { label: 'Reservas del Día', value: todayBookings.length, icon: 'event', color: 'text-blue-400', bg: 'bg-blue-500/10', sub: `Hoy ${fmtDate(today)}` },
+   475→  3634→    { label: 'Ingresos del Día', value: fmtCurrency(todayRevenue), icon: 'payments', color: 'text-green-400', bg: 'bg-green-500/10', sub: 'Completados + adelantos' },
+   476→  3635→    { label: 'Pagos Pendientes', value: fmtCurrency(pendingTotal), icon: 'schedule', color: 'text-amber-400', bg: 'bg-amber-500/10', sub: `${pendingPayments.length} reservas` },
+   477→  3636→  ]
+   478→  3637→
+   479→  3638→  if (loading) {
+   480→  3639→    return (
+   481→  3640→      <div className="px-4 py-6">
+   482→  3641→        <div className="max-w-7xl mx-auto animate-pulse space-y-4">
+   483→  3642→          <div className="h-8 bg-cm-surface-container-highest rounded w-1/4" />
+   484→  3643→          <div className="h-10 bg-cm-surface-container-highest rounded-xl" />
+   485→  3644→          <div className="h-64 bg-cm-surface-container-highest rounded-xl" />
+   486→  3645→        </div>
+   487→  3646→      </div>
+   488→  3647→    )
+   489→  3648→  }
+   490→  3649→
+   491→  3650→  /* ═══════════════════════════════════════════════════
+   492→  3651→     RENDER
+   493→  3652→     ═══════════════════════════════════════════════════ */
+   494→  3653→  return (
+   495→  3654→    <div className="px-4 py-6 pb-28">
+   496→  3655→      {/* Notification Banner - always visible */}
+   497→  3656→      <NotificationBanner
+   498→  3657→        alerts={bookingAlerts}
+   499→  3658→        onDismiss={dismissBookingAlert}
+   500→  3659→        onClearAll={clearAllAlerts}
+   501→  3660→      />
+   502→  3661→
+   503→  3662→      <div className="max-w-7xl mx-auto">
+   504→  3663→        {/* Header */}
+   505→  3664→        <div className="flex items-center gap-3 mb-6">
+   506→  3665→          <button type="button"
+   507→  3666→            onClick={() => setView('profile')}
+   508→  3667→            className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+   509→  3668→          >
+   510→  3669→            <span className="material-symbols-outlined">arrow_back</span>
+   511→  3670→          </button>
+   512→  3671→          <div className="flex-1">
+   513→  3672→            <h1 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
+   514→  3673→              Panel de Administracion
+   515→  3674→            </h1>
+   516→  3675→            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
+   517→  3676→              Gestion integral de CREARD
+   518→  3677→            </p>
+   519→  3678→          </div>
+   520→  3679→          {/* Time format toggle + Live alarm indicator */}
+   521→  3680→          <div className="flex items-center gap-2">
+   522→  3681→            <button
+   523→  3682→              type="button"
+   524→  3683→              onClick={() => setUse12hFormat(!use12hFormat)}
+   525→  3684→              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+   526→  3685→              title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+   527→  3686→            >
+   528→  3687→              <span className="material-symbols-outlined text-[16px]">schedule</span>
+   529→  3688→              <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+   530→  3689→            </button>
+   531→  3690→          {notifSettings.enabled && (
+   532→  3691→            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-primary/10 border border-cm-primary/20">
+   533→  3692→              <span className="relative flex h-2.5 w-2.5">
+   534→  3693→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cm-primary opacity-75"></span>
+   535→  3694→                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cm-primary"></span>
+   536→  3695→              </span>
+   537→  3696→              <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">Alarmas activas</span>
+   538→  3697→            </div>
+   539→  3698→          )}
+   540→  3699→          </div>
+   541→  3700→        </div>
+   542→  3701→
+   543→  3702→        {/* Tabs */}
+   544→  3703→        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar">
+   545→  3704→          {adminTabs.map((tab) => (
+   546→  3705→            <button type="button"
+   547→  3706→              key={tab.key}
+   548→  3707→              onClick={() => setActiveTab(tab.key)}
+   549→  3708→              className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+   550→  3709→                activeTab === tab.key
+   551→  3710→                  ? 'bg-cm-primary/10 text-cm-primary font-semibold'
+   552→  3711→                  : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   553→  3712→              }`}
+   554→  3713→            >
+   555→  3714→              <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+   556→  3715→              {tab.label}
+   557→  3716→            </button>
+   558→  3717→          ))}
+   559→  3718→        </div>
+   560→  3719→
+   561→  3720→        {/* ═════════════════ TAB CONTENT ═════════════════ */}
+   562→  3721→        <AnimatePresence mode="wait">
+   563→  3722→          {/* ─── RESERVAS ─── */}
+   564→  3723→          {activeTab === 'reservas' && (
+   565→  3724→            <motion.div key="reservas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   566→  3725→              {/* ─── Live Clock + Alarm Indicator ─── */}
+   567→  3726→              <LiveClock alarmsCount={bookingAlerts.length} settings={notifSettings} />
+   568→  3727→
+   569→  3728→              {/* ─── Filter Bar ─── */}
+   570→  3729→              <div className="glass-card rounded-xl p-4 mb-4">
+   571→  3730→                {/* Top row: search, view toggle, sort, filter toggle */}
+   572→  3731→                <div className="flex flex-col sm:flex-row gap-3">
+   573→  3732→                  {/* Search */}
+   574→  3733→                  <div className="relative flex-1">
+   575→  3734→                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[18px]">search</span>
+   576→  3735→                    <input
+   577→  3736→                      type="text"
+   578→  3737→                      value={searchQuery}
+   579→  3738→                      onChange={(e) => setSearchQuery(e.target.value)}
+   580→  3739→                      placeholder="Buscar por cliente, cancha o ID..."
+   581→  3740→                      className="w-full pl-9 pr-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   582→  3741→                    />
+   583→  3742→                    {searchQuery && (
+   584→  3743→                      <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors">
+   585→  3744→                        <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">close</span>
+   586→  3745→                      </button>
+   587→  3746→                    )}
+   588→  3747→                  </div>
+   589→  3748→
+   590→  3749→                  <div className="flex items-center gap-2">
+   591→  3750→                    {/* Sort dropdown */}
+   592→  3751→                    <select
+   593→  3752→                      value={sortBy}
+   594→  3753→                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+   595→  3754→                      className="bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   596→  3755→                    >
+   597→  3756→                      <option value="date_desc">Más recientes</option>
+   598→  3757→                      <option value="date_asc">Más antiguos</option>
+   599→  3758→                      <option value="price_desc">Mayor precio</option>
+   600→  3759→                      <option value="price_asc">Menor precio</option>
+   601→
+   602→[showing lines 3160-3759 of 6561; use offset=3760 with limit to continue reading]

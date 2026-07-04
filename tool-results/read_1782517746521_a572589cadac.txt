@@ -1,0 +1,702 @@
+  2400→      } catch { /* silent */ }
+  2401→    })()
+  2402→  }, [])
+  2403→
+  2404→  /* ─── fetch all data (courts & users cached in IndexedDB for speed) ─── */
+  2405→  const fetchData = useCallback(async () => {
+  2406→    try {
+  2407→      setLoading(true)
+  2408→      const headers = getAuthHeaders()
+  2409→
+  2410→      // Courts: cache-first (rarely change) — instant on repeat visits
+  2411→      const courtsPromise = cachedFetch('courts', async () => {
+  2412→        const res = await fetch('/api/courts', { headers })
+  2413→        if (!res.ok) throw new Error('err')
+  2414→        const d = await res.json()
+  2415→        return Array.isArray(d) ? d : []
+  2416→      })
+  2417→
+  2418→      // Users for booking form: cache-first
+  2419→      const usersPromise = cachedFetch('users', async () => {
+  2420→        const res = await fetch('/api/admin/users', { headers })
+  2421→        if (!res.ok) throw new Error('err')
+  2422→        const d = await res.json()
+  2423→        return Array.isArray(d) ? d : []
+  2424→      })
+  2425→
+  2426→      const [statsRes, bookingsRes, expensesRes, courtsData, usersData] = await Promise.all([
+  2427→        fetch('/api/stats', { headers }).catch(() => new Response(null, { status: 0 })),
+  2428→        // B13 FIX: Fetch wider date range (365 days) for accurate Finanzas
+  2429→        // Only fetch recent bookings: 365 days back to 60 days forward
+  2430→        (() => {
+  2431→          const today = todayStr()
+  2432→          const from = new Date(Date.now() - 365 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+  2433→          const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+  2434→          return fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers })
+  2435→        })().catch(() => new Response(null, { status: 0 })),
+  2436→        fetch('/api/expenses', { headers }).catch(() => new Response(null, { status: 0 })),
+  2437→        courtsPromise,
+  2438→        usersPromise,
+  2439→      ])
+  2440→
+  2441→      if (statsRes.ok) setStats(await statsRes.json())
+  2442→      if (bookingsRes.ok) {
+  2443→        const bookingsData = await bookingsRes.json()
+  2444→        const arr = Array.isArray(bookingsData) ? bookingsData : []
+  2445→        console.log(`[AdminDashboard] ${arr.length} bookings loaded from API`)
+  2446→        if (arr.length > 0) {
+  2447→          console.log(`[AdminDashboard] Date range in data: ${arr[0]?.date} → ${arr[arr.length - 1]?.date}`)
+  2448→          console.log(`[AdminDashboard] Sample booking:`, { id: arr[0].id, date: arr[0].date, dateType: typeof arr[0].date, status: arr[0].status })
+  2449→        } else {
+  2450→          console.warn('[AdminDashboard] API returned 0 bookings — check Firestore data')
+  2451→        }
+  2452→        setBookings(arr)
+  2453→      } else if (bookingsRes.status === 0) {
+  2454→        console.error('[AdminDashboard] Bookings fetch failed (network error)')
+  2455→        toast({ title: 'Error de conexion', description: 'No se pudieron cargar las reservas. Verifica tu conexion a internet.', variant: 'destructive' })
+  2456→      } else if (bookingsRes.status >= 400) {
+  2457→        console.error('[AdminDashboard] Bookings API error:', bookingsRes.status)
+  2458→        try {
+  2459→          const errData = await bookingsRes.json()
+  2460→          toast({ title: 'Error al cargar reservas', description: errData.error || `Error ${bookingsRes.status}`, variant: 'destructive' })
+  2461→        } catch {
+  2462→          toast({ title: 'Error al cargar reservas', description: `Error del servidor (${bookingsRes.status})`, variant: 'destructive' })
+  2463→        }
+  2464→      }
+  2465→      if (expensesRes.ok) {
+  2466→        const expensesData = await expensesRes.json()
+  2467→        setExpenses(Array.isArray(expensesData) ? expensesData : [])
+  2468→      }
+  2469→      // Fetch retained advances
+  2470→      try {
+  2471→        const raRes = await fetch('/api/retained-advances', { headers })
+  2472→        if (raRes.ok) {
+  2473→          const raData = await raRes.json()
+  2474→          setRetainedAdvances(Array.isArray(raData.advances) ? raData.advances : [])
+  2475→        }
+  2476→      } catch (err) { console.error('[AdminDashboard] Error loading retained advances:', err) }
+  2477→      setAllCourts(courtsData)
+  2478→      setBookingUsers(usersData)
+  2479→
+  2480→      // Equipment still needs separate fetch (no cache)
+  2481→      try {
+  2482→        const equipRes = await fetch('/api/equipment', { headers })
+  2483→        if (equipRes.ok) {
+  2484→          const equipData = await equipRes.json()
+  2485→          setEquipmentList(Array.isArray(equipData) ? equipData : [])
+  2486→        }
+  2487→      } catch { /* silent */ }
+  2488→    } catch {
+  2489→      toast({ title: 'Error', description: 'No se pudieron cargar los datos. Verifica la conexion a la base de datos.', variant: 'destructive' })
+  2490→    } finally {
+  2491→      setLoading(false)
+  2492→    }
+  2493→  }, [])
+  2494→
+  2495→  useEffect(() => { fetchData() }, [fetchData])
+  2496→
+  2497→  /* Derive booking court list from allCourts — deduplicated by id */
+  2498→  const bookingCourtDetails = useMemo(() => {
+  2499→    const seen = new Set<string>()
+  2500→    return allCourts.reduce<Array<{ id: string; name: string; sport: string; pricePerHour: number; pricingSchedule: PricingScheduleItem[] }>>((acc, c) => {
+  2501→      if (seen.has(c.id)) return acc
+  2502→      seen.add(c.id)
+  2503→      acc.push({
+  2504→        id: c.id,
+  2505→        name: c.name,
+  2506→        sport: c.sport || '',
+  2507→        pricePerHour: c.pricePerHour || 0,
+  2508→        pricingSchedule: Array.isArray((c as Record<string, unknown>).pricingSchedule) ? (c as Record<string, unknown>).pricingSchedule as PricingScheduleItem[] : [],
+  2509→      })
+  2510→      return acc
+  2511→    }, [])
+  2512→  }, [allCourts])
+  2513→
+  2514→  /* fetch users for booking form (courts come from allCourts, deduplicated) */
+  2515→  const loadBookingFormData = useCallback(async () => {
+  2516→    try {
+  2517→      const headers = getAuthHeaders()
+  2518→      const usersRes = await fetch('/api/admin/users', { headers })
+  2519→      if (usersRes.ok) {
+  2520→        const data = await usersRes.json()
+  2521→        const users = Array.isArray(data) ? data : []
+  2522→        setBookingUsers(users)
+  2523→      } else {
+  2524→        toast({ title: 'Error cargando clientes', description: 'No se pudieron obtener los usuarios', variant: 'destructive' })
+  2525→      }
+  2526→    } catch (err) {
+  2527→      console.error('[loadBookingFormData] Exception:', err)
+  2528→    }
+  2529→  }, [])
+  2530→
+  2531→  /* ─── booking form helpers (declared BEFORE any useCallback that references them,
+  2532→       to avoid Turbopack minification reordering bug) ─── */
+  2533→  const calculateHours = (start: string, end: string): number => {
+  2534→    const [sh, sm] = start.split(':').map(Number)
+  2535→    const [eh, em] = end.split(':').map(Number)
+  2536→    const diff = (eh * 60 + em) - (sh * 60 + sm)
+  2537→    return Math.max(diff / 60, 0.5)
+  2538→  }
+  2539→
+  2540→  const calculatePriceForTimeSlot = (schedule: PricingScheduleItem[], startTime: string, endTime: string): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } => {
+  2541→    const [startH, startM] = startTime.split(':').map(Number)
+  2542→    const [endH, endM] = endTime.split(':').map(Number)
+  2543→    const startDecimal = startH + startM / 60
+  2544→    const endDecimal = endH + endM / 60
+  2545→
+  2546→    if (schedule.length === 0) return { total: 0, breakdown: [] }
+  2547→
+  2548→    const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+  2549→    let total = 0
+  2550→    let cursor = startDecimal
+  2551→    const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
+  2552→
+  2553→    for (const slot of sorted) {
+  2554→      if (cursor >= slot.endHour) continue
+  2555→      const overlapStart = Math.max(cursor, slot.startHour)
+  2556→      const overlapEnd = Math.min(endDecimal, slot.endHour)
+  2557→      if (overlapEnd > overlapStart) {
+  2558→        const hours = overlapEnd - overlapStart
+  2559→        const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
+  2560→        breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
+  2561→        total += subtotal
+  2562→        cursor = overlapEnd
+  2563→      }
+  2564→    }
+  2565→    return { total: Math.round(total * 100) / 100, breakdown }
+  2566→  }
+  2567→
+  2568→  /** Calculate total price for ALL selected courts combined */
+  2569→  const calculateMultiCourtPrice = (courtIds: string[], startTime: string, endTime: string): number => {
+  2570→    let total = 0
+  2571→    for (const cId of courtIds) {
+  2572→      const court = bookingCourtDetails.find((c) => c.id === cId)
+  2573→      if (!court) continue
+  2574→      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+  2575→        const { total: slotTotal } = calculatePriceForTimeSlot(court.pricingSchedule, startTime, endTime)
+  2576→        total += slotTotal > 0 ? slotTotal : court.pricePerHour * calculateHours(startTime, endTime)
+  2577→      } else {
+  2578→        total += court.pricePerHour * calculateHours(startTime, endTime)
+  2579→      }
+  2580→    }
+  2581→    return Math.round(total * 100) / 100
+  2582→  }
+  2583→
+  2584→  const handleBookingFormChange = (field: string, value: string) => {
+  2585→    // If user edits totalPrice manually, mark it so we don't overwrite
+  2586→    if (field === 'totalPrice') {
+  2587→      setPriceManuallyEdited(true)
+  2588→    }
+  2589→    setBookingForm((prev) => {
+  2590→      const updated = { ...prev, [field]: value }
+  2591→      // Auto-calculate court price when courts or times change (only if user hasn't manually edited)
+  2592→      if (!priceManuallyEdited && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
+  2593→        const ids = updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : [])
+  2594→        if (ids.length > 0 && updated.startTime && updated.endTime) {
+  2595→          const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+  2596→          const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+  2597→          const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+  2598→          updated.totalPrice = String(grandTotal)
+  2599→          if (!updated.advanceAmount || parseFloat(updated.advanceAmount) <= 0) {
+  2600→            updated.advanceAmount = String(Math.round(grandTotal * 0.5 * 100) / 100)
+  2601→          }
+  2602→        }
+  2603→      }
+  2604→      return updated
+  2605→    })
+  2606→    if (formErrors[field]) setFormErrors((prev) => { const next = { ...prev }; delete next[field]; return next })
+  2607→  }
+  2608→
+  2609→  /* ─── quick client creation from booking modal ─── */
+  2610→  const openNewClientDialog = useCallback((prefillName?: string) => {
+  2611→    console.log('[quickCreateClient] Opening dialog, prefill:', prefillName)
+  2612→    setNewClientForm({ name: prefillName?.trim() || '', email: '', phone: '' })
+  2613→    setNewClientErrors({})
+  2614→    setShowNewClientDialog(true)
+  2615→    setClientDropdownOpen(false) // close the popover
+  2616→  }, [])
+  2617→
+  2618→  const handleQuickCreateClient = useCallback(async () => {
+  2619→    const errors: Record<string, string> = {}
+  2620→    if (!newClientForm.name.trim() || newClientForm.name.trim().length < 2) {
+  2621→      errors.name = 'Nombre requerido (min. 2 caracteres)'
+  2622→    }
+  2623→    if (!newClientForm.phone.trim() || newClientForm.phone.trim().length < 6) {
+  2624→      errors.phone = 'Telefono requerido (min. 6 digitos)'
+  2625→    }
+  2626→    if (newClientForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newClientForm.email.trim())) {
+  2627→      errors.email = 'Formato de correo invalido'
+  2628→    }
+  2629→    if (Object.keys(errors).length > 0) {
+  2630→      setNewClientErrors(errors)
+  2631→      return
+  2632→    }
+  2633→
+  2634→    setCreatingClient(true)
+  2635→    try {
+  2636→      const headers = getAuthHeaders()
+  2637→      console.log('[quickCreateClient] Creating client:', newClientForm.name, newClientForm.phone)
+  2638→      const res = await fetch('/api/usuarios', {
+  2639→        method: 'POST',
+  2640→        headers,
+  2641→        body: JSON.stringify({
+  2642→          name: newClientForm.name.trim(),
+  2643→          phone: newClientForm.phone.trim(),
+  2644→          email: newClientForm.email.trim() || undefined,
+  2645→        }),
+  2646→      })
+  2647→
+  2648→      const data = await res.json()
+  2649→      console.log('[quickCreateClient] Response:', res.status, data)
+  2650→
+  2651→      if (!res.ok) {
+  2652→        setNewClientErrors({ general: data.error || 'Error al crear cliente' })
+  2653→        return
+  2654→      }
+  2655→
+  2656→      // Auto-select the new (or existing) client in the booking form
+  2657→      if (data.user) {
+  2658→        handleBookingFormChange('userId', data.user.id)
+  2659→        // Add to local list so it appears immediately
+  2660→        setBookingUsers((prev) => {
+  2661→          const exists = prev.some((u) => u.id === data.user.id)
+  2662→          if (exists) return prev
+  2663→          return [...prev, { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone }]
+  2664→        })
+  2665→      }
+  2666→
+  2667→      // Invalidate users cache so next load gets fresh data
+  2668→      invalidateCache('users')
+  2669→
+  2670→      setShowNewClientDialog(false)
+  2671→      toast({
+  2672→        title: data.alreadyExists ? 'Cliente encontrado' : 'Cliente creado',
+  2673→        description: data.message || `"${data.user?.name}" esta listo para la reserva.`,
+  2674→      })
+  2675→    } catch (err) {
+  2676→      console.error('[quickCreateClient] Exception:', err)
+  2677→      setNewClientErrors({ general: 'Error de conexion. Intenta de nuevo.' })
+  2678→    } finally {
+  2679→      setCreatingClient(false)
+  2680→    }
+  2681→  }, [newClientForm, handleBookingFormChange])
+  2682→
+  2683→  /* ─── computed ─── */
+  2684→  const today = todayStr()
+  2685→  const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled')
+  2686→  const todayCompleted = bookings.filter((b) => b.date === today && b.status === 'completed')
+  2687→  const todayReserved = bookings.filter((b) => b.date === today && b.status === 'reserved')
+  2688→  const todayRevenue = todayCompleted.reduce((s, b) => s + b.totalPrice, 0)
+  2689→    + todayReserved.reduce((s, b) => s + b.advanceAmount, 0)
+  2690→  const pendingPayments = bookings.filter((b) => b.status === 'reserved' && b.remainingAmount > 0)
+  2691→  const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
+  2692→
+  2693→  const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
+  2694→  const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
+  2695→
+  2696→  /* ─── booking form validation ─── */
+  2697→  const validateBookingForm = (): boolean => {
+  2698→    const errors: Record<string, string> = {}
+  2699→    if (bookingForm.courtIds.length === 0) errors.courtId = 'Selecciona al menos una cancha'
+  2700→    if (!bookingForm.userId) errors.userId = 'Selecciona un cliente'
+  2701→    if (!bookingForm.date) errors.date = 'Selecciona una fecha'
+  2702→    if (!bookingForm.startTime) errors.startTime = 'Hora de inicio requerida'
+  2703→    if (!bookingForm.endTime) errors.endTime = 'Hora de fin requerida'
+  2704→    if (bookingForm.startTime >= bookingForm.endTime) errors.endTime = 'La hora de fin debe ser posterior'
+  2705→    if (!bookingForm.totalPrice || parseFloat(bookingForm.totalPrice) <= 0) errors.totalPrice = 'El precio debe ser mayor a 0'
+  2706→    if (bookingForm.advanceAmount && parseFloat(bookingForm.advanceAmount) > parseFloat(bookingForm.totalPrice)) errors.advanceAmount = 'El adelanto no puede superar el total'
+  2707→    setFormErrors(errors)
+  2708→    return Object.keys(errors).length === 0
+  2709→  }
+  2710→
+  2711→  /* ─── equipment selection helpers ─── */
+  2712→  const addEquipmentToForm = (eq: Equipment) => {
+  2713→    const existing = selectedEquipItems.find(i => i.equipmentId === eq.id)
+  2714→    if (existing) {
+  2715→      if (existing.quantity < eq.stock) {
+  2716→        setSelectedEquipItems(selectedEquipItems.map(i =>
+  2717→          i.equipmentId === eq.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice } : i
+  2718→        ))
+  2719→      }
+  2720→    } else if (eq.stock > 0) {
+  2721→      setSelectedEquipItems([...selectedEquipItems, { equipmentId: eq.id, name: eq.name, quantity: 1, unitPrice: eq.pricePerRental, subtotal: eq.pricePerRental }])
+  2722→    }
+  2723→  }
+  2724→
+  2725→  const removeEquipmentFromForm = (eqId: string) => {
+  2726→    setSelectedEquipItems(selectedEquipItems.filter(i => i.equipmentId !== eqId))
+  2727→  }
+  2728→
+  2729→  const updateEquipQty = (eqId: string, qty: number, stock: number) => {
+  2730→    const clamped = Math.max(1, Math.min(qty, stock))
+  2731→    setSelectedEquipItems(selectedEquipItems.map(i =>
+  2732→      i.equipmentId === eqId ? { ...i, quantity: clamped, subtotal: clamped * i.unitPrice } : i
+  2733→    ))
+  2734→  }
+  2735→
+  2736→  const equipmentFormTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+  2737→
+  2738→  // Effect: whenever equipment items change, recalculate totalPrice ONLY if user hasn't manually edited it
+  2739→  useEffect(() => {
+  2740→    if (priceManuallyEdited) return
+  2741→    if (bookingForm.courtIds.length === 0 && !bookingForm.courtId) return
+  2742→    if (!bookingForm.startTime || !bookingForm.endTime) return
+  2743→    const ids = bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId]
+  2744→    const courtPrice = calculateMultiCourtPrice(ids, bookingForm.startTime, bookingForm.endTime)
+  2745→    const eqTotal = selectedEquipItems.reduce((s, i) => s + i.subtotal, 0)
+  2746→    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+  2747→    if (grandTotal > 0) {
+  2748→      setBookingForm(prev => {
+  2749→        // Don't overwrite if user is currently typing
+  2750→        if (priceManuallyEdited) return prev
+  2751→        const newAdv = !prev.advanceAmount || parseFloat(prev.advanceAmount) <= 0
+  2752→          ? String(Math.round(grandTotal * 0.5 * 100) / 100)
+  2753→          : prev.advanceAmount
+  2754→        return { ...prev, totalPrice: String(grandTotal), advanceAmount: newAdv }
+  2755→      })
+  2756→    }
+  2757→  }, [selectedEquipItems]) // Only react to equipment changes, not to form changes (avoid loops)
+  2758→
+  2759→  // Reset manual edit flag when courts or times change
+  2760→  useEffect(() => {
+  2761→    setPriceManuallyEdited(false)
+  2762→  }, [bookingForm.courtIds, bookingForm.courtId, bookingForm.startTime, bookingForm.endTime])
+  2763→
+  2764→  const handleCreateBooking = async () => {
+  2765→    if (!validateBookingForm()) return
+  2766→    setSubmittingBooking(true)
+  2767→    try {
+  2768→      const parsedTotal = parseFloat(bookingForm.totalPrice)
+  2769→      const parsedAdvance = parseFloat(bookingForm.advanceAmount) || parsedTotal * 0.5
+  2770→      const body = {
+  2771→        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
+  2772→        userId: bookingForm.userId,
+  2773→        date: bookingForm.date,
+  2774→        startTime: bookingForm.startTime,
+  2775→        endTime: bookingForm.endTime,
+  2776→        totalPrice: parsedTotal,
+  2777→        advanceAmount: parsedAdvance,
+  2778→        remainingAmount: parsedTotal - parsedAdvance,
+  2779→        status: bookingForm.status,
+  2780→        paymentMethod: bookingForm.paymentMethod,
+  2781→        notes: bookingForm.notes || null,
+  2782→        equipmentItems: selectedEquipItems.map(i => ({
+  2783→          equipment_id: i.equipmentId,
+  2784→          name: i.name,
+  2785→          quantity: i.quantity,
+  2786→          unit_price: i.unitPrice,
+  2787→        })),
+  2788→      }
+  2789→      const res = await fetch('/api/bookings', {
+  2790→        method: 'POST',
+  2791→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  2792→        body: JSON.stringify(body),
+  2793→      })
+  2794→      if (res.ok) {
+  2795→        toast({ title: 'Reserva creada', description: 'La reserva se ha registrado correctamente' })
+  2796→        setShowBookingForm(false)
+  2797→        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
+  2798→        setFormErrors({})
+  2799→        setSelectedEquipItems([])
+  2800→        setShowEquipPanel(false)
+  2801→        setPriceManuallyEdited(false)
+  2802→        fetchData()
+  2803→      } else {
+  2804→        const err = await res.json()
+  2805→        toast({ title: 'Error al crear reserva', description: err.error || 'No se pudo crear la reserva', variant: 'destructive' })
+  2806→      }
+  2807→    } catch {
+  2808→      toast({ title: 'Error', description: 'No se pudo crear la reserva', variant: 'destructive' })
+  2809→    } finally {
+  2810→      setSubmittingBooking(false)
+  2811→    }
+  2812→  }
+  2813→
+  2814→  const openBookingForm = () => {
+  2815→    // Reset form to clean defaults
+  2816→    setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
+  2817→    setFormErrors({})
+  2818→    setSelectedEquipItems([])
+  2819→    setShowEquipPanel(false)
+  2820→    setPriceManuallyEdited(false)
+  2821→    loadBookingFormData()
+  2822→    setShowBookingForm(true)
+  2823→    setClientDropdownOpen(false)
+  2824→    setClientSearch('')
+  2825→    setStartTimeDrop(false)
+  2826→    setEndTimeDrop(false)
+  2827→    // Reset recurring state
+  2828→    setShowRecurring(false)
+  2829→    setRecurringStep('config')
+  2830→    setRecurringPreview(null)
+  2831→    setRecurringPreviewSummary(null)
+  2832→  }
+  2833→
+  2834→  /* ─── recurring booking handlers ─── */
+  2835→  const handlePreviewRecurring = async () => {
+  2836→    if (bookingForm.courtIds.length === 0 || !bookingForm.userId || !bookingForm.startTime || !bookingForm.endTime || !bookingForm.date) {
+  2837→      toast({ title: 'Error', description: 'Completa la cancha, cliente, fecha y horario primero.', variant: 'destructive' })
+  2838→      return
+  2839→    }
+  2840→    if (recurringConfig.frequency === 'custom' && recurringConfig.daysOfWeek.length === 0) {
+  2841→      toast({ title: 'Error', description: 'Selecciona al menos un día de la semana.', variant: 'destructive' })
+  2842→      return
+  2843→    }
+  2844→    if (recurringConfig.endCondition === 'date' && !recurringConfig.endDate) {
+  2845→      toast({ title: 'Error', description: 'Ingresa una fecha final.', variant: 'destructive' })
+  2846→      return
+  2847→    }
+  2848→
+  2849→    setPreviewLoading(true)
+  2850→    try {
+  2851→      const body: Record<string, unknown> = {
+  2852→        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
+  2853→        userId: bookingForm.userId,
+  2854→        startTime: bookingForm.startTime,
+  2855→        endTime: bookingForm.endTime,
+  2856→        startDate: bookingForm.date,
+  2857→        frequency: recurringConfig.frequency,
+  2858→        totalPrice: parseFloat(bookingForm.totalPrice) || 0,
+  2859→        advanceAmount: parseFloat(bookingForm.advanceAmount) || 0,
+  2860→        status: bookingForm.status,
+  2861→        paymentMethod: bookingForm.paymentMethod,
+  2862→        notes: bookingForm.notes || null,
+  2863→        equipmentItems: selectedEquipItems.length > 0 ? selectedEquipItems.map(i => ({
+  2864→          equipment_id: i.equipmentId,
+  2865→          name: i.name,
+  2866→          quantity: i.quantity,
+  2867→          unit_price: i.unitPrice,
+  2868→        })) : undefined,
+  2869→        dryRun: true,
+  2870→      }
+  2871→      if (recurringConfig.frequency === 'custom') {
+  2872→        body.daysOfWeek = recurringConfig.daysOfWeek
+  2873→      }
+  2874→      if (recurringConfig.endCondition === 'date') {
+  2875→        body.endDate = recurringConfig.endDate
+  2876→      } else {
+  2877→        body.count = recurringConfig.count
+  2878→      }
+  2879→
+  2880→      const res = await fetch('/api/bookings/recurring', {
+  2881→        method: 'POST',
+  2882→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  2883→        body: JSON.stringify(body),
+  2884→      })
+  2885→      if (res.ok) {
+  2886→        const data = await res.json()
+  2887→        setRecurringPreview(data.dates)
+  2888→        setRecurringPreviewSummary({
+  2889→          totalCount: data.totalCount,
+  2890→          availableCount: data.availableCount,
+  2891→          conflictCount: data.conflictCount,
+  2892→          totalRevenue: data.totalRevenue,
+  2893→        })
+  2894→        setRecurringStep('preview')
+  2895→      } else {
+  2896→        const err = await res.json()
+  2897→        toast({ title: 'Error', description: err.error || 'No se pudo generar la vista previa.', variant: 'destructive' })
+  2898→      }
+  2899→    } catch {
+  2900→      toast({ title: 'Error', description: 'No se pudo generar la vista previa.', variant: 'destructive' })
+  2901→    } finally {
+  2902→      setPreviewLoading(false)
+  2903→    }
+  2904→  }
+  2905→
+  2906→  const handleCreateRecurring = async () => {
+  2907→    setCreatingRecurring(true)
+  2908→    try {
+  2909→      const body: Record<string, unknown> = {
+  2910→        courtIds: bookingForm.courtIds.length > 0 ? bookingForm.courtIds : [bookingForm.courtId],
+  2911→        userId: bookingForm.userId,
+  2912→        startTime: bookingForm.startTime,
+  2913→        endTime: bookingForm.endTime,
+  2914→        startDate: bookingForm.date,
+  2915→        frequency: recurringConfig.frequency,
+  2916→        totalPrice: parseFloat(bookingForm.totalPrice) || 0,
+  2917→        advanceAmount: parseFloat(bookingForm.advanceAmount) || 0,
+  2918→        status: bookingForm.status,
+  2919→        paymentMethod: bookingForm.paymentMethod,
+  2920→        notes: bookingForm.notes || null,
+  2921→        equipmentItems: selectedEquipItems.length > 0 ? selectedEquipItems.map(i => ({
+  2922→          equipment_id: i.equipmentId,
+  2923→          name: i.name,
+  2924→          quantity: i.quantity,
+  2925→          unit_price: i.unitPrice,
+  2926→        })) : undefined,
+  2927→        dryRun: false,
+  2928→      }
+  2929→      if (recurringConfig.frequency === 'custom') {
+  2930→        body.daysOfWeek = recurringConfig.daysOfWeek
+  2931→      }
+  2932→      if (recurringConfig.endCondition === 'date') {
+  2933→        body.endDate = recurringConfig.endDate
+  2934→      } else {
+  2935→        body.count = recurringConfig.count
+  2936→      }
+  2937→
+  2938→      const res = await fetch('/api/bookings/recurring', {
+  2939→        method: 'POST',
+  2940→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  2941→        body: JSON.stringify(body),
+  2942→      })
+  2943→      if (res.ok) {
+  2944→        const data = await res.json()
+  2945→        const created = data.bookings?.length || 0
+  2946→        toast({
+  2947→          title: 'Reservas recurrentes creadas',
+  2948→          description: `${created} reservas recurrentes creadas exitosamente${data.conflictCount > 0 ? ` (${data.conflictCount} conflictos omitidos)` : ''}`,
+  2949→        })
+  2950→        setShowBookingForm(false)
+  2951→        setBookingForm({ courtId: '', courtIds: [] as string[], userId: '', date: todayStr(), startTime: '18:00', endTime: '19:00', totalPrice: '', advanceAmount: '', status: 'reserved', paymentMethod: 'EFECTIVO', notes: '' })
+  2952→        setFormErrors({})
+  2953→        setSelectedEquipItems([])
+  2954→        setShowEquipPanel(false)
+  2955→        setShowRecurring(false)
+  2956→        setRecurringStep('config')
+  2957→        setRecurringPreview(null)
+  2958→        setRecurringPreviewSummary(null)
+  2959→        fetchData()
+  2960→      } else {
+  2961→        const err = await res.json()
+  2962→        toast({ title: 'Error', description: err.error || 'No se pudieron crear las reservas recurrentes.', variant: 'destructive' })
+  2963→      }
+  2964→    } catch {
+  2965→      toast({ title: 'Error', description: 'No se pudieron crear las reservas recurrentes.', variant: 'destructive' })
+  2966→    } finally {
+  2967→      setCreatingRecurring(false)
+  2968→    }
+  2969→  }
+  2970→
+  2971→  /* ─── series management ─── */
+  2972→  const openSeriesModal = async (groupId: string) => {
+  2973→    setSeriesGroupId(groupId)
+  2974→    setShowSeriesModal(true)
+  2975→    // Load all bookings in this series from the bookings list
+  2976→    const series = bookings.filter((b) => b.recurringGroupId === groupId)
+  2977→    setSeriesBookings(series)
+  2978→  }
+  2979→
+  2980→  const handleCancelSeries = async (groupId: string) => {
+  2981→    if (!confirm('¿Cancelar toda la serie recurrente? Esta acción no se puede deshacer.')) return
+  2982→    setCancellingSeries(true)
+  2983→    try {
+  2984→      const res = await fetch('/api/bookings/recurring', {
+  2985→        method: 'PUT',
+  2986→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  2987→        body: JSON.stringify({ action: 'cancel_series', recurringGroupId: groupId }),
+  2988→      })
+  2989→      if (res.ok) {
+  2990→        toast({ title: 'Serie cancelada', description: 'Todas las reservas de la serie fueron canceladas.' })
+  2991→        setShowSeriesModal(false)
+  2992→        fetchData()
+  2993→      } else {
+  2994→        const err = await res.json()
+  2995→        toast({ title: 'Error', description: err.error || 'No se pudo cancelar la serie.', variant: 'destructive' })
+  2996→      }
+  2997→    } catch {
+  2998→      toast({ title: 'Error', description: 'No se pudo cancelar la serie.', variant: 'destructive' })
+  2999→    } finally {
+  3000→      setCancellingSeries(false)
+  3001→    }
+  3002→  }
+  3003→
+  3004→  const handleCancelSingleFromSeries = async (bookingId: string) => {
+  3005→    if (!confirm('¿Cancelar esta reserva de la serie?')) return
+  3006→    try {
+  3007→      const res = await fetch('/api/bookings/recurring', {
+  3008→        method: 'PUT',
+  3009→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  3010→        body: JSON.stringify({ action: 'cancel_single', recurringGroupId: seriesGroupId, bookingId }),
+  3011→      })
+  3012→      if (res.ok) {
+  3013→        toast({ title: 'Reserva cancelada', description: 'La reserva fue cancelada exitosamente.' })
+  3014→        // Refresh series and main bookings
+  3015→        fetchData()
+  3016→        const updatedSeries = bookings.filter((b) => b.recurringGroupId === seriesGroupId)
+  3017→        setSeriesBookings(updatedSeries)
+  3018→      } else {
+  3019→        const err = await res.json()
+  3020→        toast({ title: 'Error', description: err.error || 'No se pudo cancelar.', variant: 'destructive' })
+  3021→      }
+  3022→    } catch {
+  3023→      toast({ title: 'Error', description: 'No se pudo cancelar la reserva.', variant: 'destructive' })
+  3024→    }
+  3025→  }
+  3026→
+  3027→  /* advance payment handlers */
+  3028→  const openAdvanceModal = (booking: Booking) => {
+  3029→    setAdvanceTarget(booking)
+  3030→    setAdvanceAmount(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
+  3031→    setAdvanceMethod('EFECTIVO')
+  3032→    setShowAdvanceModal(true)
+  3033→  }
+  3034→
+  3035→  const handleSubmitAdvance = async () => {
+  3036→    if (!advanceTarget || !advanceAmount || parseFloat(advanceAmount) <= 0) return
+  3037→    setSubmittingAdvance(true)
+  3038→    try {
+  3039→      // Update booking status and adjust amounts
+  3040→      const newAdvance = advanceTarget.advanceAmount + parseFloat(advanceAmount)
+  3041→      const newRemaining = Math.max(0, advanceTarget.totalPrice - newAdvance)
+  3042→      const newStatus = newRemaining <= 0 ? 'completed' : 'reserved'
+  3043→      const isFullPayment = newRemaining <= 0
+  3044→
+  3045→      const res = await fetch('/api/bookings', {
+  3046→        method: 'PUT',
+  3047→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  3048→        body: JSON.stringify({
+  3049→          id: advanceTarget.id,
+  3050→          status: newStatus,
+  3051→          advanceAmount: newAdvance,
+  3052→          remainingAmount: newRemaining,
+  3053→          paymentMethod: advanceMethod,
+  3054→        }),
+  3055→      })
+  3056→      if (res.ok) {
+  3057→        toast({
+  3058→          title: isFullPayment ? 'Pago total registrado' : 'Adelanto registrado',
+  3059→          description: isFullPayment
+  3060→            ? `Se registró el pago total de ${fmtCurrency(parseFloat(advanceAmount))}. Saldo: S/ 0.00`
+  3061→            : `Adelanto de ${fmtCurrency(parseFloat(advanceAmount))} registrado. Restante: ${fmtCurrency(newRemaining)}`,
+  3062→        })
+  3063→        setShowAdvanceModal(false)
+  3064→        setAdvanceTarget(null)
+  3065→        fetchData()
+  3066→      } else {
+  3067→        const err = await res.json()
+  3068→        toast({ title: 'Error', description: err.error || 'No se pudo registrar el pago', variant: 'destructive' })
+  3069→      }
+  3070→    } catch {
+  3071→      toast({ title: 'Error', description: 'No se pudo registrar el pago', variant: 'destructive' })
+  3072→    } finally {
+  3073→      setSubmittingAdvance(false)
+  3074→    }
+  3075→  }
+  3076→
+  3077→  /* ─── extend time handlers ─── */
+  3078→  const extendTimeSlots = useMemo(() => {
+  3079→    if (!extendTarget) return []
+  3080→    const [eh, em] = extendTarget.endTime.split(':').map(Number)
+  3081→    // Generate slots starting from 30min after current end, up to 3h extra
+  3082→    const slots: string[] = []
+  3083→    let cursorMin = (eh * 60 + em) + 30 // minimum +30min extension
+  3084→    const maxMin = cursorMin + 180 // max 3 extra hours
+  3085→    while (cursorMin <= Math.min(maxMin, 23 * 60 + 30)) {
+  3086→      const h = Math.floor(cursorMin / 60)
+  3087→      const m = cursorMin % 60
+  3088→      if (h <= 23) slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  3089→      cursorMin += 30
+  3090→    }
+  3091→    return slots
+  3092→  }, [extendTarget])
+  3093→
+  3094→  const openExtendModal = (booking: Booking) => {
+  3095→    if (booking.status === 'completed' || booking.status === 'cancelled') return
+  3096→    setExtendTarget(booking)
+  3097→    // Default to +30min
+  3098→    const [eh, em] = booking.endTime.split(':').map(Number)
+  3099→    const newMin = eh * 60 + em + 30
+
+[showing lines 2400-3099 of 6365; use offset=3100 with limit to continue reading]

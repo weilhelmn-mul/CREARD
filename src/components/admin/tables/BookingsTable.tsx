@@ -69,6 +69,7 @@ interface BookingsTableProps {
   onDeleteBooking?: (bookingId: string) => void
   use12hFormat?: boolean
   onExtendTime?: (booking: Booking) => void
+  onEditTime?: (booking: Booking) => void
 }
 
 export default function BookingsTable({
@@ -84,6 +85,7 @@ export default function BookingsTable({
   onDeleteBooking,
   use12hFormat = false,
   onExtendTime,
+  onEditTime,
 }: BookingsTableProps) {
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -108,14 +110,20 @@ export default function BookingsTable({
             {bookings.map((b) => {
               const st = statusConfig[b.status] || statusConfig.reserved
               const alertLv = getAlertLevel(b.id)
-              const rowClass = alertLv === 'expired'
+              const isCompleted = b.status === 'completed'
+              const rowClass = isCompleted
+                ? 'bg-green-500/[0.06] border-l-2 border-l-green-400/70 animate-glow-green-row relative overflow-hidden'
+                : alertLv === 'expired'
                 ? 'bg-red-500/10 border-l-2 border-l-red-500 animate-pulse'
                 : alertLv === 'warning'
                 ? 'bg-amber-500/10 border-l-2 border-l-amber-500'
                 : 'border-b border-white/[0.03] hover:bg-white/[0.02]'
               return (
                 <tr key={b.id} className={`${rowClass} transition-colors`}>
-                  <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)]">
+                  <td className="px-4 py-3 text-cm-on-surface font-[family-name:var(--font-inter)] relative">
+                    {isCompleted && (
+                      <div className="absolute inset-y-0 -left-[2px] w-20 bg-gradient-to-r from-green-400/15 via-green-400/5 to-transparent animate-scanline-green pointer-events-none" />
+                    )}
                     <div className="flex items-center gap-1.5">
                       {fmtDate(b.date)}
                       {b.recurringGroupId && (
@@ -174,10 +182,17 @@ export default function BookingsTable({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                      {st.label}
-                    </span>
+                    {isCompleted ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-[glow-green_2s_ease-in-out_infinite]">
+                        <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                        {st.label}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                        {st.label}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-cm-on-surface font-[family-name:var(--font-inter)] hidden sm:table-cell">{fmtCurrency(b.advanceAmount)}</td>
                   <td className={`px-4 py-3 text-right font-[family-name:var(--font-inter)] hidden sm:table-cell ${b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(b.remainingAmount)}</td>
@@ -229,6 +244,15 @@ export default function BookingsTable({
                         <option value="completed">Completo</option>
                         <option value="cancelled">Cancelado</option>
                       </select>
+                      {isSuperAdmin && onEditTime && (
+                        <button
+                          onClick={() => onEditTime(b)}
+                          className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                          title="Editar reserva"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">edit</span>
+                        </button>
+                      )}
                       {isSuperAdmin && onDeleteBooking && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeleteBooking(b.id) }}
