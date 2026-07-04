@@ -175,12 +175,15 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
 const fmtHour = (h: number) => `${String(h).padStart(2, '0')}:00`
 const fmtDate = (d: string) => {
-  const date = new Date(d + 'T00:00:00')
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })
+  // Bug fix #9: Use America/Lima timezone for consistent date display
+  const [y, m, day] = d.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, day))
+  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })
 }
 const fmtDateFull = (d: string) => {
-  const date = new Date(d + 'T00:00:00')
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+  const [y, m, day] = d.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, day))
+  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Lima' })
 }
 const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 
@@ -2280,6 +2283,8 @@ export default function AdminDashboard() {
   const [courtFilter, setCourtFilter] = useState('all')
   const [sportFilter, setSportFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'compact'>('table')
+  const [bookingsPage, setBookingsPage] = useState(1)
+  const BOOKINGS_PER_PAGE = 30
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'price_desc' | 'price_asc' | 'name_asc'>('date_desc')
   const [showPastBookings, setShowPastBookings] = useState(false)
@@ -3104,16 +3109,19 @@ export default function AdminDashboard() {
     const nm = newMin % 60
     const defaultEnd = `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`
     setExtendNewEnd(defaultEnd)
-    // Calculate extra cost
-    const court = bookingCourtDetails.find(c => c.id === booking.courtId)
+    // Bug fix #4: Calculate extra cost for ALL courts, not just primary
+    const courtIds = booking.courtIds && booking.courtIds.length > 0 ? booking.courtIds : [booking.courtId]
     let extraCost = 0
-    if (court) {
-      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
-        const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, defaultEnd)
-        const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, booking.endTime)
-        extraCost = Math.round((newTotal - oldTotal) * 100) / 100
-      } else {
-        extraCost = Math.round(court.pricePerHour * 0.5 * 100) / 100 // default 30min
+    for (const cId of courtIds) {
+      const court = bookingCourtDetails.find(c => c.id === cId)
+      if (court) {
+        if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+          const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, defaultEnd)
+          const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, booking.startTime, booking.endTime)
+          extraCost += Math.round((newTotal - oldTotal) * 100) / 100
+        } else {
+          extraCost += Math.round(court.pricePerHour * 0.5 * 100) / 100 // default 30min
+        }
       }
     }
     setExtendExtraCost(Math.max(0, extraCost))
@@ -3125,17 +3133,21 @@ export default function AdminDashboard() {
   const handleExtendEndChange = (newEnd: string) => {
     setExtendNewEnd(newEnd)
     if (!extendTarget) return
-    const court = bookingCourtDetails.find(c => c.id === extendTarget.courtId)
+    // Bug fix #4: Calculate extra cost for ALL courts
+    const courtIds = extendTarget.courtIds && extendTarget.courtIds.length > 0 ? extendTarget.courtIds : [extendTarget.courtId]
     let extraCost = 0
-    if (court) {
-      if (court.pricingSchedule && court.pricingSchedule.length > 0) {
-        const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, newEnd)
-        const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, extendTarget.endTime)
-        extraCost = Math.round((newTotal - oldTotal) * 100) / 100
-      } else {
-        const origH = calculateHours(extendTarget.startTime, extendTarget.endTime)
-        const newH = calculateHours(extendTarget.startTime, newEnd)
-        extraCost = Math.round(court.pricePerHour * (newH - origH) * 100) / 100
+    for (const cId of courtIds) {
+      const court = bookingCourtDetails.find(c => c.id === cId)
+      if (court) {
+        if (court.pricingSchedule && court.pricingSchedule.length > 0) {
+          const { total: newTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, newEnd)
+          const { total: oldTotal } = calculatePriceForTimeSlot(court.pricingSchedule, extendTarget.startTime, extendTarget.endTime)
+          extraCost += Math.round((newTotal - oldTotal) * 100) / 100
+        } else {
+          const origH = calculateHours(extendTarget.startTime, extendTarget.endTime)
+          const newH = calculateHours(extendTarget.startTime, newEnd)
+          extraCost += Math.round(court.pricePerHour * (newH - origH) * 100) / 100
+        }
       }
     }
     setExtendExtraCost(Math.max(0, extraCost))
@@ -3431,6 +3443,16 @@ export default function AdminDashboard() {
     }
     return result
   }, [bookings, statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
+
+  // Bug fix #8: Pagination
+  const paginatedBookings = useMemo(() => {
+    const start = (bookingsPage - 1) * BOOKINGS_PER_PAGE
+    return filteredBookings.slice(start, start + BOOKINGS_PER_PAGE)
+  }, [filteredBookings, bookingsPage])
+  const totalBookingsPages = Math.ceil(filteredBookings.length / BOOKINGS_PER_PAGE)
+
+  // Reset page when filters change
+  useEffect(() => { setBookingsPage(1) }, [statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
 
   const activeFilterCount = [searchQuery, dateFrom, dateTo, courtFilter !== 'all' && courtFilter, sportFilter !== 'all' && sportFilter].filter(Boolean).length
 
@@ -3865,10 +3887,16 @@ export default function AdminDashboard() {
               {/* Status filter */}
               <div className="flex flex-wrap gap-2 mb-4">
                 <button type="button" onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
-                  Todos ({bookings.length})
+                  Todos ({filteredBookings.length})
                 </button>
                 {Object.entries(statusConfig).map(([key, val]) => {
-                  const count = bookings.filter((b) => b.status === key).length
+                  // Bug fix #5: Count respects showPastBookings toggle
+                  let countBase = bookings.filter((b) => b.status === key)
+                  if (!showPastBookings) {
+                    const today = todayStr()
+                    countBase = countBase.filter(b => typeof b.date === 'string' && b.date >= today)
+                  }
+                  const count = countBase.length
                   if (count === 0) return null
                   return (
                     <button type="button" key={key} onClick={() => setStatusFilter(key)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === key ? `${val.color} border-current/30` : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
@@ -3882,7 +3910,7 @@ export default function AdminDashboard() {
               {/* Results count + action buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                  Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
+                  Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{showPastBookings ? bookings.length : bookings.filter(b => typeof b.date === 'string' && b.date >= todayStr()).length}</span> reservas
                 </p>
                 <div className="flex items-center gap-2">
                   <button type="button"
@@ -3928,14 +3956,13 @@ export default function AdminDashboard() {
               ) : viewMode === 'table' ? (
                 /* ─── TABLE MODE ─── */
                 <BookingsTable
-                  bookings={filteredBookings}
+                  bookings={paginatedBookings}
                   getAlertLevel={getAlertLevel}
                   openSeriesModal={openSeriesModal}
                   openAdvanceModal={openAdvanceModal}
                   handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
                   onShowEquipDetail={setShowEquipDetail}
                   advanceAmount={advanceAmount}
-                  advanceTarget={advanceTarget}
                   isSuperAdmin={isSuperAdmin}
                   onDeleteBooking={handleDeleteBooking}
                   use12hFormat={use12hFormat}
@@ -3945,7 +3972,7 @@ export default function AdminDashboard() {
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredBookings.map((b, i) => {
+                  {paginatedBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
                     const isGCompleted = b.status === 'completed'
                     const statusAccent = isGCompleted ? 'bg-gradient-to-r from-green-400 via-emerald-400 to-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
@@ -4105,7 +4132,7 @@ export default function AdminDashboard() {
               ) : (
                 /* ─── COMPACT MODE ─── */
                 <div className="space-y-2">
-                  {filteredBookings.map((b, i) => {
+                  {paginatedBookings.map((b, i) => {
                     const st = statusConfig[b.status] || statusConfig.reserved
                     const isCCompleted = b.status === 'completed'
                     const calertLv = getAlertLevel(b.id)
@@ -4231,6 +4258,22 @@ export default function AdminDashboard() {
                       </motion.div>
                     )
                   })}
+                </div>
+              )}
+              {/* Bug fix #8: Pagination controls */}
+              {totalBookingsPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <button type="button" onClick={() => setBookingsPage(p => Math.max(1, p - 1))} disabled={bookingsPage <= 1}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                    Anterior
+                  </button>
+                  <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] px-2">
+                    {bookingsPage} / {totalBookingsPages}
+                  </span>
+                  <button type="button" onClick={() => setBookingsPage(p => Math.min(totalBookingsPages, p + 1))} disabled={bookingsPage >= totalBookingsPages}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                    Siguiente
+                  </button>
                 </div>
               )}
             </motion.div>
@@ -6150,15 +6193,29 @@ export default function AdminDashboard() {
                       { value: 'reserved', label: 'Reservado', icon: 'calendar_month', color: 'text-blue-400' },
                       { value: 'completed', label: 'Completado', icon: 'check_circle', color: 'text-green-400' },
                       { value: 'cancelled', label: 'Cancelado', icon: 'cancel', color: 'text-red-400' },
-                    ].map(s => (
-                      <button key={s.value} type="button" onClick={() => handleEditFormChange('status', s.value)} disabled={submittingEdit}
-                        className={`py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1 ${editForm.status === s.value ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'}`}
-                      >
-                        <span className="material-symbols-outlined text-[12px]">{s.icon}</span>
-                        {s.label}
-                      </button>
-                    ))}
+                    ].map(s => {
+                      // Bug fix #2: Cannot reactivate cancelled bookings
+                      const originalStatus = editTarget?.status || ''
+                      const isDisabled = (originalStatus === 'cancelled' && s.value !== 'cancelled')
+                        // Bug fix #3: Cannot cancel completed bookings
+                        || (originalStatus === 'completed' && s.value === 'cancelled')
+                        || submittingEdit
+                      return (
+                        <button key={s.value} type="button" onClick={() => !isDisabled && handleEditFormChange('status', s.value)} disabled={isDisabled}
+                          className={`py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-center gap-1 ${editForm.status === s.value ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : isDisabled ? 'bg-cm-surface-container-highest/20 text-cm-on-surface-variant/30 border border-white/5 cursor-not-allowed' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'}`}
+                        >
+                          <span className="material-symbols-outlined text-[12px]">{s.icon}</span>
+                          {s.label}
+                        </button>
+                      )
+                    })}
                   </div>
+                  {editTarget?.status === 'cancelled' && (
+                    <p className="text-[10px] text-amber-400/70 mt-1.5 font-[family-name:var(--font-inter)]">Reserva cancelada: no se puede reactivar.</p>
+                  )}
+                  {editTarget?.status === 'completed' && (
+                    <p className="text-[10px] text-amber-400/70 mt-1.5 font-[family-name:var(--font-inter)]">Reserva completada: no se puede cancelar.</p>
+                  )}
                 </div>
 
                 {/* ── Notas ── */}

@@ -52,8 +52,9 @@ const sportIcons: Record<string, string> = {
 
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
 const fmtDate = (d: string) => {
-  const date = new Date(d + 'T00:00:00')
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })
+  const [y, m, day] = d.split('-').map(Number)
+  const date = new Date(Date.UTC(y, m - 1, day))
+  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })
 }
 
 interface BookingsTableProps {
@@ -64,7 +65,6 @@ interface BookingsTableProps {
   handleUpdateStatus: (booking: Booking, status: string) => void
   onShowEquipDetail: (booking: Booking) => void
   advanceAmount: string
-  advanceTarget: Booking | null
   isSuperAdmin?: boolean
   onDeleteBooking?: (bookingId: string) => void
   use12hFormat?: boolean
@@ -80,7 +80,6 @@ export default function BookingsTable({
   handleUpdateStatus,
   onShowEquipDetail,
   advanceAmount,
-  advanceTarget,
   isSuperAdmin = false,
   onDeleteBooking,
   use12hFormat = false,
@@ -222,7 +221,7 @@ export default function BookingsTable({
                       <button
                         onClick={() => openAdvanceModal(b)}
                         className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                        title={b.remainingAmount > 0 ? (parseFloat(advanceAmount || '0') >= b.remainingAmount && advanceTarget?.id === b.id ? 'Registrar el total' : 'Registrar adelanto') : 'Registrar pago adicional'}
+                        title={b.remainingAmount > 0 ? 'Registrar adelanto' : 'Registrar pago adicional'}
                       >
                         <span className="material-symbols-outlined text-[16px]">payments</span>
                       </button>

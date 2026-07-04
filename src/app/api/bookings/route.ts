@@ -515,35 +515,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // B15 FIX: Re-check conflicts right before creation (optimistic concurrency)
-    for (const cId of allCourtIds) {
-      const recheck = await getBookings({ courtId: cId, date });
-      const stillConflicts = recheck.filter(
-        (b) => {
-          const bCourtIds: string[] = Array.isArray(b.court_ids)
-            ? b.court_ids as string[]
-            : [b.court_id as string];
-          if (!bCourtIds.includes(cId)) return false;
-          return (
-            !['cancelled'].includes(migrateStatus(b.status || '')) &&
-            (b.start_time || '') < endTime &&
-            (b.end_time || '') > startTime
-          );
-        }
-      );
-      if (stillConflicts.length > 0) {
-        let courtName = cId;
-        try {
-          const c = await getCourtById(cId);
-          if (c?.name) courtName = c.name as string;
-        } catch { /* use ID */ }
-        return NextResponse.json(
-          { error: `Horario ocupado en ${courtName}. Alguien reservó mientras completabas el formulario. Intenta de nuevo.`, conflicts: [{ courtId: cId, courtName }] },
-          { status: 409 }
-        );
-      }
-    }
-
     // ── Calculate price ──
     // Frontend sends totalPrice as grand total (court + equipment combined).
     // We compute courtSubtotal and equipmentSubtotal separately for storage/display.
@@ -694,7 +665,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const updateData: Record<string, unknown> = {};
-    if (status) updateData.status = migrateStatus(status);
+    // Bug fix #7: Only set status from generic handler if NOT in editBooking mode
+    // (editBooking handles status via its own branch to avoid double-processing)
+    if (status && !editBooking) updateData.status = migrateStatus(status);
     if (slot_status) updateData.slot_status = slot_status;
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
@@ -839,6 +812,19 @@ export async function PUT(request: NextRequest) {
       if (reqPaymentMethod) {
         const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
         updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+      }
+
+      // Status change (with guard: cancelled → other is blocked, completed → cancelled is blocked)
+      if (status) {
+        const newStatus = migrateStatus(status);
+        // Enforce same rules as generic handler
+        if (bStatus === 'cancelled' && newStatus !== 'cancelled') {
+          return NextResponse.json({ error: 'No se puede reactivar una reserva cancelada.' }, { status: 400 });
+        }
+        if (bStatus === 'completed' && newStatus === 'cancelled') {
+          return NextResponse.json({ error: 'No se puede cancelar una reserva completada.' }, { status: 400 });
+        }
+        updateData.status = newStatus;
       }
 
       // Conflict check (only if time or court or date changed)
