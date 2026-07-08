@@ -21,6 +21,7 @@ import BookingsTable from './tables/BookingsTable'
 import ExpensesTable from './tables/ExpensesTable'
 import RecurringPreviewTable from './tables/RecurringPreviewTable'
 import SeriesBookingsTable from './tables/SeriesBookingsTable'
+import TimeSlotPicker from './TimeSlotPicker'
 import {
   DndContext,
   closestCenter,
@@ -2519,6 +2520,37 @@ export default function AdminDashboard() {
     }, [])
   }, [allCourts])
 
+  /* Occupied slots for the booking form's selected date + courts */
+  const formOccupiedSlots = useMemo(() => {
+    const date = bookingForm.date
+    const cIds = bookingForm.courtIds.length > 0 ? bookingForm.courtIds : (bookingForm.courtId ? [bookingForm.courtId] : [])
+    if (!date || cIds.length === 0) return []
+    return bookings
+      .filter(b => {
+        if (b.status === 'cancelled') return false
+        if (b.date !== date) return false
+        const bCIds = b.courtIds && b.courtIds.length > 0 ? b.courtIds : [b.courtId]
+        return bCIds.some(id => cIds.includes(id))
+      })
+      .map(b => ({ startTime: b.startTime, endTime: b.endTime, label: b.user?.name }))
+  }, [bookings, bookingForm.date, bookingForm.courtIds, bookingForm.courtId])
+
+  /* Occupied slots for the edit form */
+  const editOccupiedSlots = useMemo(() => {
+    const date = editForm.date
+    const cIds = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    if (!date || cIds.length === 0 || !editTarget) return []
+    return bookings
+      .filter(b => {
+        if (b.id === editTarget.id) return false
+        if (b.status === 'cancelled') return false
+        if (b.date !== date) return false
+        const bCIds = b.courtIds && b.courtIds.length > 0 ? b.courtIds : [b.courtId]
+        return bCIds.some(id => cIds.includes(id))
+      })
+      .map(b => ({ startTime: b.startTime, endTime: b.endTime, label: b.user?.name }))
+  }, [bookings, editForm.date, editForm.courtIds, editForm.courtId, editTarget])
+
   /* fetch users for booking form (courts come from allCourts, deduplicated) */
   const loadBookingFormData = useCallback(async () => {
     try {
@@ -4880,84 +4912,26 @@ export default function AdminDashboard() {
                       />
                       {formErrors.date && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.date}</p>}
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:mt-2">
-                      {/* 12h/24h toggle */}
-                      <div className="col-span-2 flex items-center justify-end mb-1">
-                        <button
-                          type="button"
-                          onClick={() => setUse12hFormat(!use12hFormat)}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cm-surface-container-highest/40 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all text-[11px]"
-                          title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
-                        >
-                          <span className="material-symbols-outlined text-[14px]">schedule</span>
-                          <span className="font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">
-                          Hora inicio *
-                        </label>
-                        <button type="button"
-                          onClick={() => { setStartTimeDrop(!startTimeDrop); setEndTimeDrop(false); setClientDropdownOpen(false) }}
-                          className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.startTime ? 'border-red-400' : 'border-white/10'}`}
-                        >
-                          <span className="text-cm-on-surface">{use12hFormat ? formatTime12(bookingForm.startTime) : formatTime24(bookingForm.startTime)}</span>
-                          <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
-                        </button>
-                        {startTimeDrop && (
-                          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
-                            {timeSlots.map((ts) => (
-                              <button
-                                type="button"
-                                key={ts.value}
-                                disabled={ts.disabled}
-                                onClick={() => { handleBookingFormChange('startTime', ts.value); setStartTimeDrop(false) }}
-                                className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
-                                  ts.disabled
-                                    ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
-                                    : bookingForm.startTime === ts.value
-                                      ? 'bg-cm-primary/15 text-cm-primary'
-                                      : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                                }`}
-                              >
-                                {use12hFormat ? formatTime12(ts.value) : formatTime24(ts.value)}{ts.label ? ` (${ts.label})` : ''}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hora fin *</label>
-                        <button type="button"
-                          onClick={() => { setEndTimeDrop(!endTimeDrop); setStartTimeDrop(false); setClientDropdownOpen(false) }}
-                          className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-left focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] flex items-center justify-between ${formErrors.endTime ? 'border-red-400' : 'border-white/10'}`}
-                        >
-                          <span className="text-cm-on-surface">{use12hFormat ? formatTime12(bookingForm.endTime) : formatTime24(bookingForm.endTime)}</span>
-                          <span className="material-symbols-outlined text-[18px] text-cm-on-surface-variant/60">expand_more</span>
-                        </button>
-                        {endTimeDrop && (
-                          <div className="absolute z-[60] top-full mt-1 left-0 right-0 bg-cm-surface-container-highest border border-white/15 rounded-xl shadow-2xl overflow-hidden max-h-48 overflow-y-auto">
-                            {timeSlots.map((ts) => (
-                              <button
-                                type="button"
-                                key={`end-${ts.value}`}
-                                disabled={ts.disabled || ts.value <= bookingForm.startTime}
-                                onClick={() => { handleBookingFormChange('endTime', ts.value); setEndTimeDrop(false) }}
-                                className={`w-full px-3 py-2 text-sm text-left font-[family-name:var(--font-inter)] transition-colors ${
-                                  ts.disabled || ts.value <= bookingForm.startTime
-                                    ? 'text-cm-on-surface-variant/30 cursor-not-allowed'
-                                    : bookingForm.endTime === ts.value
-                                      ? 'bg-cm-primary/15 text-cm-primary'
-                                      : 'text-cm-on-surface hover:bg-cm-surface-container-highest/80'
-                                }`}
-                              >
-                                {use12hFormat ? formatTime12(ts.value) : formatTime24(ts.value)}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {formErrors.endTime && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{formErrors.endTime}</p>}
-                      </div>
+                    {/* TimeSlotPicker — visual timeline */}
+                    <div className="sm:mt-2 col-span-2">
+                      <TimeSlotPicker
+                        startTime={bookingForm.startTime}
+                        endTime={bookingForm.endTime}
+                        onChange={(s, e) => {
+                          handleBookingFormChange('startTime', s)
+                          handleBookingFormChange('endTime', e)
+                          setStartTimeDrop(false)
+                          setEndTimeDrop(false)
+                        }}
+                        occupied={formOccupiedSlots}
+                        use12hFormat={use12hFormat}
+                        theme="primary"
+                      />
+                      {(formErrors.startTime || formErrors.endTime) && (
+                        <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">
+                          {formErrors.startTime || formErrors.endTime}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -5996,47 +5970,19 @@ export default function AdminDashboard() {
                     disabled={submittingEdit}
                     className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] mb-2"
                   />
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Inicio</label>
-                      <select
-                        value={editForm.startTime}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          handleEditFormChange('startTime', v)
-                          if (v >= editForm.endTime) {
-                            const [h, m] = v.split(':').map(Number)
-                            let nm = h * 60 + m + 30
-                            if (nm <= 23 * 60) {
-                              const autoEnd = `${String(Math.floor(nm / 60)).padStart(2, '0')}:${String(nm % 60).padStart(2, '0')}`
-                              handleEditFormChange('endTime', autoEnd)
-                            }
-                          }
-                        }}
-                        disabled={submittingEdit}
-                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
-                      >
-                        {allTimeSlots.map(s => {
-                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
-                          return <option key={`s-${s}`} value={s}>{fmt}</option>
-                        })}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Fin</label>
-                      <select
-                        value={editForm.endTime}
-                        onChange={(e) => handleEditFormChange('endTime', e.target.value)}
-                        disabled={submittingEdit}
-                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
-                      >
-                        {editEndSlots.map(s => {
-                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
-                          return <option key={`e-${s}`} value={s}>{fmt}</option>
-                        })}
-                      </select>
-                    </div>
-                  </div>
+                  {/* TimeSlotPicker for edit modal */}
+                  <TimeSlotPicker
+                    startTime={editForm.startTime}
+                    endTime={editForm.endTime}
+                    onChange={(s, e) => {
+                      handleEditFormChange('startTime', s)
+                      handleEditFormChange('endTime', e)
+                    }}
+                    occupied={editOccupiedSlots}
+                    use12hFormat={use12hFormat}
+                    theme="purple"
+                    disabled={submittingEdit}
+                  />
                 </div>
 
                 {/* ── Cancha ── */}
