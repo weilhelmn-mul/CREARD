@@ -387,6 +387,7 @@ export async function createBooking(data: Record<string, unknown>): Promise<stri
     notes: data.notes || null,
     recurring_group_id: data.recurring_group_id || null,
     recurring_index: data.recurring_index ?? null,
+    selected_slots: Array.isArray(data.selected_slots) ? data.selected_slots : [],
   });
 }
 

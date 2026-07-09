@@ -419,6 +419,7 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       notes,
       equipmentItems,
+      selectedSlots,
     } = body;
 
     // ── Resolve court IDs (support both single courtId and multi-court courtIds) ──
@@ -582,6 +583,7 @@ export async function POST(request: NextRequest) {
       slot_status: 'available',
       payment_method: normalizedPaymentMethod || null,
       notes: notes || null,
+      selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
     });
 
     console.log(`[BOOKINGS] POST: Created booking ${id} for user=${userId} date=${date} ${startTime}-${endTime} courts=${allCourtIds.join(',')} total=${price} advance=${adv} remaining=${rem} method=${normalizedPaymentMethod} email=${clientEmail}`);

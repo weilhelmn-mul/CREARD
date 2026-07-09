@@ -268,3 +268,14 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
 }
+
+/* ─── TimeSlotPicker futuristic animations ─── */
+@keyframes tsp-scan {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(1000%); }
+}
+
+@keyframes tsp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}

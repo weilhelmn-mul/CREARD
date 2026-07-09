@@ -2325,8 +2325,6 @@ export default function AdminDashboard() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
-  const [startTimeDrop, setStartTimeDrop] = useState(false)
-  const [endTimeDrop, setEndTimeDrop] = useState(false)
 
   /* quick client creation from booking modal */
   const [showNewClientDialog, setShowNewClientDialog] = useState(false)
@@ -2577,6 +2575,23 @@ export default function AdminDashboard() {
     return Math.max(diff / 60, 0.5)
   }
 
+  /** Compute individual 30-min slot strings between start and end */
+  const computeSelectedSlots = (start: string, end: string): string[] => {
+    if (!start || !end || end <= start) return []
+    const slots: string[] = []
+    const [sh, sm] = start.split(':').map(Number)
+    const [eh, em] = end.split(':').map(Number)
+    let cursor = sh * 60 + sm
+    const endMin = eh * 60 + em
+    while (cursor < endMin) {
+      const h = Math.floor(cursor / 60)
+      const m = cursor % 60
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+      cursor += 30
+    }
+    return slots
+  }
+
   const calculatePriceForTimeSlot = (schedule: PricingScheduleItem[], startTime: string, endTime: string): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } => {
     const [startH, startM] = startTime.split(':').map(Number)
     const [endH, endM] = endTime.split(':').map(Number)
@@ -2825,6 +2840,7 @@ export default function AdminDashboard() {
           quantity: i.quantity,
           unit_price: i.unitPrice,
         })),
+        selectedSlots: computeSelectedSlots(bookingForm.startTime, bookingForm.endTime),
       }
       const res = await fetch('/api/bookings', {
         method: 'POST',
@@ -2965,6 +2981,7 @@ export default function AdminDashboard() {
           unit_price: i.unitPrice,
         })) : undefined,
         dryRun: false,
+        selectedSlots: computeSelectedSlots(bookingForm.startTime, bookingForm.endTime),
       }
       if (recurringConfig.frequency === 'custom') {
         body.daysOfWeek = recurringConfig.daysOfWeek
@@ -3229,22 +3246,6 @@ export default function AdminDashboard() {
   }
 
   /* ─── edit booking handlers (super_admin only) ─── */
-  const allTimeSlots = useMemo(() => {
-    const slots: string[] = []
-    for (let h = 6; h <= 23; h++) {
-      for (const m of [0, 30]) {
-        if (h === 23 && m > 0) continue
-        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
-      }
-    }
-    return slots
-  }, [])
-
-  const editEndSlots = useMemo(() => {
-    if (!editForm.startTime) return allTimeSlots
-    return allTimeSlots.filter(s => s > editForm.startTime)
-  }, [editForm.startTime, allTimeSlots])
-
   const recalcEditCourtPrice = () => {
     if (editPriceManual) return
     const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
@@ -4920,8 +4921,6 @@ export default function AdminDashboard() {
                         onChange={(s, e) => {
                           handleBookingFormChange('startTime', s)
                           handleBookingFormChange('endTime', e)
-                          setStartTimeDrop(false)
-                          setEndTimeDrop(false)
                         }}
                         occupied={formOccupiedSlots}
                         use12hFormat={use12hFormat}

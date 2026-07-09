@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       startDate, frequency, daysOfWeek,
       endDate, count, totalPrice, advanceAmount,
       status, paymentMethod, notes, dryRun,
-      equipmentItems,
+      equipmentItems, selectedSlots,
     } = body;
 
     // Resolve all court IDs (support both single courtId and multi-court courtIds)
@@ -270,6 +270,7 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         recurring_group_id: groupId,
         recurring_index: createdBookings.length,
+        selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
       });
 
       createdBookings.push({ id, date: dates[i] });
