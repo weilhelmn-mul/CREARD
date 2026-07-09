@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useCallback, useState } from 'react'
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react'
 import { formatTime12, formatTime24, generateTimeSlots } from '@/lib/timeUtils'
 
 interface OccupiedSlot {
@@ -38,6 +38,40 @@ const PERIODS = [
   { key: 'evening',   label: 'NOCHE',   icon: 'dark_mode',  startH: 18, endH: 23 },
 ]
 
+/** Normalize a raw input string to "HH:MM" or return empty */
+function normalizeTime(raw: string, startH: number, endH: number): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+
+  // Already in HH:MM
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    const [h, m] = trimmed.split(':').map(Number)
+    if (h >= startH && h <= endH && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    }
+  }
+
+  // HHMM (no colon)
+  if (/^\d{3,4}$/.test(trimmed)) {
+    const padded = trimmed.padStart(4, '0')
+    const h = parseInt(padded.slice(0, 2), 10)
+    const m = parseInt(padded.slice(2, 4), 10)
+    if (h >= startH && h <= endH && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    }
+  }
+
+  // H or HH (hour only → :00)
+  if (/^\d{1,2}$/.test(trimmed)) {
+    const h = parseInt(trimmed, 10)
+    if (h >= startH && h <= endH) {
+      return `${String(h).padStart(2, '0')}:00`
+    }
+  }
+
+  return ''
+}
+
 export default function TimeSlotPicker({
   startTime,
   endTime,
@@ -50,10 +84,20 @@ export default function TimeSlotPicker({
   endHour = 23,
 }: TimeSlotPickerProps) {
   const [hoveredSlot, setHoveredSlot] = useState<string | null>(null)
+  const [showManual, setShowManual] = useState(false)
+  const [rawStart, setRawStart] = useState('')
+  const [rawEnd, setRawEnd] = useState('')
+  const startInputRef = useRef<HTMLInputElement>(null)
+  const endInputRef = useRef<HTMLInputElement>(null)
 
   const allSlots = useMemo(
     () => generateTimeSlots(startHour, endHour, [0, 30]),
     [startHour, endHour],
+  )
+
+  const validSlots = useMemo(
+    () => new Set(allSlots.map(s => s.value)),
+    [allSlots],
   )
 
   /* ── occupied set ── */
@@ -94,6 +138,48 @@ export default function TimeSlotPicker({
     [disabled, hasStart, hasEnd, startTime, isOcc, onChange],
   )
 
+  /* ── manual input handlers ── */
+  const handleManualApply = useCallback(() => {
+    const s = normalizeTime(rawStart, startHour, endHour)
+    const e = normalizeTime(rawEnd, startHour, endHour)
+    if (s && e && e > s) {
+      onChange(s, e)
+    } else if (s) {
+      onChange(s, '')
+    }
+  }, [rawStart, rawEnd, startHour, endHour, onChange])
+
+  const handleStartKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      // default tab → go to end input
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (rawStart) {
+        const s = normalizeTime(rawStart, startHour, endHour)
+        if (s) {
+          onChange(s, '')
+          setRawStart('')
+          endInputRef.current?.focus()
+        }
+      }
+    }
+  }
+
+  const handleEndKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleManualApply()
+    }
+  }
+
+  // Sync manual inputs when selection changes externally (e.g. grid click)
+  useEffect(() => {
+    if (showManual) {
+      setRawStart(hasStart ? fmt(startTime) : '')
+      setRawEnd(hasEnd ? fmt(endTime) : '')
+    }
+  }, [startTime, endTime, showManual, hasStart, hasEnd, fmt])
+
   /* ── theme tokens ── */
   const isPurple = theme === 'purple'
   const accent   = isPurple ? '#a855f7' : '#00ff41'
@@ -129,6 +215,14 @@ export default function TimeSlotPicker({
       })),
     [allSlots, startHour, endHour],
   )
+
+  /* ══════════════ common input style ══════════════ */
+  const inputBaseStyle: React.CSSProperties = {
+    background: `rgba(${rgb},0.04)`,
+    border: `1px solid rgba(${rgb},0.15)`,
+    color: accent,
+  }
+  const inputFocusClass = `focus:outline-none focus:border-[rgba(${rgb},0.5)] focus:shadow-[0_0_12px_rgba(${rgb},0.08)]`
 
   /* ─────────────────── RENDER ─────────────────── */
   return (
@@ -194,20 +288,157 @@ export default function TimeSlotPicker({
             )}
           </div>
 
-          {hasStart && hasEnd && (
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Manual toggle */}
             <button
               type="button"
-              onClick={() => onChange('', '')}
-              className="flex-shrink-0 text-cm-on-surface-variant/40 hover:text-red-400 transition-colors flex items-center gap-0.5"
+              onClick={() => {
+                setShowManual(prev => !prev)
+                if (!showManual) {
+                  // opening manual → pre-fill
+                  setRawStart(hasStart ? fmt(startTime) : '')
+                  setRawEnd(hasEnd ? fmt(endTime) : '')
+                  setTimeout(() => startInputRef.current?.focus(), 50)
+                }
+              }}
+              title="Ingreso manual de horario"
+              className="p-1 rounded-lg transition-all duration-200 hover:bg-white/5"
+              style={{
+                color: showManual ? accent : `rgba(${rgb},0.5)`,
+                background: showManual ? `rgba(${rgb},0.1)` : undefined,
+                border: showManual ? `1px solid rgba(${rgb},0.2)` : '1px solid transparent',
+              }}
             >
-              <span className="material-symbols-outlined text-[14px]">close</span>
-              <span className="text-[10px] font-[family-name:var(--font-inter)] hidden sm:inline">
-                Limpiar
-              </span>
+              <span className="material-symbols-outlined text-[16px]">edit</span>
             </button>
-          )}
+
+            {hasStart && hasEnd && (
+              <button
+                type="button"
+                onClick={() => onChange('', '')}
+                className="text-cm-on-surface-variant/40 hover:text-red-400 transition-colors flex items-center gap-0.5"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+                <span className="text-[10px] font-[family-name:var(--font-inter)] hidden sm:inline">
+                  Limpiar
+                </span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ═══ Manual input panel ═══ */}
+      {showManual && (
+        <div
+          className="rounded-xl p-3 space-y-2.5 transition-all duration-300"
+          style={{
+            background: `linear-gradient(135deg, rgba(${rgb},0.04), rgba(${rgb},0.01))`,
+            border: `1px solid rgba(${rgb},0.1)`,
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className="material-symbols-outlined text-[12px]"
+              style={{ color: `rgba(${rgb},0.4)`, fontVariationSettings: '"FILL" 1' }}
+            >
+              keyboard
+            </span>
+            <span
+              className="text-[9px] font-bold font-[family-name:var(--font-inter)] uppercase tracking-[0.2em]"
+              style={{ color: `rgba(${rgb},0.4)` }}
+            >
+              Ingreso manual
+            </span>
+            <div
+              className="flex-1 h-px"
+              style={{ background: `linear-gradient(to right, rgba(${rgb},0.08), transparent)` }}
+            />
+            <span className="text-[8px] text-cm-on-surface-variant/25 font-[family-name:var(--font-inter)]">
+              Enter para confirmar
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Start time input */}
+            <div className="space-y-1">
+              <label
+                className="text-[9px] font-bold font-[family-name:var(--font-inter)] uppercase tracking-[0.15em] block px-0.5"
+                style={{ color: `rgba(${rgb},0.5)` }}
+              >
+                Inicio
+              </label>
+              <input
+                ref={startInputRef}
+                type="text"
+                inputMode="text"
+                placeholder={use12hFormat ? 'Ej: 6 PM o 18:00' : 'Ej: 18:00 o 1800'}
+                value={rawStart}
+                onChange={e => setRawStart(e.target.value)}
+                onKeyDown={handleStartKeyDown}
+                disabled={disabled}
+                className={[
+                  'w-full px-3 py-2 rounded-lg text-sm font-semibold font-[family-name:var(--font-inter)]',
+                  'placeholder:text-cm-on-surface-variant/20 placeholder:font-normal placeholder:text-[11px]',
+                  'transition-all duration-200',
+                  inputFocusClass,
+                ].join(' ')}
+                style={inputBaseStyle}
+              />
+            </div>
+
+            {/* End time input */}
+            <div className="space-y-1">
+              <label
+                className="text-[9px] font-bold font-[family-name:var(--font-inter)] uppercase tracking-[0.15em] block px-0.5"
+                style={{ color: `rgba(${rgb},0.5)` }}
+              >
+                Fin
+              </label>
+              <input
+                ref={endInputRef}
+                type="text"
+                inputMode="text"
+                placeholder={use12hFormat ? 'Ej: 8 PM o 20:00' : 'Ej: 20:00 o 2000'}
+                value={rawEnd}
+                onChange={e => setRawEnd(e.target.value)}
+                onKeyDown={handleEndKeyDown}
+                disabled={disabled}
+                className={[
+                  'w-full px-3 py-2 rounded-lg text-sm font-semibold font-[family-name:var(--font-inter)]',
+                  'placeholder:text-cm-on-surface-variant/20 placeholder:font-normal placeholder:text-[11px]',
+                  'transition-all duration-200',
+                  inputFocusClass,
+                ].join(' ')}
+                style={inputBaseStyle}
+              />
+            </div>
+          </div>
+
+          {/* Apply button */}
+          <div className="flex items-center justify-between pt-0.5">
+            <p className="text-[9px] text-cm-on-surface-variant/25 font-[family-name:var(--font-inter)] leading-tight">
+              Formatos: 18:00, 1800, 6 PM, 18
+            </p>
+            <button
+              type="button"
+              onClick={handleManualApply}
+              disabled={disabled || (!rawStart && !rawEnd)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold font-[family-name:var(--font-inter)] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
+              style={{
+                background: `rgba(${rgb},0.12)`,
+                border: `1px solid rgba(${rgb},0.25)`,
+                color: accent,
+              }}
+            >
+              <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                check_circle
+              </span>
+              Aplicar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ═══ Period grids ═══ */}
       <div className="space-y-4">
