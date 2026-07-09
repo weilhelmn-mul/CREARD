@@ -43,33 +43,43 @@ function normalizeTime(raw: string, startH: number, endH: number): string {
   const trimmed = raw.trim()
   if (!trimmed) return ''
 
+  let h = -1
+  let m = 0
+
+  // AM/PM format: "6 PM", "6:30pm", "12:00 AM", "12am"
+  const ampmMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i)
+  if (ampmMatch) {
+    h = parseInt(ampmMatch[1], 10)
+    m = ampmMatch[2] ? parseInt(ampmMatch[2], 10) : 0
+    const isPm = ampmMatch[3].toLowerCase() === 'pm'
+    if (isPm && h !== 12) h += 12
+    if (!isPm && h === 12) h = 0
+  }
   // Already in HH:MM
-  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
-    const [h, m] = trimmed.split(':').map(Number)
-    if (h >= startH && h <= endH && m >= 0 && m <= 59) {
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-    }
+  else if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    ;[h, m] = trimmed.split(':').map(Number)
   }
-
   // HHMM (no colon)
-  if (/^\d{3,4}$/.test(trimmed)) {
+  else if (/^\d{3,4}$/.test(trimmed)) {
     const padded = trimmed.padStart(4, '0')
-    const h = parseInt(padded.slice(0, 2), 10)
-    const m = parseInt(padded.slice(2, 4), 10)
-    if (h >= startH && h <= endH && m >= 0 && m <= 59) {
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-    }
+    h = parseInt(padded.slice(0, 2), 10)
+    m = parseInt(padded.slice(2, 4), 10)
   }
-
   // H or HH (hour only → :00)
-  if (/^\d{1,2}$/.test(trimmed)) {
-    const h = parseInt(trimmed, 10)
-    if (h >= startH && h <= endH) {
-      return `${String(h).padStart(2, '0')}:00`
-    }
+  else if (/^\d{1,2}$/.test(trimmed)) {
+    h = parseInt(trimmed, 10)
+    m = 0
   }
 
-  return ''
+  if (h < startH || h > endH || m < 0 || m > 59) return ''
+
+  // Snap minutes to 30-min boundary
+  const roundedM = m < 15 ? 0 : m < 45 ? 30 : 60
+  let adjustedH = roundedM === 60 ? h + 1 : h
+  const adjustedM = roundedM === 60 ? 0 : roundedM
+  if (adjustedH > endH) return ''
+
+  return `${String(adjustedH).padStart(2, '0')}:${String(adjustedM).padStart(2, '0')}`
 }
 
 export default function TimeSlotPicker({

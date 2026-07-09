@@ -640,7 +640,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems, selectedSlots: reqSelectedSlots } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -770,6 +770,9 @@ export async function PUT(request: NextRequest) {
       if (reqDate) updateData.date = reqDate;
       if (reqStartTime) updateData.start_time = reqStartTime;
       if (reqEndTime) updateData.end_time = reqEndTime;
+      if (reqStartTime && reqEndTime && Array.isArray(reqSelectedSlots)) {
+        updateData.selected_slots = reqSelectedSlots;
+      }
 
       // Court change
       if (reqCourtIds && Array.isArray(reqCourtIds) && reqCourtIds.length > 0) {

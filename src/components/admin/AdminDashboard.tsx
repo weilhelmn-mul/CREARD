@@ -2386,6 +2386,7 @@ export default function AdminDashboard() {
   })
   const [editEquipItems, setEditEquipItems] = useState<Array<{ equipmentId: string; name: string; quantity: number; unitPrice: number; subtotal: number }>>([])
   const [editPriceManual, setEditPriceManual] = useState(false)
+  const editPriceManualRef = useRef(false)
   const [editClientSearch, setEditClientSearch] = useState('')
   const [editEquipOpen, setEditEquipOpen] = useState(false)
   const [submittingEdit, setSubmittingEdit] = useState(false)
@@ -3247,7 +3248,7 @@ export default function AdminDashboard() {
 
   /* ─── edit booking handlers (super_admin only) ─── */
   const recalcEditCourtPrice = () => {
-    if (editPriceManual) return
+    if (editPriceManualRef.current) return
     const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
     if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
     const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
@@ -3259,10 +3260,14 @@ export default function AdminDashboard() {
   }
 
   const handleEditFormChange = (field: string, value: string | string[]) => {
-    if (field === 'totalPrice') setEditPriceManual(true)
+    if (field === 'totalPrice') {
+      setEditPriceManual(true)
+      editPriceManualRef.current = true
+    }
+    const isManual = editPriceManualRef.current
     setEditForm(prev => {
       const updated = { ...prev, [field]: value }
-      if (!editPriceManual && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
+      if (!isManual && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
         const ids = Array.isArray(value) ? value : (updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : []))
         if (ids.length > 0 && updated.startTime && updated.endTime) {
           const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
@@ -3275,6 +3280,7 @@ export default function AdminDashboard() {
     })
     if (field === 'startTime' || field === 'endTime' || field === 'courtId' || field === 'courtIds') {
       setEditPriceManual(false)
+      editPriceManualRef.current = false
     }
   }
 
@@ -3388,6 +3394,7 @@ export default function AdminDashboard() {
           status: editForm.status,
           notes: editForm.notes || null,
           equipmentItems: editEquipItems.map(i => ({ equipment_id: i.equipmentId, name: i.name, quantity: i.quantity, unit_price: i.unitPrice })),
+          selectedSlots: computeSelectedSlots(editForm.startTime, editForm.endTime),
           editBooking: true,
         }),
       })
