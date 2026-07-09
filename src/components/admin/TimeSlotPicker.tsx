@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useCallback, useState, useRef, useEffect } from 'react'
+import { useMemo, useCallback, useState, useRef } from 'react'
 import { formatTime12, formatTime24, generateTimeSlots } from '@/lib/timeUtils'
 
 interface OccupiedSlot {
@@ -105,11 +105,6 @@ export default function TimeSlotPicker({
     [startHour, endHour],
   )
 
-  const validSlots = useMemo(
-    () => new Set(allSlots.map(s => s.value)),
-    [allSlots],
-  )
-
   /* ── occupied set ── */
   const occupiedSet = useMemo(() => {
     const set = new Set<string>()
@@ -154,8 +149,12 @@ export default function TimeSlotPicker({
     const e = normalizeTime(rawEnd, startHour, endHour)
     if (s && e && e > s) {
       onChange(s, e)
+      setRawStart('')
+      setRawEnd('')
     } else if (s) {
       onChange(s, '')
+      setRawStart('')
+      endInputRef.current?.focus()
     }
   }, [rawStart, rawEnd, startHour, endHour, onChange])
 
@@ -181,14 +180,6 @@ export default function TimeSlotPicker({
       handleManualApply()
     }
   }
-
-  // Sync manual inputs when selection changes externally (e.g. grid click)
-  useEffect(() => {
-    if (showManual) {
-      setRawStart(hasStart ? fmt(startTime) : '')
-      setRawEnd(hasEnd ? fmt(endTime) : '')
-    }
-  }, [startTime, endTime, showManual, hasStart, hasEnd, fmt])
 
   /* ── theme tokens ── */
   const isPurple = theme === 'purple'
@@ -305,10 +296,14 @@ export default function TimeSlotPicker({
               onClick={() => {
                 setShowManual(prev => !prev)
                 if (!showManual) {
-                  // opening manual → pre-fill
-                  setRawStart(hasStart ? fmt(startTime) : '')
-                  setRawEnd(hasEnd ? fmt(endTime) : '')
+                  // opening manual → pre-fill with 24h format (parseable)
+                  setRawStart(hasStart ? startTime : '')
+                  setRawEnd(hasEnd ? endTime : '')
                   setTimeout(() => startInputRef.current?.focus(), 50)
+                } else {
+                  // closing → clear drafts
+                  setRawStart('')
+                  setRawEnd('')
                 }
               }}
               title="Ingreso manual de horario"
