@@ -2272,6 +2272,10 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [retainedAdvances, setRetainedAdvances] = useState<RetainedAdvance[]>([])
+  const [raPage, setRaPage] = useState(1)
+  const [editingRaId, setEditingRaId] = useState<string | null>(null)
+  const [editRaAmount, setEditRaAmount] = useState('')
+  const [editRaReason, setEditRaReason] = useState('')
   const [allCourts, setAllCourts] = useState<Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>>([])
 
   /* filters */
@@ -2479,7 +2483,20 @@ export default function AdminDashboard() {
         const raRes = await fetch('/api/retained-advances', { headers })
         if (raRes.ok) {
           const raData = await raRes.json()
-          setRetainedAdvances(Array.isArray(raData.advances) ? raData.advances : [])
+          const allAdvances = Array.isArray(raData.advances) ? raData.advances : []
+          // FIX Bug #3: Filter to current month for accurate Finanzas display
+          const now = new Date()
+          const currentMonth = now.getMonth()
+          const currentYear = now.getFullYear()
+          const filtered = allAdvances.filter((ra: RetainedAdvance) => {
+            if (!ra.createdAt) return true // keep if no date
+            try {
+              const d = new Date(ra.createdAt)
+              return d.getMonth() === currentMonth && d.getFullYear() === currentYear
+            } catch { return true }
+          })
+          setRetainedAdvances(filtered)
+          setRaPage(1)
         }
       } catch (err) { console.error('[AdminDashboard] Error loading retained advances:', err) }
       setAllCourts(courtsData)
@@ -3522,10 +3539,11 @@ export default function AdminDashboard() {
     .filter((ra) => ra.status === 'refunded')
     .reduce((s, ra) => s + ra.amount, 0)
 
-  // Real money in box = normal income + retained advances (refunded is informational only —
-  // the booking was already removed from totalIncome when cancelled, so subtracting again
-  // would double-count the outflow).
-  const effectiveIncome = totalIncome + retainedTotal
+  // FIX Bug #1: Neto retenido = lo que realmente queda en caja (retenidos - devueltos)
+  const netRetained = retainedTotal - refundedTotal
+
+  // FIX Bug #2: Real money in box = income + retained - refunded (devueltos ya no están en caja)
+  const effectiveIncome = totalIncome + retainedTotal - refundedTotal
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const balance = effectiveIncome - totalExpenses
 
@@ -3562,8 +3580,21 @@ export default function AdminDashboard() {
         body: JSON.stringify(body),
       })
       if (res.ok) {
+        // FIX Bug #9: Show warnings from backend
+        const result = await res.json().catch(() => ({}));
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)))
-        toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
+        if ((result as Record<string, unknown>).warnings && Array.isArray((result as Record<string, unknown>).warnings)) {
+          const warnings = (result as Record<string, unknown>).warnings as string[];
+          if (warnings.includes('retained_advance_failed')) {
+            toast({ title: 'Reserva cancelada con advertencia', description: 'No se pudo crear el registro de adelanto retenido. Verifica la pestaña Finanzas > Adelantos por Cancelaciones.', variant: 'destructive' })
+          } else if (warnings.includes('payment_record_failed')) {
+            toast({ title: 'Reserva cancelada con advertencia', description: 'No se pudo crear el registro de pago asociado. Verifica manualmente.', variant: 'destructive' })
+          } else {
+            toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
+          }
+        } else {
+          toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
+        }
         fetchData()
         return true
       } else {
@@ -4382,8 +4413,8 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="p-2.5 rounded-lg bg-cm-surface-container-highest/40 flex items-center justify-between">
-                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Neto retenido</span>
-                    <span className="font-[family-name:var(--font-sora)] text-sm font-bold text-orange-400">{fmtCurrency(retainedTotal)}</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Neto retenido (en caja)</span>
+                    <span className={`font-[family-name:var(--font-sora)] text-sm font-bold ${netRetained >= 0 ? 'text-orange-400' : 'text-red-400'}`}>{fmtCurrency(netRetained)}</span>
                   </div>
                 </motion.div>
 
@@ -4408,8 +4439,8 @@ export default function AdminDashboard() {
                     )}
                     {refundedTotal > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">~ Devueltos (info)</span>
-                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">{fmtCurrency(refundedTotal)}</span>
+                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">- Devueltos al cliente</span>
+                        <span className="text-purple-400 font-[family-name:var(--font-inter)]">-{fmtCurrency(refundedTotal)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-xs">
@@ -4453,7 +4484,7 @@ export default function AdminDashboard() {
                       <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
                       <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Historial de Adelantos por Cancelaciones</h3>
                     </div>
-                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
+                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros (mes actual)</span>
                   </div>
                   <div className="overflow-x-auto -mx-4 px-4">
                     <table className="w-full text-xs">
@@ -4470,14 +4501,27 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {retainedAdvances.map((ra) => (
+                        {retainedAdvances.slice((raPage - 1) * 8, raPage * 8).map((ra) => (
                           <tr key={ra.id} className="border-b border-white/5 last:border-0">
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
                               {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}
                             </td>
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
                             <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
-                            <td className="py-2 text-right font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</td>
+                            <td className="py-2 text-right">
+                              {editingRaId === ra.id ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={editRaAmount}
+                                  onChange={(e) => setEditRaAmount(e.target.value)}
+                                  className="w-20 bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface text-right focus:outline-none focus:border-cm-primary/40"
+                                />
+                              ) : (
+                                <span className="font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</span>
+                              )}
+                            </td>
                             <td className="py-2 text-right text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{fmtCurrency(ra.originalTotal)}</td>
                             <td className="py-2 text-center">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium font-[family-name:var(--font-inter)] ${
@@ -4491,73 +4535,139 @@ export default function AdminDashboard() {
                                 {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
                               </span>
                             </td>
-                            <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px] truncate">{ra.reason || '-'}</td>
+                            <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px]">
+                              {editingRaId === ra.id ? (
+                                <input
+                                  type="text"
+                                  value={editRaReason}
+                                  onChange={(e) => setEditRaReason(e.target.value)}
+                                  className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+                                />
+                              ) : (
+                                <span className="truncate block">{ra.reason || '-'}</span>
+                              )}
+                            </td>
                             <td className="py-2 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                {ra.status === 'retained' ? (
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        const res = await fetch('/api/retained-advances', {
-                                          method: 'PUT',
-                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
-                                        })
-                                        if (res.ok) {
-                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
-                                          fetchData()
+                                {editingRaId === ra.id ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const newAmount = parseFloat(editRaAmount)
+                                        if (isNaN(newAmount) || newAmount < 0) {
+                                          toast({ title: 'Error', description: 'Monto inválido', variant: 'destructive' })
+                                          return
                                         }
-                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
-                                    }}
-                                    className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
-                                    title="Marcar como devuelto"
-                                  >
-                                    <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
-                                  </button>
+                                        try {
+                                          const updateBody: Record<string, unknown> = { id: ra.id, bookingId: ra.bookingId, amount: newAmount, reason: editRaReason }
+                                          const res = await fetch('/api/retained-advances', {
+                                            method: 'PUT',
+                                            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(updateBody),
+                                          })
+                                          if (res.ok) {
+                                            toast({ title: 'Actualizado', description: 'Registro de adelanto actualizado' })
+                                            setEditingRaId(null)
+                                            fetchData()
+                                          } else {
+                                            const err = await res.json().catch(() => ({}))
+                                            toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar', variant: 'destructive' })
+                                          }
+                                        } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                      }}
+                                      className="p-1 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
+                                      title="Guardar cambios"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">check</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingRaId(null)}
+                                      className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                      title="Cancelar edición"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">close</span>
+                                    </button>
+                                  </>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        const res = await fetch('/api/retained-advances', {
-                                          method: 'PUT',
-                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
-                                        })
-                                        if (res.ok) {
-                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
-                                          fetchData()
-                                        }
-                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
-                                    }}
-                                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
-                                    title="Marcar como retenido"
-                                  >
-                                    <span className="material-symbols-outlined text-[14px]">lock</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setEditingRaId(ra.id); setEditRaAmount(String(ra.amount)); setEditRaReason(ra.reason || '') }}
+                                      className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                      title="Editar monto/motivo"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                                    </button>
+                                    {ra.status === 'retained' ? (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como devuelto al cliente?`)) return
+                                          try {
+                                            const res = await fetch('/api/retained-advances', {
+                                              method: 'PUT',
+                                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
+                                            })
+                                            if (res.ok) {
+                                              toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
+                                              fetchData()
+                                            }
+                                          } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                        }}
+                                        className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                        title="Marcar como devuelto"
+                                      >
+                                        <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como retenido en caja?`)) return
+                                          try {
+                                            const res = await fetch('/api/retained-advances', {
+                                              method: 'PUT',
+                                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
+                                            })
+                                            if (res.ok) {
+                                              toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
+                                              fetchData()
+                                            }
+                                          } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                        }}
+                                        className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+                                        title="Marcar como retenido"
+                                      >
+                                        <span className="material-symbols-outlined text-[14px]">lock</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (!confirm('Eliminar este registro de adelanto?')) return
+                                        try {
+                                          const res = await fetch('/api/retained-advances', {
+                                            method: 'PUT',
+                                            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, action: 'delete' }),
+                                          })
+                                          if (res.ok) {
+                                            toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+                                            fetchData()
+                                          }
+                                        } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+                                      }}
+                                      className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                      title="Eliminar registro"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                                    </button>
+                                  </>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (!confirm('Eliminar este registro de adelanto?')) return
-                                    try {
-                                      const res = await fetch('/api/retained-advances', {
-                                        method: 'PUT',
-                                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ id: ra.id, action: 'delete' }),
-                                      })
-                                      if (res.ok) {
-                                        toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
-                                        fetchData()
-                                      }
-                                    } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
-                                  }}
-                                  className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                                  title="Eliminar registro"
-                                >
-                                  <span className="material-symbols-outlined text-[14px]">delete</span>
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -4565,6 +4675,36 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  {/* FIX Bug #4: Pagination */}
+                  {retainedAdvances.length > 8 && (
+                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/5">
+                      <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                        Mostrando {(raPage - 1) * 8 + 1}-{Math.min(raPage * 8, retainedAdvances.length)} de {retainedAdvances.length}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={raPage <= 1}
+                          onClick={() => setRaPage((p) => p - 1)}
+                          className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >Anterior</button>
+                        {Array.from({ length: Math.ceil(retainedAdvances.length / 8) }, (_, i) => i + 1).slice(Math.max(0, raPage - 3), raPage + 2).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setRaPage(p)}
+                            className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${p === raPage ? 'bg-cm-primary text-white' : 'text-cm-on-surface-variant hover:bg-white/5'}`}
+                          >{p}</button>
+                        ))}
+                        <button
+                          type="button"
+                          disabled={raPage >= Math.ceil(retainedAdvances.length / 8)}
+                          onClick={() => setRaPage((p) => p + 1)}
+                          className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >Siguiente</button>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 

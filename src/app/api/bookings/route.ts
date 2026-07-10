@@ -866,6 +866,9 @@ export async function PUT(request: NextRequest) {
     // B11 FIX: Track if this is a cancellation to skip advance payment record
     const isCancelling = status === 'cancelled' || (status && migrateStatus(status) === 'cancelled');
 
+    // FIX Bug #9: Track warnings to return to frontend
+    const warningFlags: string[] = [];
+
     // When cancelling a booking with advance, handle retained/refunded advance
     // Only create retained advance records when an admin explicitly provides advanceAction
     // (user-side cancellations should NOT auto-create records — the admin decides later)
@@ -883,70 +886,83 @@ export async function PUT(request: NextRequest) {
       }
 
       if (isAdminCancellation) {
-      try {
-        if (bookingForCancel && ((bookingForCancel.advance_amount as number) || 0) > 0) {
-          // Bug #4: Check for duplicate retained advance
-          const { getRetainedAdvances } = await import('@/lib/db');
-          const existing = await getRetainedAdvances({ bookingId: id });
-          if (existing.length > 0) {
-            console.warn('[BOOKINGS] Retained advance already exists for booking', id, '- skipping creation');
-          } else {
-          const advAmount = (bookingForCancel.advance_amount as number) || 0;
-          const isRetained = advanceAction === 'retain';
-          const statusAdvance = isRetained ? 'retained' : 'refunded';
+        try {
+          if (bookingForCancel && ((bookingForCancel.advance_amount as number) || 0) > 0) {
+            const advAmount = (bookingForCancel.advance_amount as number) || 0;
+            const isRetained = advanceAction === 'retain';
+            const statusAdvance = isRetained ? 'retained' : 'refunded';
 
-          // Get court name for the record
-          let courtName = '';
-          try {
-            const cId = (bookingForCancel.court_ids as string[])?.[0] || (bookingForCancel.court_id as string) || '';
-            if (cId) {
-              const court = await getCourtById(cId);
-              courtName = (court?.name as string) || '';
+            // Check for duplicate retained advance
+            const { getRetainedAdvances } = await import('@/lib/db');
+            const existing = await getRetainedAdvances({ bookingId: id });
+            if (existing.length > 0) {
+              console.warn('[BOOKINGS] Retained advance already exists for booking', id, '- skipping creation');
+            } else {
+              // Get court name for the record
+              let courtName = '';
+              try {
+                const cId = (bookingForCancel.court_ids as string[])?.[0] || (bookingForCancel.court_id as string) || '';
+                if (cId) {
+                  const court = await getCourtById(cId);
+                  courtName = (court?.name as string) || '';
+                }
+              } catch { /* non-critical */ }
+
+              // Get user name
+              let userName = '';
+              let userEmail = (bookingForCancel.user_email as string) || null;
+              try {
+                const uId = bookingForCancel.user_id as string;
+                if (uId) {
+                  const user = await getUserById(uId);
+                  userName = (user?.name as string) || '';
+                  // FIX Bug #8: Fallback userEmail from user doc if missing in booking
+                  if (!userEmail) {
+                    userEmail = (user?.email as string) || null;
+                  }
+                }
+              } catch { /* non-critical */ }
+
+              // Create retained advance record
+              try {
+                await createRetainedAdvance({
+                  booking_id: id,
+                  user_id: (bookingForCancel.user_id as string) || '',
+                  user_name: userName,
+                  user_email: userEmail,
+                  court_name: courtName,
+                  booking_date: (bookingForCancel.date as string) || '',
+                  amount: advAmount,
+                  original_total: (bookingForCancel.total_price as number) || 0,
+                  payment_method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
+                  reason: cancelReason || 'Cancelación de reserva',
+                  status: statusAdvance,
+                });
+              } catch (raErr) {
+                console.error('[BOOKINGS] Error: could not create retained advance record:', raErr);
+                warningFlags.push('retained_advance_failed');
+              }
+
+              // Create a payment record for the refund/retention
+              try {
+                await createPayment(id, {
+                  user_id: (bookingForCancel.user_id as string) || '',
+                  amount: advAmount,
+                  type: isRetained ? 'retained' : 'refund',
+                  method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
+                  status: 'completed',
+                });
+              } catch (payErr) {
+                console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
+                warningFlags.push('payment_record_failed');
+              }
             }
-          } catch { /* non-critical */ }
-
-          // Get user name
-          let userName = '';
-          try {
-            const uId = bookingForCancel.user_id as string;
-            if (uId) {
-              const user = await getUserById(uId);
-              userName = (user?.name as string) || '';
-            }
-          } catch { /* non-critical */ }
-
-          await createRetainedAdvance({
-            booking_id: id,
-            user_id: (bookingForCancel.user_id as string) || '',
-            user_name: userName,
-            user_email: (bookingForCancel.user_email as string) || null,
-            court_name: courtName,
-            booking_date: (bookingForCancel.date as string) || '',
-            amount: advAmount,
-            original_total: (bookingForCancel.total_price as number) || 0,
-            payment_method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
-            reason: cancelReason || 'Cancelación de reserva',
-            status: statusAdvance,
-          });
-
-          // Create a payment record for the refund/retention
-          try {
-            await createPayment(id, {
-              user_id: (bookingForCancel.user_id as string) || '',
-              amount: advAmount,
-              type: isRetained ? 'retained' : 'refund',
-              method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
-              status: 'completed',
-            });
-          } catch (payErr) {
-            console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
           }
-          }
+        } catch (err) {
+          console.error('[BOOKINGS] Warning: could not process retained advance on cancellation:', err);
+          warningFlags.push('retained_advance_failed');
         }
-      } catch (err) {
-        console.error('[BOOKINGS] Warning: could not process retained advance on cancellation:', err);
       }
-      } // end isAdminCancellation
     }
 
     // B11 FIX: Skip advance payment record when cancelling or editBooking (handled above / no record needed)
@@ -975,6 +991,10 @@ export async function PUT(request: NextRequest) {
 
     await updateBooking(id, updateData);
 
+    // FIX Bug #9: Return warnings if any
+    if (warningFlags.length > 0) {
+      return NextResponse.json({ success: true, warnings: warningFlags });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[BOOKINGS] PUT error:', error);

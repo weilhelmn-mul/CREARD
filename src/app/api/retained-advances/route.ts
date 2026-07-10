@@ -154,6 +154,27 @@ export async function PUT(request: NextRequest) {
     }
 
     if (action === 'delete') {
+      // FIX Bug #5: Also delete the associated payment record
+      const bookingId = body.bookingId;
+      if (bookingId) {
+        try {
+          const { getAdminDb } = await import('@/lib/firebase-admin');
+          const db = await getAdminDb();
+          const paySnapshot = await db
+            .collection('bookings')
+            .doc(bookingId as string)
+            .collection('payments')
+            .where('type', 'in', ['retained', 'refund'])
+            .limit(1)
+            .get();
+          for (const payDoc of paySnapshot.docs) {
+            await payDoc.ref.delete();
+            console.log(`[RETAINED-ADVANCES] Deleted payment ${payDoc.id} for booking ${bookingId}`);
+          }
+        } catch (delPayErr) {
+          console.error('[RETAINED-ADVANCES] Warning: could not delete associated payment:', delPayErr);
+        }
+      }
       await deleteRetainedAdvance(id);
       return NextResponse.json({ success: true });
     }
@@ -179,6 +200,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // B17 FIX: Sync payment record when status changes
+    // FIX Bug #6: Only sync the most recent matching payment (limit 1)
     if (updateData.status && updateData.bookingId) {
       try {
         const { getAdminDb } = await import('@/lib/firebase-admin');
@@ -189,6 +211,7 @@ export async function PUT(request: NextRequest) {
           .doc(updateData.bookingId as string)
           .collection('payments')
           .where('type', 'in', ['retained', 'refund'])
+          .limit(1)
           .get();
         for (const payDoc of paySnapshot.docs) {
           const payData = payDoc.data();
