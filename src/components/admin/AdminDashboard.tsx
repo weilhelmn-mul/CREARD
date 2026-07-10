@@ -2483,19 +2483,7 @@ export default function AdminDashboard() {
         const raRes = await fetch('/api/retained-advances', { headers })
         if (raRes.ok) {
           const raData = await raRes.json()
-          const allAdvances = Array.isArray(raData.advances) ? raData.advances : []
-          // FIX Bug #3: Filter to current month for accurate Finanzas display
-          const now = new Date()
-          const currentMonth = now.getMonth()
-          const currentYear = now.getFullYear()
-          const filtered = allAdvances.filter((ra: RetainedAdvance) => {
-            if (!ra.createdAt) return true // keep if no date
-            try {
-              const d = new Date(ra.createdAt)
-              return d.getMonth() === currentMonth && d.getFullYear() === currentYear
-            } catch { return true }
-          })
-          setRetainedAdvances(filtered)
+          setRetainedAdvances(Array.isArray(raData.advances) ? raData.advances : [])
           setRaPage(1)
         }
       } catch (err) { console.error('[AdminDashboard] Error loading retained advances:', err) }
@@ -4484,7 +4472,7 @@ export default function AdminDashboard() {
                       <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
                       <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Historial de Adelantos por Cancelaciones</h3>
                     </div>
-                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros (mes actual)</span>
+                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
                   </div>
                   <div className="overflow-x-auto -mx-4 px-4">
                     <table className="w-full text-xs">
