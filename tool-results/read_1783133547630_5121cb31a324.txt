@@ -1,0 +1,602 @@
+     1→  3200→    if (!editForm.startTime) return allTimeSlots
+     2→  3201→    return allTimeSlots.filter(s => s > editForm.startTime)
+     3→  3202→  }, [editForm.startTime, allTimeSlots])
+     4→  3203→
+     5→  3204→  const recalcEditCourtPrice = () => {
+     6→  3205→    if (editPriceManual) return
+     7→  3206→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+     8→  3207→    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+     9→  3208→    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+    10→  3209→    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    11→  3210→    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    12→  3211→    if (grandTotal > 0) {
+    13→  3212→      setEditForm(prev => ({ ...prev, totalPrice: String(grandTotal) }))
+    14→  3213→    }
+    15→  3214→  }
+    16→  3215→
+    17→  3216→  const handleEditFormChange = (field: string, value: string | string[]) => {
+    18→  3217→    if (field === 'totalPrice') setEditPriceManual(true)
+    19→  3218→    setEditForm(prev => {
+    20→  3219→      const updated = { ...prev, [field]: value }
+    21→  3220→      if (!editPriceManual && (field === 'courtId' || field === 'startTime' || field === 'endTime' || field === 'courtIds')) {
+    22→  3221→        const ids = Array.isArray(value) ? value : (updated.courtIds.length > 0 ? updated.courtIds : (updated.courtId ? [updated.courtId] : []))
+    23→  3222→        if (ids.length > 0 && updated.startTime && updated.endTime) {
+    24→  3223→          const courtPrice = calculateMultiCourtPrice(ids, updated.startTime, updated.endTime)
+    25→  3224→          const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    26→  3225→          const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    27→  3226→          updated.totalPrice = String(grandTotal)
+    28→  3227→        }
+    29→  3228→      }
+    30→  3229→      return updated
+    31→  3230→    })
+    32→  3231→    if (field === 'startTime' || field === 'endTime' || field === 'courtId' || field === 'courtIds') {
+    33→  3232→      setEditPriceManual(false)
+    34→  3233→    }
+    35→  3234→  }
+    36→  3235→
+    37→  3236→  const toggleEditCourt = (cId: string) => {
+    38→  3237→    const ids = editForm.courtIds
+    39→  3238→    const isSelected = ids.includes(cId)
+    40→  3239→    const newIds = isSelected ? ids.filter(id => id !== cId) : [...ids, cId]
+    41→  3240→    handleEditFormChange('courtIds', newIds)
+    42→  3241→    handleEditFormChange('courtId', newIds[0] || '')
+    43→  3242→  }
+    44→  3243→
+    45→  3244→  const addEditEquip = (eq: Equipment) => {
+    46→  3245→    const existing = editEquipItems.find(i => i.equipmentId === eq.id)
+    47→  3246→    if (existing) {
+    48→  3247→      if (existing.quantity < eq.stock) {
+    49→  3248→        setEditEquipItems(editEquipItems.map(i =>
+    50→  3249→          i.equipmentId === eq.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.unitPrice } : i
+    51→  3250→        ))
+    52→  3251→      }
+    53→  3252→    } else if (eq.stock > 0) {
+    54→  3253→      setEditEquipItems([...editEquipItems, { equipmentId: eq.id, name: eq.name, quantity: 1, unitPrice: eq.pricePerRental, subtotal: eq.pricePerRental }])
+    55→  3254→    }
+    56→  3255→  }
+    57→  3256→
+    58→  3257→  const removeEditEquip = (eqId: string) => {
+    59→  3258→    setEditEquipItems(editEquipItems.filter(i => i.equipmentId !== eqId))
+    60→  3259→  }
+    61→  3260→
+    62→  3261→  const updateEditEquipQty = (eqId: string, qty: number, stock: number) => {
+    63→  3262→    const clamped = Math.max(1, Math.min(qty, stock))
+    64→  3263→    setEditEquipItems(editEquipItems.map(i =>
+    65→  3264→      i.equipmentId === eqId ? { ...i, quantity: clamped, subtotal: clamped * i.unitPrice } : i
+    66→  3265→    ))
+    67→  3266→  }
+    68→  3267→
+    69→  3268→  // Recalc price when equipment changes
+    70→  3269→  useEffect(() => {
+    71→  3270→    if (editPriceManual || !showEditModal) return
+    72→  3271→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+    73→  3272→    if (ids.length === 0 || !editForm.startTime || !editForm.endTime) return
+    74→  3273→    const courtPrice = calculateMultiCourtPrice(ids, editForm.startTime, editForm.endTime)
+    75→  3274→    const eqTotal = editEquipItems.reduce((s, i) => s + i.subtotal, 0)
+    76→  3275→    const grandTotal = Math.round((courtPrice + eqTotal) * 100) / 100
+    77→  3276→    if (grandTotal > 0) {
+    78→  3277→      setEditForm(prev => {
+    79→  3278→        if (editPriceManual) return prev
+    80→  3279→        return { ...prev, totalPrice: String(grandTotal) }
+    81→  3280→      })
+    82→  3281→    }
+    83→  3282→  }, [editEquipItems])
+    84→  3283→
+    85→  3284→  const filteredEditUsers = useMemo(() => {
+    86→  3285→    if (!editClientSearch) return bookingUsers
+    87→  3286→    const q = editClientSearch.toLowerCase()
+    88→  3287→    return bookingUsers.filter(u =>
+    89→  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+    90→  3289→    )
+    91→  3290→  }, [editClientSearch, bookingUsers])
+    92→  3291→
+    93→  3292→  const openEditModal = (booking: Booking) => {
+    94→  3293→    setEditTarget(booking)
+    95→  3294→    const cIds = booking.courtIds && booking.courtIds.length > 0 ? booking.courtIds : [booking.courtId]
+    96→  3295→    setEditForm({
+    97→  3296→      courtId: booking.courtId,
+    98→  3297→      courtIds: cIds,
+    99→  3298→      userId: booking.userId,
+   100→  3299→      date: booking.date,
+   101→  3300→      startTime: booking.startTime,
+   102→  3301→      endTime: booking.endTime,
+   103→  3302→      totalPrice: String(booking.totalPrice),
+   104→  3303→      advanceAmount: String(booking.advanceAmount),
+   105→  3304→      paymentMethod: booking.paymentMethod || 'EFECTIVO',
+   106→  3305→      notes: (booking as Record<string, unknown>).notes as string || '',
+   107→  3306→      status: booking.status || 'reserved',
+   108→  3307→    })
+   109→  3308→    setEditEquipItems((booking.equipmentItems || []).map(e => ({ equipmentId: e.equipmentId, name: e.name, quantity: e.quantity, unitPrice: e.unitPrice, subtotal: e.subtotal })))
+   110→  3309→    setEditPriceManual(false)
+   111→  3310→    setEditClientSearch('')
+   112→  3311→    setEditEquipOpen(false)
+   113→  3312→    setShowEditModal(true)
+   114→  3313→  }
+   115→  3314→
+   116→  3315→  const handleSubmitEdit = async () => {
+   117→  3316→    if (!editTarget) return
+   118→  3317→    const ids = editForm.courtIds.length > 0 ? editForm.courtIds : (editForm.courtId ? [editForm.courtId] : [])
+   119→  3318→    if (ids.length === 0) { toast({ title: 'Error', description: 'Selecciona al menos una cancha', variant: 'destructive' }); return }
+   120→  3319→    if (!editForm.userId) { toast({ title: 'Error', description: 'Selecciona un cliente', variant: 'destructive' }); return }
+   121→  3320→    if (!editForm.date) { toast({ title: 'Error', description: 'Selecciona una fecha', variant: 'destructive' }); return }
+   122→  3321→    if (!editForm.startTime || !editForm.endTime) { toast({ title: 'Error', description: 'Selecciona hora de inicio y fin', variant: 'destructive' }); return }
+   123→  3322→    if (editForm.startTime >= editForm.endTime) { toast({ title: 'Error', description: 'La hora de fin debe ser posterior a la de inicio', variant: 'destructive' }); return }
+   124→  3323→    const parsedTotal = parseFloat(editForm.totalPrice) || 0
+   125→  3324→    if (parsedTotal <= 0) { toast({ title: 'Error', description: 'El total debe ser mayor a 0', variant: 'destructive' }); return }
+   126→  3325→    const parsedAdvance = parseFloat(editForm.advanceAmount) || 0
+   127→  3326→
+   128→  3327→    setSubmittingEdit(true)
+   129→  3328→    try {
+   130→  3329→      const res = await fetch('/api/bookings', {
+   131→  3330→        method: 'PUT',
+   132→  3331→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   133→  3332→        body: JSON.stringify({
+   134→  3333→          id: editTarget.id,
+   135→  3334→          courtIds: ids,
+   136→  3335→          userId: editForm.userId,
+   137→  3336→          date: editForm.date,
+   138→  3337→          startTime: editForm.startTime,
+   139→  3338→          endTime: editForm.endTime,
+   140→  3339→          totalPrice: parsedTotal,
+   141→  3340→          advanceAmount: parsedAdvance,
+   142→  3341→          remainingAmount: Math.max(0, parsedTotal - parsedAdvance),
+   143→  3342→          paymentMethod: editForm.paymentMethod,
+   144→  3343→          status: editForm.status,
+   145→  3344→          notes: editForm.notes || null,
+   146→  3345→          equipmentItems: editEquipItems.map(i => ({ equipment_id: i.equipmentId, name: i.name, quantity: i.quantity, unit_price: i.unitPrice })),
+   147→  3346→          editBooking: true,
+   148→  3347→        }),
+   149→  3348→      })
+   150→  3349→      if (res.ok) {
+   151→  3350→        toast({ title: 'Reserva actualizada', description: 'Todos los cambios fueron guardados correctamente.' })
+   152→  3351→        setShowEditModal(false)
+   153→  3352→        setEditTarget(null)
+   154→  3353→        fetchData()
+   155→  3354→      } else {
+   156→  3355→        const err = await res.json()
+   157→  3356→        toast({ title: 'Error', description: err.error || 'No se pudo actualizar la reserva', variant: 'destructive' })
+   158→  3357→      }
+   159→  3358→    } catch {
+   160→  3359→      toast({ title: 'Error', description: 'No se pudo actualizar la reserva', variant: 'destructive' })
+   161→  3360→    } finally {
+   162→  3361→      setSubmittingEdit(false)
+   163→  3362→    }
+   164→  3363→  }
+   165→  3364→
+   166→  3365→  // B16 FIX: Use useMemo instead of IIFE for filtered bookings
+   167→  3366→  const filteredBookings = useMemo(() => {
+   168→  3367→    let result = statusFilter === 'all' ? [...bookings] : bookings.filter((b) => b.status === statusFilter)
+   169→  3368→    const afterStatus = result.length;
+   170→  3369→    // Hide past bookings unless toggle is on
+   171→  3370→    if (!showPastBookings) {
+   172→  3371→      const today = todayStr();
+   173→  3372→      const beforeDate = result.length;
+   174→  3373→      result = result.filter((b) => {
+   175→  3374→        const ok = typeof b.date === 'string' && b.date >= today;
+   176→  3375→        if (!ok) console.debug('[Filter] Excluded past booking:', b.id, 'date=', b.date, 'typeof=', typeof b.date, 'today=', today);
+   177→  3376→        return ok;
+   178→  3377→      });
+   179→  3378→      if (beforeDate > 0 && result.length === 0) {
+   180→  3379→        console.warn(`[Filter] showPastBookings=false removed ALL ${beforeDate} bookings. Today(Lima)=`, today)
+   181→  3380→      }
+   182→  3381→    }
+   183→  3382→    if (searchQuery.trim()) {
+   184→  3383→      const q = searchQuery.toLowerCase()
+   185→  3384→      result = result.filter((b) =>
+   186→  3385→        b.user?.name?.toLowerCase().includes(q) ||
+   187→  3386→        b.user?.email?.toLowerCase().includes(q) ||
+   188→  3387→        b.court?.name?.toLowerCase().includes(q) ||
+   189→  3388→        b.id.toLowerCase().includes(q) ||
+   190→  3389→        (b.courts && b.courts.some((c) => c.name?.toLowerCase().includes(q)))
+   191→  3390→      )
+   192→  3391→    }
+   193→  3392→    if (dateFrom) result = result.filter((b) => b.date >= dateFrom)
+   194→  3393→    if (dateTo) result = result.filter((b) => b.date <= dateTo)
+   195→  3394→    if (courtFilter !== 'all') result = result.filter((b) => b.courtId === courtFilter || (b.courtIds && b.courtIds.includes(courtFilter)))
+   196→  3395→    if (sportFilter !== 'all') result = result.filter((b) => b.court?.sport === sportFilter || (b.courts && b.courts.some((c) => c.sport === sportFilter)))
+   197→  3396→    switch (sortBy) {
+   198→  3397→      case 'date_desc': {
+   199→  3398→        const today = todayStr();
+   200→  3399→        result.sort((a, b) => {
+   201→  3400→          const aIsToday = a.date === today, bIsToday = b.date === today;
+   202→  3401→          const aFuture = a.date > today, bFuture = b.date > today;
+   203→  3402→          const aPast = a.date < today, bPast = b.date < today;
+   204→  3403→          // 1) Today always first
+   205→  3404→          if (aIsToday && !bIsToday) return -1;
+   206→  3405→          if (!aIsToday && bIsToday) return 1;
+   207→  3406→          // 2) Both on same side of today
+   208→  3407→          if (aFuture && bFuture) {
+   209→  3408→            const dc = a.date.localeCompare(b.date);
+   210→  3409→            if (dc !== 0) return dc;
+   211→  3410→          } else if (aPast && bPast) {
+   212→  3411→            const dc = b.date.localeCompare(a.date);
+   213→  3412→            if (dc !== 0) return dc;
+   214→  3413→          }
+   215→  3414→          // Same date: chronological by start time
+   216→  3415→          return a.startTime.localeCompare(b.startTime);
+   217→  3416→        });
+   218→  3417→        break;
+   219→  3418→      }
+   220→  3419→      case 'date_asc': {
+   221→  3420→        // Strict ascending date order (correlativo)
+   222→  3421→        result.sort((a, b) => {
+   223→  3422→          const dc = a.date.localeCompare(b.date);
+   224→  3423→          if (dc !== 0) return dc;
+   225→  3424→          return a.startTime.localeCompare(b.startTime);
+   226→  3425→        });
+   227→  3426→        break;
+   228→  3427→      }
+   229→  3428→      case 'price_desc': result.sort((a, b) => b.totalPrice - a.totalPrice); break
+   230→  3429→      case 'price_asc': result.sort((a, b) => a.totalPrice - b.totalPrice); break
+   231→  3430→      case 'name_asc': result.sort((a, b) => (a.user?.name || '').localeCompare(b.user?.name || '')); break
+   232→  3431→    }
+   233→  3432→    return result
+   234→  3433→  }, [bookings, statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
+   235→  3434→
+   236→  3435→  const activeFilterCount = [searchQuery, dateFrom, dateTo, courtFilter !== 'all' && courtFilter, sportFilter !== 'all' && sportFilter].filter(Boolean).length
+   237→  3436→
+   238→  3437→  const clearAllFilters = () => {
+   239→  3438→    setSearchQuery('')
+   240→  3439→    setDateFrom('')
+   241→  3440→    setDateTo('')
+   242→  3441→    setCourtFilter('all')
+   243→  3442→    setSportFilter('all')
+   244→  3443→  }
+   245→  3444→
+   246→  3445→  // B14 FIX: Use actual paid amount (advance) for completed, not totalPrice
+   247→  3446→  // B13 FIX: Widen date range to 365 days for accurate Finanzas
+   248→  3447→  const completedIncome = bookings
+   249→  3448→    .filter((b) => b.status === 'completed')
+   250→  3449→    .reduce((s, b) => s + b.advanceAmount, 0)
+   251→  3450→  const reservedAdvances = bookings
+   252→  3451→    .filter((b) => b.status === 'reserved')
+   253→  3452→    .reduce((s, b) => s + b.advanceAmount, 0)
+   254→  3453→  const totalIncome = completedIncome + reservedAdvances
+   255→  3454→
+   256→  3455→  // Retained advances (adelantos de reservas canceladas que se quedaron en caja)
+   257→  3456→  const retainedTotal = retainedAdvances
+   258→  3457→    .filter((ra) => ra.status === 'retained')
+   259→  3458→    .reduce((s, ra) => s + ra.amount, 0)
+   260→  3459→  const refundedTotal = retainedAdvances
+   261→  3460→    .filter((ra) => ra.status === 'refunded')
+   262→  3461→    .reduce((s, ra) => s + ra.amount, 0)
+   263→  3462→
+   264→  3463→  // Real money in box = normal income + retained advances (refunded is informational only —
+   265→  3464→  // the booking was already removed from totalIncome when cancelled, so subtracting again
+   266→  3465→  // would double-count the outflow).
+   267→  3466→  const effectiveIncome = totalIncome + retainedTotal
+   268→  3467→  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
+   269→  3468→  const balance = effectiveIncome - totalExpenses
+   270→  3469→
+   271→  3470→  const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
+   272→  3471→    acc[e.category] = (acc[e.category] || 0) + e.amount
+   273→  3472→    return acc
+   274→  3473→  }, {})
+   275→  3474→
+   276→  3475→  /* user stats from bookings */
+   277→  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+   278→  3477→    if (!b.user || !b.user.id) return acc
+   279→  3478→    if (!acc[b.user.id]) {
+   280→  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+   281→  3480→    }
+   282→  3481→    acc[b.user.id].bookingCount++
+   283→  3482→    if (b.status === 'completed') {
+   284→  3483→      acc[b.user.id].totalSpent += b.totalPrice
+   285→  3484→    }
+   286→  3485→    return acc
+   287→  3486→  }, {})
+   288→  3487→  const rankedUsers = Object.values(userStats).sort((a, b) => b.totalSpent - a.totalSpent)
+   289→  3488→
+   290→  3489→  /* ─── actions ─── */
+   291→  3490→  const handleUpdateStatus = async (id: string, status: string, advanceAction?: 'retain' | 'refund', cancelReason?: string): Promise<boolean> => {
+   292→  3491→    try {
+   293→  3492→      const body: Record<string, unknown> = { id, status }
+   294→  3493→      if (status === 'cancelled' && advanceAction) {
+   295→  3494→        body.advanceAction = advanceAction
+   296→  3495→        body.cancelReason = cancelReason || ''
+   297→  3496→      }
+   298→  3497→      const res = await fetch('/api/bookings', {
+   299→  3498→        method: 'PUT',
+   300→  3499→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   301→  3500→        body: JSON.stringify(body),
+   302→  3501→      })
+   303→  3502→      if (res.ok) {
+   304→  3503→        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)))
+   305→  3504→        toast({ title: 'Estado actualizado', description: `Reserva marcada como ${statusConfig[status]?.label || status}` })
+   306→  3505→        fetchData()
+   307→  3506→        return true
+   308→  3507→      } else {
+   309→  3508→        const err = await res.json().catch(() => ({}))
+   310→  3509→        toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar el estado', variant: 'destructive' })
+   311→  3510→        return false
+   312→  3511→      }
+   313→  3512→    } catch {
+   314→  3513→      toast({ title: 'Error', description: 'No se pudo actualizar el estado', variant: 'destructive' })
+   315→  3514→      return false
+   316→  3515→    }
+   317→  3516→  }
+   318→  3517→
+   319→  3518→  const handleStatusChangeWithAdvanceCheck = (booking: Booking, newStatus: string) => {
+   320→  3519→    // B1 FIX: Prevent reverting cancelled/completed back to other statuses
+   321→  3520→    if (booking.status === 'cancelled' && newStatus !== 'cancelled') {
+   322→  3521→      toast({ title: 'Acción bloqueada', description: 'No se puede cambiar el estado de una reserva cancelada.', variant: 'destructive' })
+   323→  3522→      return
+   324→  3523→    }
+   325→  3524→    // B3 FIX: Always confirm cancellation (even with 0 advance)
+   326→  3525→    if (newStatus === 'cancelled') {
+   327→  3526→      if (booking.advanceAmount > 0) {
+   328→  3527→        setCancelTarget(booking)
+   329→  3528→        setCancelAdvanceAction('retain')
+   330→  3529→        setCancelReason('')
+   331→  3530→        setShowCancelDialog(true)
+   332→  3531→      } else {
+   333→  3532→        // Simple confirmation for 0-advance bookings
+   334→  3533→        if (confirm(`¿Cancelar esta reserva de ${booking.user?.name || 'sin nombre'}?`)) {
+   335→  3534→          handleUpdateStatus(booking.id, newStatus)
+   336→  3535→        }
+   337→  3536→      }
+   338→  3537→    } else {
+   339→  3538→      handleUpdateStatus(booking.id, newStatus)
+   340→  3539→    }
+   341→  3540→  }
+   342→  3541→
+   343→  3542→  const handleConfirmCancel = async () => {
+   344→  3543→    if (!cancelTarget) return
+   345→  3544→    setCancellingBooking(true)
+   346→  3545→    const success = await handleUpdateStatus(cancelTarget.id, 'cancelled', cancelAdvanceAction, cancelReason)
+   347→  3546→    if (success) {
+   348→  3547→      setShowCancelDialog(false)
+   349→  3548→      setCancelTarget(null)
+   350→  3549→    }
+   351→  3550→    setCancellingBooking(false)
+   352→  3551→  }
+   353→  3552→
+   354→  3553→  const handleToggleEquipment = async (bookingId: string, field: 'equipmentDelivered' | 'equipmentReturned', value: boolean) => {
+   355→  3554→    try {
+   356→  3555→      const res = await fetch('/api/bookings', {
+   357→  3556→        method: 'PUT',
+   358→  3557→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+   359→  3558→        body: JSON.stringify({ id: bookingId, [field]: value }),
+   360→  3559→      })
+   361→  3560→      if (res.ok) {
+   362→  3561→        setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, [field]: value } : b)))
+   363→  3562→        if (showEquipDetail?.id === bookingId) {
+   364→  3563→          setShowEquipDetail((prev) => prev ? { ...prev, [field]: value } : null)
+   365→  3564→        }
+   366→  3565→      }
+   367→  3566→    } catch {
+   368→  3567→      toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' })
+   369→  3568→    }
+   370→  3569→  }
+   371→  3570→
+   372→  3571→  const handleDeleteBooking = async (bookingId: string) => {
+   373→  3572→    if (!confirm('Eliminar permanentemente esta reserva? Se borrara de la base de datos y no se podra recuperar.')) return
+   374→  3573→    try {
+   375→  3574→      const res = await fetch(`/api/bookings?id=${bookingId}`, {
+   376→  3575→        method: 'DELETE',
+   377→  3576→        headers: getAuthHeaders(),
+   378→  3577→      })
+   379→  3578→      if (res.ok) {
+   380→  3579→        toast({ title: 'Reserva eliminada', description: 'La reserva fue eliminada permanentemente de la base de datos.' })
+   381→  3580→        setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+   382→  3581→        fetchData()
+   383→  3582→      } else {
+   384→  3583→        const err = await res.json()
+   385→  3584→        toast({ title: 'Error', description: err.error || 'No se pudo eliminar la reserva.', variant: 'destructive' })
+   386→  3585→      }
+   387→  3586→    } catch {
+   388→  3587→      toast({ title: 'Error', description: 'No se pudo eliminar la reserva.', variant: 'destructive' })
+   389→  3588→    }
+   390→  3589→  }
+   391→  3590→
+   392→  3591→  const handleAddExpense = async () => {
+   393→  3592→    if (!expForm.description || !expForm.amount || !expForm.category || !expForm.date) {
+   394→  3593→      toast({ title: 'Error', description: 'Completa todos los campos requeridos', variant: 'destructive' })
+   395→  3594→      return
+   396→  3595→    }
+   397→  3596→    setSubmittingExpense(true)
+   398→  3597→    try {
+   399→  3598→      const res = await fetch('/api/expenses', {
+   400→  3599→        method: 'POST',
+   401→  3600→        headers: getAuthHeaders(),
+   402→  3601→        body: JSON.stringify(expForm),
+   403→  3602→      })
+   404→  3603→      if (res.ok) {
+   405→  3604→        toast({ title: 'Gasto registrado', description: `${expForm.description} - ${fmtCurrency(parseFloat(expForm.amount))}` })
+   406→  3605→        setExpForm({ description: '', amount: '', category: 'mantenimiento', date: todayStr(), notes: '' })
+   407→  3606→        setShowExpenseForm(false)
+   408→  3607→        fetchData()
+   409→  3608→      } else {
+   410→  3609→        const err = await res.json()
+   411→  3610→        toast({ title: 'Error', description: err.error || 'No se pudo registrar', variant: 'destructive' })
+   412→  3611→      }
+   413→  3612→    } catch {
+   414→  3613→      toast({ title: 'Error', description: 'No se pudo registrar el gasto', variant: 'destructive' })
+   415→  3614→    } finally {
+   416→  3615→      setSubmittingExpense(false)
+   417→  3616→    }
+   418→  3617→  }
+   419→  3618→
+   420→  3619→  /* schedule bookings for a given date */
+   421→  3620→  const scheduleBookings = bookings.filter((b) => b.date === scheduleDate && b.status !== 'cancelled')
+   422→  3621→    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+   423→  3622→  const scheduleCourts = allCourts.map((c) => ({
+   424→  3623→    ...c,
+   425→  3624→    bookings: scheduleBookings.filter((b) => b.courtId === c.id || (b.courtIds && b.courtIds.includes(c.id))),
+   426→  3625→  }))
+   427→  3626→
+   428→  3627→  /* time slots — admin has NO time restrictions, all slots available for any date (includes :30 for fractional hours) */
+   429→  3628→  const timeSlots = useMemo(() => generateTimeSlots(6, 23, [0, 30]), [])
+   430→  3629→
+   431→  3630→  /* ─── KPIs ─── */
+   432→  3631→  const kpis = [
+   433→  3632→    { label: 'Canchas Ocupadas Hoy', value: todayBookings.length, icon: 'sports_soccer', color: 'text-cm-primary', bg: 'bg-cm-primary/10', sub: `de ${allCourts.length} canchas` },
+   434→  3633→    { label: 'Reservas del Día', value: todayBookings.length, icon: 'event', color: 'text-blue-400', bg: 'bg-blue-500/10', sub: `Hoy ${fmtDate(today)}` },
+   435→  3634→    { label: 'Ingresos del Día', value: fmtCurrency(todayRevenue), icon: 'payments', color: 'text-green-400', bg: 'bg-green-500/10', sub: 'Completados + adelantos' },
+   436→  3635→    { label: 'Pagos Pendientes', value: fmtCurrency(pendingTotal), icon: 'schedule', color: 'text-amber-400', bg: 'bg-amber-500/10', sub: `${pendingPayments.length} reservas` },
+   437→  3636→  ]
+   438→  3637→
+   439→  3638→  if (loading) {
+   440→  3639→    return (
+   441→  3640→      <div className="px-4 py-6">
+   442→  3641→        <div className="max-w-7xl mx-auto animate-pulse space-y-4">
+   443→  3642→          <div className="h-8 bg-cm-surface-container-highest rounded w-1/4" />
+   444→  3643→          <div className="h-10 bg-cm-surface-container-highest rounded-xl" />
+   445→  3644→          <div className="h-64 bg-cm-surface-container-highest rounded-xl" />
+   446→  3645→        </div>
+   447→  3646→      </div>
+   448→  3647→    )
+   449→  3648→  }
+   450→  3649→
+   451→  3650→  /* ═══════════════════════════════════════════════════
+   452→  3651→     RENDER
+   453→  3652→     ═══════════════════════════════════════════════════ */
+   454→  3653→  return (
+   455→  3654→    <div className="px-4 py-6 pb-28">
+   456→  3655→      {/* Notification Banner - always visible */}
+   457→  3656→      <NotificationBanner
+   458→  3657→        alerts={bookingAlerts}
+   459→  3658→        onDismiss={dismissBookingAlert}
+   460→  3659→        onClearAll={clearAllAlerts}
+   461→  3660→      />
+   462→  3661→
+   463→  3662→      <div className="max-w-7xl mx-auto">
+   464→  3663→        {/* Header */}
+   465→  3664→        <div className="flex items-center gap-3 mb-6">
+   466→  3665→          <button type="button"
+   467→  3666→            onClick={() => setView('profile')}
+   468→  3667→            className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+   469→  3668→          >
+   470→  3669→            <span className="material-symbols-outlined">arrow_back</span>
+   471→  3670→          </button>
+   472→  3671→          <div className="flex-1">
+   473→  3672→            <h1 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
+   474→  3673→              Panel de Administracion
+   475→  3674→            </h1>
+   476→  3675→            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
+   477→  3676→              Gestion integral de CREARD
+   478→  3677→            </p>
+   479→  3678→          </div>
+   480→  3679→          {/* Time format toggle + Live alarm indicator */}
+   481→  3680→          <div className="flex items-center gap-2">
+   482→  3681→            <button
+   483→  3682→              type="button"
+   484→  3683→              onClick={() => setUse12hFormat(!use12hFormat)}
+   485→  3684→              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+   486→  3685→              title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+   487→  3686→            >
+   488→  3687→              <span className="material-symbols-outlined text-[16px]">schedule</span>
+   489→  3688→              <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+   490→  3689→            </button>
+   491→  3690→          {notifSettings.enabled && (
+   492→  3691→            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-primary/10 border border-cm-primary/20">
+   493→  3692→              <span className="relative flex h-2.5 w-2.5">
+   494→  3693→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cm-primary opacity-75"></span>
+   495→  3694→                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cm-primary"></span>
+   496→  3695→              </span>
+   497→  3696→              <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">Alarmas activas</span>
+   498→  3697→            </div>
+   499→  3698→          )}
+   500→  3699→          </div>
+   501→  3700→        </div>
+   502→  3701→
+   503→  3702→        {/* Tabs */}
+   504→  3703→        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar">
+   505→  3704→          {adminTabs.map((tab) => (
+   506→  3705→            <button type="button"
+   507→  3706→              key={tab.key}
+   508→  3707→              onClick={() => setActiveTab(tab.key)}
+   509→  3708→              className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+   510→  3709→                activeTab === tab.key
+   511→  3710→                  ? 'bg-cm-primary/10 text-cm-primary font-semibold'
+   512→  3711→                  : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   513→  3712→              }`}
+   514→  3713→            >
+   515→  3714→              <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+   516→  3715→              {tab.label}
+   517→  3716→            </button>
+   518→  3717→          ))}
+   519→  3718→        </div>
+   520→  3719→
+   521→  3720→        {/* ═════════════════ TAB CONTENT ═════════════════ */}
+   522→  3721→        <AnimatePresence mode="wait">
+   523→  3722→          {/* ─── RESERVAS ─── */}
+   524→  3723→          {activeTab === 'reservas' && (
+   525→  3724→            <motion.div key="reservas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   526→  3725→              {/* ─── Live Clock + Alarm Indicator ─── */}
+   527→  3726→              <LiveClock alarmsCount={bookingAlerts.length} settings={notifSettings} />
+   528→  3727→
+   529→  3728→              {/* ─── Filter Bar ─── */}
+   530→  3729→              <div className="glass-card rounded-xl p-4 mb-4">
+   531→  3730→                {/* Top row: search, view toggle, sort, filter toggle */}
+   532→  3731→                <div className="flex flex-col sm:flex-row gap-3">
+   533→  3732→                  {/* Search */}
+   534→  3733→                  <div className="relative flex-1">
+   535→  3734→                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[18px]">search</span>
+   536→  3735→                    <input
+   537→  3736→                      type="text"
+   538→  3737→                      value={searchQuery}
+   539→  3738→                      onChange={(e) => setSearchQuery(e.target.value)}
+   540→  3739→                      placeholder="Buscar por cliente, cancha o ID..."
+   541→  3740→                      className="w-full pl-9 pr-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   542→  3741→                    />
+   543→  3742→                    {searchQuery && (
+   544→  3743→                      <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-white/10 transition-colors">
+   545→  3744→                        <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">close</span>
+   546→  3745→                      </button>
+   547→  3746→                    )}
+   548→  3747→                  </div>
+   549→  3748→
+   550→  3749→                  <div className="flex items-center gap-2">
+   551→  3750→                    {/* Sort dropdown */}
+   552→  3751→                    <select
+   553→  3752→                      value={sortBy}
+   554→  3753→                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+   555→  3754→                      className="bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   556→  3755→                    >
+   557→  3756→                      <option value="date_desc">Más recientes</option>
+   558→  3757→                      <option value="date_asc">Más antiguos</option>
+   559→  3758→                      <option value="price_desc">Mayor precio</option>
+   560→  3759→                      <option value="price_asc">Menor precio</option>
+   561→  3760→                      <option value="name_asc">Cliente A-Z</option>
+   562→  3761→                    </select>
+   563→  3762→
+   564→  3763→                    {/* View mode toggle */}
+   565→  3764→                    <div className="flex bg-cm-surface-container-highest/60 rounded-lg p-0.5">
+   566→  3765→                      <button type="button" onClick={() => setViewMode('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Tabla">
+   567→  3766→                        <span className="material-symbols-outlined text-[18px]">table_list</span>
+   568→  3767→                      </button>
+   569→  3768→                      <button type="button" onClick={() => setViewMode('gallery')} className={`p-1.5 rounded-md transition-all ${viewMode === 'gallery' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Galería">
+   570→  3769→                        <span className="material-symbols-outlined text-[18px]">grid_view</span>
+   571→  3770→                      </button>
+   572→  3771→                      <button type="button" onClick={() => setViewMode('compact')} className={`p-1.5 rounded-md transition-all ${viewMode === 'compact' ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'}`} title="Compacto">
+   573→  3772→                        <span className="material-symbols-outlined text-[18px]">view_agenda</span>
+   574→  3773→                      </button>
+   575→  3774→                    </div>
+   576→  3775→
+   577→  3776→                    {/* Filter toggle */}
+   578→  3777→                    <button type="button"
+   579→  3778→                      onClick={() => setShowFilters(!showFilters)}
+   580→  3779→                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${showFilters || activeFilterCount > 0 ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
+   581→  3780→                    >
+   582→  3781→                      <span className="material-symbols-outlined text-[16px]">{showFilters ? 'filter_list_off' : 'filter_list'}</span>
+   583→  3782→                      Filtros
+   584→  3783→                      {activeFilterCount > 0 && (
+   585→  3784→                        <span className="w-4 h-4 rounded-full bg-cm-primary text-cm-on-primary text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
+   586→  3785→                      )}
+   587→  3786→                    </button>
+   588→  3787→                  </div>
+   589→  3788→                </div>
+   590→  3789→
+   591→  3790→                {/* Advanced filters (collapsible) */}
+   592→  3791→                <AnimatePresence>
+   593→  3792→                  {showFilters && (
+   594→  3793→                    <motion.div
+   595→  3794→                      initial={{ height: 0, opacity: 0 }}
+   596→  3795→                      animate={{ height: 'auto', opacity: 1 }}
+   597→  3796→                      exit={{ height: 0, opacity: 0 }}
+   598→  3797→                      transition={{ duration: 0.2 }}
+   599→  3798→                      className="overflow-hidden"
+   600→  3799→                    >
+
+[showing lines 1-600 of 602; use offset=601 with limit to continue reading]

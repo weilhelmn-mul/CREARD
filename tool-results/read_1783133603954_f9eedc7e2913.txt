@@ -1,0 +1,602 @@
+  4100→                        </div>
+  4101→                      </motion.div>
+  4102→                    )
+  4103→                  })}
+  4104→                </div>
+  4105→              ) : (
+  4106→                /* ─── COMPACT MODE ─── */
+  4107→                <div className="space-y-2">
+  4108→                  {filteredBookings.map((b, i) => {
+  4109→                    const st = statusConfig[b.status] || statusConfig.reserved
+  4110→                    const isCCompleted = b.status === 'completed'
+  4111→                    const calertLv = getAlertLevel(b.id)
+  4112→                    const compactBorder = isCCompleted
+  4113→                      ? 'border-green-400/40 shadow-[0_0_12px_rgba(34,197,94,0.1),0_0_3px_rgba(34,197,94,0.25)] animate-glow-green-row relative overflow-hidden'
+  4114→                      : calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
+  4115→                    return (
+  4116→                      <motion.div
+  4117→                        key={b.id}
+  4118→                        initial={{ opacity: 0, x: -10 }}
+  4119→                        animate={{ opacity: 1, x: 0 }}
+  4120→                        transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
+  4121→                        className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
+  4122→                      >
+  4123→                        {isCCompleted && (
+  4124→                          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
+  4125→                        )}
+  4126→                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+  4127→                          {/* Date & Time */}
+  4128→                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
+  4129→                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
+  4130→                            <div>
+  4131→                              <div className="flex items-center gap-1">
+  4132→                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+  4133→                                {b.recurringGroupId && (
+  4134→                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+  4135→                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
+  4136→                                  </button>
+  4137→                                )}
+  4138→                              </div>
+  4139→                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
+  4140→                            </div>
+  4141→                          </div>
+  4142→                          {/* Court */}
+  4143→                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
+  4144→                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+  4145→                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
+  4146→                              {b.courtIds && b.courtIds.length > 1
+  4147→                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+  4148→                                : (b.court?.name || 'N/A')}
+  4149→                            </span>
+  4150→                          </div>
+  4151→                          {/* Client */}
+  4152→                          <div className="flex-1 min-w-0 hidden md:block">
+  4153→                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+  4154→                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+  4155→                          </div>
+  4156→                          {/* Status + Price + Action */}
+  4157→                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
+  4158→                            {b.recurringGroupId && (
+  4159→                              <button type="button"
+  4160→                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+  4161→                                className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+  4162→                                title="Ver serie recurrente"
+  4163→                              >
+  4164→                                <span className="material-symbols-outlined text-[14px]">repeat</span>
+  4165→                              </button>
+  4166→                            )}
+  4167→                            {b.status === 'completed' ? (
+  4168→                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+  4169→                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+  4170→                                {st.label}
+  4171→                              </span>
+  4172→                            ) : (
+  4173→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+  4174→                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+  4175→                                {st.label}
+  4176→                              </span>
+  4177→                            )}
+  4178→                            {b.paymentMethod && (
+  4179→                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex">
+  4180→                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+  4181→                                <span>{b.paymentMethod}</span>
+  4182→                              </span>
+  4183→                            )}
+  4184→                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
+  4185→                            {/* B8 FIX: Always show payment button */}
+  4186→                            <button type="button"
+  4187→                              onClick={() => openAdvanceModal(b)}
+  4188→                              className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+  4189→                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+  4190→                            >
+  4191→                              <span className="material-symbols-outlined text-[14px]">payments</span>
+  4192→                            </button>
+  4193→                            {b.status === 'reserved' && (
+  4194→                              <button type="button"
+  4195→                                onClick={() => openExtendModal(b)}
+  4196→                                className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+  4197→                                title="Extender tiempo"
+  4198→                              >
+  4199→                                <span className="material-symbols-outlined text-[14px]">schedule</span>
+  4200→                              </button>
+  4201→                            )}
+  4202→                            {isSuperAdmin && (
+  4203→                              <button type="button"
+  4204→                                onClick={() => openEditModal(b)}
+  4205→                                className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+  4206→                                title="Editar reserva"
+  4207→                              >
+  4208→                                <span className="material-symbols-outlined text-[14px]">edit</span>
+  4209→                              </button>
+  4210→                            )}
+  4211→                            <select
+  4212→                              value={b.status}
+  4213→                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
+  4214→                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4215→                            >
+  4216→                              <option value="reserved">Reservado</option>
+  4217→                              <option value="completed">Completo</option>
+  4218→                              <option value="cancelled">Cancelado</option>
+  4219→                            </select>
+  4220→                            {isSuperAdmin && (
+  4221→                              <button type="button"
+  4222→                                onClick={() => handleDeleteBooking(b.id)}
+  4223→                                className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+  4224→                                title="Eliminar permanentemente"
+  4225→                              >
+  4226→                                <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+  4227→                              </button>
+  4228→                            )}
+  4229→                          </div>
+  4230→                        </div>
+  4231→                      </motion.div>
+  4232→                    )
+  4233→                  })}
+  4234→                </div>
+  4235→              )}
+  4236→            </motion.div>
+  4237→          )}
+  4238→
+  4239→
+  4240→          {/* ─── FINANZAS ─── */}
+  4241→          {activeTab === 'finanzas' && (
+  4242→            <motion.div key="finanzas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-4">
+  4243→              {/* Row 1: Main income cards */}
+  4244→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  4245→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card rounded-xl p-4">
+  4246→                  <div className="flex items-center gap-2 mb-2">
+  4247→                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>account_balance_wallet</span>
+  4248→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Ingresos Totales</span>
+  4249→                  </div>
+  4250→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-primary">{fmtCurrency(totalIncome)}</p>
+  4251→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Completados + adelantos activos</p>
+  4252→                </motion.div>
+  4253→
+  4254→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-xl p-4">
+  4255→                  <div className="flex items-center gap-2 mb-2">
+  4256→                    <span className="material-symbols-outlined text-green-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+  4257→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Servicios Completados</span>
+  4258→                  </div>
+  4259→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(completedIncome)}</p>
+  4260→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Pagos recibidos de completadas</p>
+  4261→                </motion.div>
+  4262→
+  4263→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass-card rounded-xl p-4">
+  4264→                  <div className="flex items-center gap-2 mb-2">
+  4265→                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>savings</span>
+  4266→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelantos Activos</span>
+  4267→                  </div>
+  4268→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-blue-400">{fmtCurrency(reservedAdvances)}</p>
+  4269→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Saldo pendiente de reservas</p>
+  4270→                </motion.div>
+  4271→
+  4272→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card rounded-xl p-4">
+  4273→                  <div className="flex items-center gap-2 mb-2">
+  4274→                    <span className="material-symbols-outlined text-red-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>trending_down</span>
+  4275→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Egresos</span>
+  4276→                  </div>
+  4277→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-red-400">{fmtCurrency(totalExpenses)}</p>
+  4278→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Total de gastos registrados</p>
+  4279→                </motion.div>
+  4280→              </div>
+  4281→
+  4282→              {/* Row 2: Retained advances + Balance */}
+  4283→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  4284→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-xl p-4">
+  4285→                  <div className="flex items-center gap-2 mb-3">
+  4286→                    <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>lock_person</span>
+  4287→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelantos por Cancelaciones</span>
+  4288→                  </div>
+  4289→                  <div className="grid grid-cols-2 gap-3 mb-3">
+  4290→                    <div className="p-3 rounded-lg bg-orange-400/10">
+  4291→                      <p className="text-[10px] text-orange-300 font-[family-name:var(--font-inter)] mb-1">Retenidos (en caja)</p>
+  4292→                      <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-orange-400">{fmtCurrency(retainedTotal)}</p>
+  4293→                      <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.filter((ra) => ra.status === 'retained').length} registros</p>
+  4294→                    </div>
+  4295→                    <div className="p-3 rounded-lg bg-purple-400/10">
+  4296→                      <p className="text-[10px] text-purple-300 font-[family-name:var(--font-inter)] mb-1">Devueltos al cliente</p>
+  4297→                      <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-purple-400">{fmtCurrency(refundedTotal)}</p>
+  4298→                      <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.filter((ra) => ra.status === 'refunded').length} registros</p>
+  4299→                    </div>
+  4300→                  </div>
+  4301→                  <div className="p-2.5 rounded-lg bg-cm-surface-container-highest/40 flex items-center justify-between">
+  4302→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Neto retenido</span>
+  4303→                    <span className="font-[family-name:var(--font-sora)] text-sm font-bold text-orange-400">{fmtCurrency(retainedTotal)}</span>
+  4304→                  </div>
+  4305→                </motion.div>
+  4306→
+  4307→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card rounded-xl p-4">
+  4308→                  <div className="flex items-center gap-2 mb-2">
+  4309→                    <span className={`material-symbols-outlined text-[20px] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`} style={{ fontVariationSettings: '"FILL" 1' }}>analytics</span>
+  4310→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Balance (Dinero en Caja)</span>
+  4311→                  </div>
+  4312→                  <p className={`font-[family-name:var(--font-sora)] text-3xl font-bold ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>
+  4313→                    {fmtCurrency(balance)}
+  4314→                  </p>
+  4315→                  <div className="mt-3 p-3 rounded-lg bg-cm-surface-container-highest/40 space-y-1.5">
+  4316→                    <div className="flex justify-between text-xs">
+  4317→                      <span className="text-green-400 font-[family-name:var(--font-inter)]">+ Ingresos por servicios</span>
+  4318→                      <span className="text-green-400 font-[family-name:var(--font-inter)]">{fmtCurrency(totalIncome)}</span>
+  4319→                    </div>
+  4320→                    {retainedTotal > 0 && (
+  4321→                      <div className="flex justify-between text-xs">
+  4322→                        <span className="text-orange-400 font-[family-name:var(--font-inter)]">+ Adelantos retenidos</span>
+  4323→                        <span className="text-orange-400 font-[family-name:var(--font-inter)]">+{fmtCurrency(retainedTotal)}</span>
+  4324→                      </div>
+  4325→                    )}
+  4326→                    {refundedTotal > 0 && (
+  4327→                      <div className="flex justify-between text-xs">
+  4328→                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">~ Devueltos (info)</span>
+  4329→                        <span className="text-purple-400/70 font-[family-name:var(--font-inter)]">{fmtCurrency(refundedTotal)}</span>
+  4330→                      </div>
+  4331→                    )}
+  4332→                    <div className="flex justify-between text-xs">
+  4333→                      <span className="text-red-400 font-[family-name:var(--font-inter)]">- Egresos</span>
+  4334→                      <span className="text-red-400 font-[family-name:var(--font-inter)]">-{fmtCurrency(totalExpenses)}</span>
+  4335→                    </div>
+  4336→                    <div className="border-t border-white/10 mt-2 pt-2 flex justify-between text-sm font-bold">
+  4337→                      <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Balance Total</span>
+  4338→                      <span className={`font-[family-name:var(--font-sora)] ${balance >= 0 ? 'text-cm-primary' : 'text-red-400'}`}>{fmtCurrency(balance)}</span>
+  4339→                    </div>
+  4340→                  </div>
+  4341→                </motion.div>
+  4342→              </div>
+  4343→
+  4344→              {/* Row 3: Expense breakdown */}
+  4345→              {Object.keys(expensesByCategory).length > 0 && (
+  4346→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="glass-card rounded-xl p-4">
+  4347→                  <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3">Desglose de Gastos</h3>
+  4348→                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+  4349→                    {Object.entries(expensesByCategory).map(([cat, amount]) => {
+  4350→                      const catInfo = expenseCategories[cat] || expenseCategories.otros
+  4351→                      return (
+  4352→                        <div key={cat} className="flex items-center gap-2 p-2.5 rounded-lg bg-cm-surface-container-highest/30">
+  4353→                          <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant">{catInfo.icon}</span>
+  4354→                          <div className="flex-1 min-w-0">
+  4355→                            <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{catInfo.label}</p>
+  4356→                            <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(amount)}</p>
+  4357→                          </div>
+  4358→                        </div>
+  4359→                      )
+  4360→                    })}
+  4361→                  </div>
+  4362→                </motion.div>
+  4363→              )}
+  4364→
+  4365→              {/* Row 4: Retained advances table */}
+  4366→              {retainedAdvances.length > 0 && (
+  4367→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-4">
+  4368→                  <div className="flex items-center justify-between mb-3">
+  4369→                    <div className="flex items-center gap-2">
+  4370→                      <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
+  4371→                      <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Historial de Adelantos por Cancelaciones</h3>
+  4372→                    </div>
+  4373→                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
+  4374→                  </div>
+  4375→                  <div className="overflow-x-auto -mx-4 px-4">
+  4376→                    <table className="w-full text-xs">
+  4377→                      <thead>
+  4378→                        <tr className="border-b border-white/5">
+  4379→                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Fecha</th>
+  4380→                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cliente</th>
+  4381→                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cancha</th>
+  4382→                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelanto</th>
+  4383→                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Total Reserva</th>
+  4384→                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Estado</th>
+  4385→                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Motivo</th>
+  4386→                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Acciones</th>
+  4387→                        </tr>
+  4388→                      </thead>
+  4389→                      <tbody>
+  4390→                        {retainedAdvances.map((ra) => (
+  4391→                          <tr key={ra.id} className="border-b border-white/5 last:border-0">
+  4392→                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
+  4393→                              {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}
+  4394→                            </td>
+  4395→                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
+  4396→                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
+  4397→                            <td className="py-2 text-right font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</td>
+  4398→                            <td className="py-2 text-right text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{fmtCurrency(ra.originalTotal)}</td>
+  4399→                            <td className="py-2 text-center">
+  4400→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium font-[family-name:var(--font-inter)] ${
+  4401→                                ra.status === 'retained'
+  4402→                                  ? 'bg-orange-400/20 text-orange-400'
+  4403→                                  : 'bg-purple-400/20 text-purple-400'
+  4404→                              }`}>
+  4405→                                <span className="material-symbols-outlined text-[10px]">
+  4406→                                  {ra.status === 'retained' ? 'lock' : 'currency_exchange'}
+  4407→                                </span>
+  4408→                                {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
+  4409→                              </span>
+  4410→                            </td>
+  4411→                            <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px] truncate">{ra.reason || '-'}</td>
+  4412→                            <td className="py-2 text-center">
+  4413→                              <div className="flex items-center justify-center gap-1">
+  4414→                                {ra.status === 'retained' ? (
+  4415→                                  <button
+  4416→                                    type="button"
+  4417→                                    onClick={async () => {
+  4418→                                      try {
+  4419→                                        const res = await fetch('/api/retained-advances', {
+  4420→                                          method: 'PUT',
+  4421→                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  4422→                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
+  4423→                                        })
+  4424→                                        if (res.ok) {
+  4425→                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
+  4426→                                          fetchData()
+  4427→                                        }
+  4428→                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+  4429→                                    }}
+  4430→                                    className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+  4431→                                    title="Marcar como devuelto"
+  4432→                                  >
+  4433→                                    <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
+  4434→                                  </button>
+  4435→                                ) : (
+  4436→                                  <button
+  4437→                                    type="button"
+  4438→                                    onClick={async () => {
+  4439→                                      try {
+  4440→                                        const res = await fetch('/api/retained-advances', {
+  4441→                                          method: 'PUT',
+  4442→                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  4443→                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
+  4444→                                        })
+  4445→                                        if (res.ok) {
+  4446→                                          toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
+  4447→                                          fetchData()
+  4448→                                        }
+  4449→                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+  4450→                                    }}
+  4451→                                    className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+  4452→                                    title="Marcar como retenido"
+  4453→                                  >
+  4454→                                    <span className="material-symbols-outlined text-[14px]">lock</span>
+  4455→                                  </button>
+  4456→                                )}
+  4457→                                <button
+  4458→                                  type="button"
+  4459→                                  onClick={async () => {
+  4460→                                    if (!confirm('Eliminar este registro de adelanto?')) return
+  4461→                                    try {
+  4462→                                      const res = await fetch('/api/retained-advances', {
+  4463→                                        method: 'PUT',
+  4464→                                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  4465→                                        body: JSON.stringify({ id: ra.id, action: 'delete' }),
+  4466→                                      })
+  4467→                                      if (res.ok) {
+  4468→                                        toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+  4469→                                        fetchData()
+  4470→                                      }
+  4471→                                    } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+  4472→                                  }}
+  4473→                                  className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+  4474→                                  title="Eliminar registro"
+  4475→                                >
+  4476→                                  <span className="material-symbols-outlined text-[14px]">delete</span>
+  4477→                                </button>
+  4478→                              </div>
+  4479→                            </td>
+  4480→                          </tr>
+  4481→                        ))}
+  4482→                      </tbody>
+  4483→                    </table>
+  4484→                  </div>
+  4485→                </motion.div>
+  4486→              )}
+  4487→
+  4488→              {/* Revenue chart */}
+  4489→              {stats?.revenueByMonth && stats.revenueByMonth.length > 0 && (
+  4490→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="glass-card rounded-xl p-5">
+  4491→                  <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-base mb-4">Ingresos por Mes</h2>
+  4492→                  <div className="space-y-2">
+  4493→                    {stats.revenueByMonth.map((item, i) => {
+  4494→                      const maxRevenue = Math.max(...stats.revenueByMonth.map((m) => m.revenue), 1)
+  4495→                      const barWidth = (item.revenue / maxRevenue) * 100
+  4496→                      return (
+  4497→                        <div key={i} className="flex items-center gap-3">
+  4498→                          <span className="text-xs text-cm-on-surface-variant w-12 text-right font-[family-name:var(--font-inter)]">{item.month}</span>
+  4499→                          <div className="flex-1 h-7 bg-cm-surface-container-highest/40 rounded-lg overflow-hidden">
+  4500→                            <motion.div
+  4501→                              initial={{ width: 0 }}
+  4502→                              animate={{ width: `${Math.max(barWidth, 2)}%` }}
+  4503→                              transition={{ duration: 0.6, delay: i * 0.05 }}
+  4504→                              className="h-full rounded-lg flex items-center px-2"
+  4505→                              style={{
+  4506→                                background: i === stats.revenueByMonth.length - 1
+  4507→                                  ? 'linear-gradient(90deg, #00ff41, #00cc33)'
+  4508→                                  : 'linear-gradient(90deg, rgba(0,255,65,0.6), rgba(0,255,65,0.3))',
+  4509→                              }}
+  4510→                            >
+  4511→                              <span className="text-[10px] font-semibold text-cm-on-primary font-[family-name:var(--font-inter)] whitespace-nowrap">
+  4512→                                {item.revenue > 0 ? fmtCurrency(item.revenue) : ''}
+  4513→                              </span>
+  4514→                            </motion.div>
+  4515→                          </div>
+  4516→                        </div>
+  4517→                      )
+  4518→                    })}
+  4519→                  </div>
+  4520→                </motion.div>
+  4521→              )}
+  4522→            </motion.div>
+  4523→          )}
+  4524→
+  4525→          {/* ─── GASTOS ─── */}
+  4526→          {activeTab === 'gastos' && (
+  4527→            <motion.div key="gastos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+  4528→              {/* Header with add button */}
+  4529→              <div className="flex items-center justify-between mb-4">
+  4530→                <div>
+  4531→                  <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Registro de Gastos</h2>
+  4532→                  <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{expenses.length} gastos · Total {fmtCurrency(totalExpenses)}</p>
+  4533→                </div>
+  4534→                <button type="button"
+  4535→                  onClick={() => setShowExpenseForm(true)}
+  4536→                  className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+  4537→                >
+  4538→                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
+  4539→                  Agregar Gasto
+  4540→                </button>
+  4541→              </div>
+  4542→
+  4543→              {/* Expense list */}
+  4544→              <ExpensesTable expenses={expenses} />
+  4545→
+  4546→              {/* Add expense modal */}
+  4547→              <AnimatePresence>
+  4548→                {showExpenseForm && (
+  4549→                  <motion.div
+  4550→                    initial={{ opacity: 0 }}
+  4551→                    animate={{ opacity: 1 }}
+  4552→                    exit={{ opacity: 0 }}
+  4553→                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+  4554→                    onClick={() => !submittingExpense && setShowExpenseForm(false)}
+  4555→                  >
+  4556→                    <motion.div
+  4557→                      initial={{ y: 100, opacity: 0 }}
+  4558→                      animate={{ y: 0, opacity: 1 }}
+  4559→                      exit={{ y: 100, opacity: 0 }}
+  4560→                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  4561→                      className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20"
+  4562→                      onClick={(e) => e.stopPropagation()}
+  4563→                    >
+  4564→                      <div className="flex items-center justify-between mb-5">
+  4565→                        <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Agregar Gasto</h3>
+  4566→                        {!submittingExpense && (
+  4567→                          <button type="button" onClick={() => setShowExpenseForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  4568→                            <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  4569→                          </button>
+  4570→                        )}
+  4571→                      </div>
+  4572→
+  4573→                      <div className="space-y-3">
+  4574→                        <div>
+  4575→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Descripción *</label>
+  4576→                          <input
+  4577→                            value={expForm.description}
+  4578→                            onChange={(e) => setExpForm((f) => ({ ...f, description: e.target.value }))}
+  4579→                            className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4580→                            placeholder="Ej. Mantenimiento césped"
+  4581→                          />
+  4582→                        </div>
+  4583→                        <div className="grid grid-cols-2 gap-3">
+  4584→                          <div>
+  4585→                            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Monto (S/) *</label>
+  4586→                            <input
+  4587→                              type="number"
+  4588→                              step="0.01"
+  4589→                              value={expForm.amount}
+  4590→                              onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))}
+  4591→                              className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4592→                              placeholder="0.00"
+  4593→                            />
+  4594→                          </div>
+  4595→                          <div>
+  4596→                            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Fecha *</label>
+  4597→                            <input
+  4598→                              type="date"
+  4599→                              value={expForm.date}
+  4600→                              onChange={(e) => setExpForm((f) => ({ ...f, date: e.target.value }))}
+  4601→                              className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4602→                            />
+  4603→                          </div>
+  4604→                        </div>
+  4605→                        <div>
+  4606→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Categoría *</label>
+  4607→                          <div className="grid grid-cols-3 gap-2">
+  4608→                            {Object.entries(expenseCategories).map(([key, cat]) => (
+  4609→                              <button type="button"
+  4610→                                key={key}
+  4611→                                onClick={() => setExpForm((f) => ({ ...f, category: key }))}
+  4612→                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
+  4613→                                  expForm.category === key
+  4614→                                    ? 'bg-cm-primary/10 border-cm-primary/40 text-cm-primary'
+  4615→                                    : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+  4616→                                }`}
+  4617→                              >
+  4618→                                <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
+  4619→                                {cat.label}
+  4620→                              </button>
+  4621→                            ))}
+  4622→                          </div>
+  4623→                        </div>
+  4624→                        <div>
+  4625→                          <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Notas</label>
+  4626→                          <textarea
+  4627→                            value={expForm.notes}
+  4628→                            onChange={(e) => setExpForm((f) => ({ ...f, notes: e.target.value }))}
+  4629→                            rows={2}
+  4630→                            className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 resize-none font-[family-name:var(--font-inter)]"
+  4631→                            placeholder="Notas opcionales..."
+  4632→                          />
+  4633→                        </div>
+  4634→                      </div>
+  4635→
+  4636→                      <button type="button"
+  4637→                        onClick={handleAddExpense}
+  4638→                        disabled={submittingExpense}
+  4639→                        className="w-full mt-5 py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+  4640→                      >
+  4641→                        {submittingExpense ? (
+  4642→                          <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Registrando...</>
+  4643→                        ) : (
+  4644→                          <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Gasto</>
+  4645→                        )}
+  4646→                      </button>
+  4647→                    </motion.div>
+  4648→                  </motion.div>
+  4649→                )}
+  4650→              </AnimatePresence>
+  4651→            </motion.div>
+  4652→          )}
+  4653→
+  4654→          {/* ─── USUARIOS ─── */}
+  4655→          {activeTab === 'usuarios' && (
+  4656→            <motion.div key="usuarios" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+  4657→              <UsersTab />
+  4658→            </motion.div>
+  4659→          )}
+  4660→
+  4661→          {/* ─── CANCHAS (Court Management) ─── */}
+  4662→          {activeTab === 'canchas' && (
+  4663→            <CourtsTab allCourts={allCourts} onRefresh={fetchData} />
+  4664→          )}
+  4665→
+  4666→          {/* ─── EQUIPOS (Equipment Management) ─── */}
+  4667→          {activeTab === 'equipos' && (
+  4668→            <motion.div key="equipos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+  4669→              <EquipmentManager equipmentList={equipmentList} onRefresh={fetchData} />
+  4670→            </motion.div>
+  4671→          )}
+  4672→
+  4673→          {/* ─── ALARMAS (Notification Settings) ─── */}
+  4674→          {activeTab === 'alarmas' && (
+  4675→            <motion.div key="alarmas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+  4676→              <NotificationSettingsPanel
+  4677→                settings={notifSettings}
+  4678→                onSettingsChange={setNotifSettings}
+  4679→              />
+  4680→            </motion.div>
+  4681→          )}
+  4682→
+  4683→          {/* ─── CONTENIDO (Edit Home Page) ─── */}
+  4684→          {activeTab === 'contenido' && (
+  4685→            <ContentTab />
+  4686→          )}
+  4687→        </AnimatePresence>
+  4688→      </div>
+  4689→
+  4690→      {/* ═══════════════════════════════════════════════════════════════
+  4691→           MODALS: Booking Form, Advance Payment, Schedule
+  4692→         ═══════════════════════════════════════════════════════════════ */}
+  4693→      <AnimatePresence>
+  4694→        {/* ─── New Booking Modal ─── */}
+  4695→        {showBookingForm && (
+  4696→          <motion.div
+  4697→            initial={{ opacity: 0 }}
+  4698→            animate={{ opacity: 1 }}
+  4699→            exit={{ opacity: 0 }}
+
+[showing lines 4100-4699 of 6561; use offset=4700 with limit to continue reading]

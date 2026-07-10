@@ -1,0 +1,502 @@
+  5910→          </motion.div>
+  5911→        )}
+  5912→      </AnimatePresence>
+  5913→
+  5914→      {/* ─── Edit Booking Modal (super_admin only) ─── */}
+  5915→      <AnimatePresence>
+  5916→        {showEditModal && editTarget && (
+  5917→          <motion.div
+  5918→            initial={{ opacity: 0 }}
+  5919→            animate={{ opacity: 1 }}
+  5920→            exit={{ opacity: 0 }}
+  5921→            className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+  5922→            onClick={() => !submittingEdit && setShowEditModal(false)}
+  5923→          >
+  5924→            <motion.div
+  5925→              initial={{ scale: 0.95, y: 20 }}
+  5926→              animate={{ scale: 1, y: 0 }}
+  5927→              exit={{ scale: 0.95, y: 20 }}
+  5928→              className="w-full max-w-lg glass-card border border-purple-500/20 rounded-2xl overflow-hidden my-4"
+  5929→              onClick={(e) => e.stopPropagation()}
+  5930→            >
+  5931→              {/* Header */}
+  5932→              <div className="flex items-center justify-between p-4 border-b border-white/5 bg-purple-500/5">
+  5933→                <div className="flex items-center gap-3">
+  5934→                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center">
+  5935→                    <span className="material-symbols-outlined text-purple-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>edit</span>
+  5936→                  </div>
+  5937→                  <div>
+  5938→                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-base text-cm-on-surface">Editar Reserva</h3>
+  5939→                    <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Super Admin — Modifica cualquier campo</p>
+  5940→                  </div>
+  5941→                </div>
+  5942→                {!submittingEdit && (
+  5943→                  <button type="button" onClick={() => setShowEditModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  5944→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  5945→                  </button>
+  5946→                )}
+  5947→              </div>
+  5948→
+  5949→              <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+  5950→                {/* ── Fecha y Hora ── */}
+  5951→                <div>
+  5952→                  <div className="flex items-center gap-2 mb-2">
+  5953→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">event</span>
+  5954→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Fecha y Hora</span>
+  5955→                  </div>
+  5956→                  <input
+  5957→                    type="date"
+  5958→                    value={editForm.date}
+  5959→                    onChange={(e) => handleEditFormChange('date', e.target.value)}
+  5960→                    disabled={submittingEdit}
+  5961→                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] mb-2"
+  5962→                  />
+  5963→                  <div className="grid grid-cols-2 gap-3">
+  5964→                    <div>
+  5965→                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Inicio</label>
+  5966→                      <select
+  5967→                        value={editForm.startTime}
+  5968→                        onChange={(e) => {
+  5969→                          const v = e.target.value
+  5970→                          handleEditFormChange('startTime', v)
+  5971→                          if (v >= editForm.endTime) {
+  5972→                            const [h, m] = v.split(':').map(Number)
+  5973→                            let nm = h * 60 + m + 30
+  5974→                            if (nm <= 23 * 60) {
+  5975→                              const autoEnd = `${String(Math.floor(nm / 60)).padStart(2, '0')}:${String(nm % 60).padStart(2, '0')}`
+  5976→                              handleEditFormChange('endTime', autoEnd)
+  5977→                            }
+  5978→                          }
+  5979→                        }}
+  5980→                        disabled={submittingEdit}
+  5981→                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+  5982→                      >
+  5983→                        {allTimeSlots.map(s => {
+  5984→                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
+  5985→                          return <option key={`s-${s}`} value={s}>{fmt}</option>
+  5986→                        })}
+  5987→                      </select>
+  5988→                    </div>
+  5989→                    <div>
+  5990→                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Fin</label>
+  5991→                      <select
+  5992→                        value={editForm.endTime}
+  5993→                        onChange={(e) => handleEditFormChange('endTime', e.target.value)}
+  5994→                        disabled={submittingEdit}
+  5995→                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+  5996→                      >
+  5997→                        {editEndSlots.map(s => {
+  5998→                          const fmt = use12hFormat ? formatTime12(s) : formatTime24(s)
+  5999→                          return <option key={`e-${s}`} value={s}>{fmt}</option>
+  6000→                        })}
+  6001→                      </select>
+  6002→                    </div>
+  6003→                  </div>
+  6004→                </div>
+  6005→
+  6006→                {/* ── Cancha ── */}
+  6007→                <div>
+  6008→                  <div className="flex items-center gap-2 mb-2">
+  6009→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">sports</span>
+  6010→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cancha</span>
+  6011→                  </div>
+  6012→                  <div className="space-y-1 max-h-32 overflow-y-auto">
+  6013→                    {bookingCourtDetails.map(c => {
+  6014→                      const sel = editForm.courtIds.includes(c.id)
+  6015→                      return (
+  6016→                        <button key={c.id} type="button" onClick={() => toggleEditCourt(c.id)} disabled={submittingEdit}
+  6017→                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${sel ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface border border-white/10 hover:border-white/20'}`}
+  6018→                        >
+  6019→                          <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${sel ? 'border-purple-400 bg-purple-400' : 'border-white/20'}`}>
+  6020→                            {sel && <span className="material-symbols-outlined text-[10px] text-white">check</span>}
+  6021→                          </span>
+  6022→                          <span className="material-symbols-outlined text-[14px]">{sportIcons[c.sport] || 'sports'}</span>
+  6023→                          <span className="font-medium font-[family-name:var(--font-sora)]">{c.name}</span>
+  6024→                          <span className="text-cm-on-surface-variant ml-auto">S/ {c.pricePerHour.toFixed(2)}/h</span>
+  6025→                        </button>
+  6026→                      )
+  6027→                    })}
+  6028→                  </div>
+  6029→                </div>
+  6030→
+  6031→                {/* ── Cliente ── */}
+  6032→                <div>
+  6033→                  <div className="flex items-center gap-2 mb-2">
+  6034→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">person</span>
+  6035→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cliente</span>
+  6036→                  </div>
+  6037→                  <input
+  6038→                    type="text"
+  6039→                    placeholder="Buscar por nombre, email o telefono..."
+  6040→                    value={editClientSearch}
+  6041→                    onChange={(e) => setEditClientSearch(e.target.value)}
+  6042→                    disabled={submittingEdit}
+  6043→                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] mb-1.5"
+  6044→                  />
+  6045→                  <div className="max-h-28 overflow-y-auto space-y-0.5">
+  6046→                    {filteredEditUsers.slice(0, 20).map(u => {
+  6047→                      const sel = editForm.userId === u.id
+  6048→                      return (
+  6049→                        <button key={u.id} type="button" onClick={() => { handleEditFormChange('userId', u.id); setEditClientSearch('') }} disabled={submittingEdit}
+  6050→                          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] transition-all ${sel ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'hover:bg-cm-surface-container-highest/60 text-cm-on-surface'}`}
+  6051→                        >
+  6052→                          <span className="font-medium font-[family-name:var(--font-sora)]">{u.name}</span>
+  6053→                          <span className="text-cm-on-surface-variant">{u.email}</span>
+  6054→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+  6055→                        </button>
+  6056→                      )
+  6057→                    })}
+  6058→                    {filteredEditUsers.length === 0 && <p className="text-[10px] text-cm-on-surface-variant px-3 py-2">Sin resultados</p>}
+  6059→                  </div>
+  6060→                </div>
+  6061→
+  6062→                {/* ── Equipamiento ── */}
+  6063→                <div>
+  6064→                  <button type="button" onClick={() => setEditEquipOpen(!editEquipOpen)} className="flex items-center gap-2 mb-2 w-full text-left">
+  6065→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">sports_tennis</span>
+  6066→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Equipamiento</span>
+  6067→                    {editEquipItems.length > 0 && (
+  6068→                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[9px] font-bold">{editEquipItems.length}</span>
+  6069→                    )}
+  6070→                    <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px] ml-auto transition-transform" style={{ transform: editEquipOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+  6071→                  </button>
+  6072→                  {editEquipOpen && (
+  6073→                    <div className="space-y-2">
+  6074→                      {editEquipItems.length > 0 && (
+  6075→                        <div className="space-y-1">
+  6076→                          {editEquipItems.map(eq => {
+  6077→                            const eqData = equipmentList.find(e => e.id === eq.equipmentId)
+  6078→                            return (
+  6079→                              <div key={eq.equipmentId} className="flex items-center gap-2 px-2 py-1.5 bg-cm-surface-container-highest/40 rounded-lg">
+  6080→                                <span className="text-[11px] text-cm-on-surface font-medium flex-1 font-[family-name:var(--font-sora)]">{eq.name}</span>
+  6081→                                <div className="flex items-center gap-1">
+  6082→                                  <button type="button" onClick={() => updateEditEquipQty(eq.equipmentId, eq.quantity - 1, eqData?.stock || 99)} disabled={submittingEdit || eq.quantity <= 1} className="w-6 h-6 rounded bg-white/10 text-cm-on-surface text-xs flex items-center justify-center hover:bg-white/20">-</button>
+  6083→                                  <span className="text-[11px] text-cm-on-surface w-6 text-center font-mono">{eq.quantity}</span>
+  6084→                                  <button type="button" onClick={() => updateEditEquipQty(eq.equipmentId, eq.quantity + 1, eqData?.stock || 99)} disabled={submittingEdit} className="w-6 h-6 rounded bg-white/10 text-cm-on-surface text-xs flex items-center justify-center hover:bg-white/20">+</button>
+  6085→                                </div>
+  6086→                                <span className="text-[10px] text-cm-on-surface-variant">{fmtCurrency(eq.subtotal)}</span>
+  6087→                                <button type="button" onClick={() => removeEditEquip(eq.equipmentId)} disabled={submittingEdit} className="p-0.5 rounded text-red-400 hover:bg-red-400/10">
+  6088→                                  <span className="material-symbols-outlined text-[14px]">close</span>
+  6089→                                </button>
+  6090→                              </div>
+  6091→                            )
+  6092→                          })}
+  6093→                        </div>
+  6094→                      )}
+  6095→                      <div className="max-h-24 overflow-y-auto space-y-0.5">
+  6096→                        {equipmentList.filter(e => e.active && e.stock > 0 && !editEquipItems.find(ie => ie.equipmentId === e.id)).map(eq => (
+  6097→                          <button key={eq.id} type="button" onClick={() => addEditEquip(eq)} disabled={submittingEdit}
+  6098→                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] hover:bg-cm-surface-container-highest/60 text-cm-on-surface transition-colors"
+  6099→                          >
+  6100→                            <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">add</span>
+  6101→                            <span className="font-medium">{eq.name}</span>
+  6102→                            <span className="text-cm-on-surface-variant ml-auto">S/ {eq.pricePerRental.toFixed(2)} (stock: {eq.stock})</span>
+  6103→                          </button>
+  6104→                        ))}
+  6105→                        {equipmentList.filter(e => e.active && e.stock > 0 && !editEquipItems.find(ie => ie.equipmentId === e.id)).length === 0 && (
+  6106→                          <p className="text-[10px] text-cm-on-surface-variant px-2">Todo el equipamiento disponible ya fue agregado</p>
+  6107→                        )}
+  6108→                      </div>
+  6109→                    </div>
+  6110→                  )}
+  6111→                </div>
+  6112→
+  6113→                {/* ── Pagos ── */}
+  6114→                <div>
+  6115→                  <div className="flex items-center gap-2 mb-2">
+  6116→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">payments</span>
+  6117→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagos</span>
+  6118→                  </div>
+  6119→                  <div className="grid grid-cols-2 gap-2 mb-2">
+  6120→                    <div>
+  6121→                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Total (S/)</label>
+  6122→                      <input type="number" step="0.01" min="0" value={editForm.totalPrice} onChange={(e) => handleEditFormChange('totalPrice', e.target.value)} disabled={submittingEdit}
+  6123→                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+  6124→                      />
+  6125→                    </div>
+  6126→                    <div>
+  6127→                      <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Adelanto (S/)</label>
+  6128→                      <input type="number" step="0.01" min="0" value={editForm.advanceAmount} onChange={(e) => handleEditFormChange('advanceAmount', e.target.value)} disabled={submittingEdit}
+  6129→                        className="w-full px-2 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)]"
+  6130→                      />
+  6131→                    </div>
+  6132→                  </div>
+  6133→                  <div className="flex justify-between text-[10px] text-cm-on-surface-variant mb-2 px-1">
+  6134→                    <span>Restante: <span className={`font-semibold ${Math.max(0, (parseFloat(editForm.totalPrice) || 0) - (parseFloat(editForm.advanceAmount) || 0)) > 0 ? 'text-orange-400' : 'text-green-400'}`}>{fmtCurrency(Math.max(0, (parseFloat(editForm.totalPrice) || 0) - (parseFloat(editForm.advanceAmount) || 0)))}</span></span>
+  6135→                    <span>Equip: {fmtCurrency(editEquipItems.reduce((s, i) => s + i.subtotal, 0))}</span>
+  6136→                  </div>
+  6137→                  <div>
+  6138→                    <label className="text-[10px] text-cm-on-surface-variant font-semibold mb-1 block">Metodo de pago</label>
+  6139→                    <div className="grid grid-cols-3 gap-2">
+  6140→                      {['EFECTIVO', 'YAPE', 'PLIN'].map(m => (
+  6141→                        <button key={m} type="button" onClick={() => handleEditFormChange('paymentMethod', m)} disabled={submittingEdit}
+  6142→                          className={`py-1.5 rounded-lg text-[10px] font-semibold transition-all ${editForm.paymentMethod === m ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-white/10 hover:border-white/20'}`}
+  6143→                        >{m === 'YAPE' ? '📱 ' : m === 'PLIN' ? '💜 ' : '💵 '}{m}</button>
+  6144→                      ))}
+  6145→                    </div>
+  6146→                  </div>
+  6147→                </div>
+  6148→
+  6149→                {/* ── Notas ── */}
+  6150→                <div>
+  6151→                  <div className="flex items-center gap-2 mb-2">
+  6152→                    <span className="material-symbols-outlined text-purple-400 text-[14px]">notes</span>
+  6153→                    <span className="text-xs font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Notas</span>
+  6154→                  </div>
+  6155→                  <textarea value={editForm.notes} onChange={(e) => handleEditFormChange('notes', e.target.value)} disabled={submittingEdit} rows={2} placeholder="Notas opcionales..."
+  6156→                    className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-xs text-cm-on-surface focus:outline-none focus:border-purple-500/40 font-[family-name:var(--font-inter)] resize-none"
+  6157→                  />
+  6158→                </div>
+  6159→
+  6160→                {/* Submit */}
+  6161→                <button type="button" onClick={handleSubmitEdit} disabled={submittingEdit}
+  6162→                  className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 font-[family-name:var(--font-sora)]"
+  6163→                >
+  6164→                  {submittingEdit ? (<><span className="animate-spin"><Loader2 size={18} /></span> Guardando...</>) : (<><span className="material-symbols-outlined text-[18px]">save</span> Guardar Cambios</>)}
+  6165→                </button>
+  6166→              </div>
+  6167→            </motion.div>
+  6168→          </motion.div>
+  6169→        )}
+  6170→      </AnimatePresence>
+  6171→
+  6172→      {/* ─── Equipment Detail Modal (delivered/returned) ─── */}
+  6173→      <AnimatePresence>
+  6174→        {showEquipDetail && (
+  6175→          <motion.div
+  6176→            initial={{ opacity: 0 }}
+  6177→            animate={{ opacity: 1 }}
+  6178→            exit={{ opacity: 0 }}
+  6179→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+  6180→            onClick={() => setShowEquipDetail(null)}
+  6181→          >
+  6182→            <motion.div
+  6183→              initial={{ y: 100, opacity: 0 }}
+  6184→              animate={{ y: 0, opacity: 1 }}
+  6185→              exit={{ y: 100, opacity: 0 }}
+  6186→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  6187→              className="w-full max-w-sm glass-card rounded-2xl p-6 border-blue-400/20"
+  6188→              onClick={(e) => e.stopPropagation()}
+  6189→            >
+  6190→              <div className="flex items-center justify-between mb-4">
+  6191→                <div className="flex items-center gap-2">
+  6192→                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+  6193→                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>sports_tennis</span>
+  6194→                  </div>
+  6195→                  <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Equipamiento</h3>
+  6196→                </div>
+  6197→                <button type="button" onClick={() => setShowEquipDetail(null)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  6198→                  <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  6199→                </button>
+  6200→              </div>
+  6201→
+  6202→              <div className="space-y-2 mb-4">
+  6203→                {showEquipDetail.equipmentItems?.map((eq, i) => (
+  6204→                  <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-cm-surface-container-highest/30">
+  6205→                    <div>
+  6206→                      <p className="text-xs font-medium text-cm-on-surface font-[family-name:var(--font-sora)]">{eq.name}</p>
+  6207→                      <p className="text-[10px] text-cm-on-surface-variant">Cantidad: {eq.quantity} · {fmtCurrency(eq.unitPrice)}/u</p>
+  6208→                    </div>
+  6209→                    <span className="text-sm font-bold text-blue-400">{fmtCurrency(eq.subtotal)}</span>
+  6210→                  </div>
+  6211→                ))}
+  6212→                {(showEquipDetail.courtSubtotal !== undefined) && (
+  6213→                  <div className="pt-2 border-t border-white/5 space-y-1">
+  6214→                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Cancha</span><span>{fmtCurrency(Math.max(0, (showEquipDetail.totalPrice || 0) - (showEquipDetail.equipmentSubtotal || 0)))}</span></div>
+  6215→                    <div className="flex justify-between text-[11px]"><span className="text-cm-on-surface-variant">Subtotal Equip.</span><span className="text-blue-400">{fmtCurrency(showEquipDetail.equipmentSubtotal || 0)}</span></div>
+  6216→                    <div className="flex justify-between text-xs font-bold pt-1 border-t border-white/5"><span>Total</span><span className="text-cm-primary">{fmtCurrency(showEquipDetail.totalPrice)}</span></div>
+  6217→                  </div>
+  6218→                )}
+  6219→              </div>
+  6220→
+  6221→              {/* Delivery / Return toggles */}
+  6222→              <div className="space-y-3 pt-3 border-t border-white/5">
+  6223→                <div className="flex items-center justify-between">
+  6224→                  <div className="flex items-center gap-2">
+  6225→                    <span className="material-symbols-outlined text-[18px] text-amber-400">inventory_2</span>
+  6226→                    <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Entregado</span>
+  6227→                  </div>
+  6228→                  <button type="button"
+  6229→                    onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentDelivered', !showEquipDetail.equipmentDelivered)}
+  6230→                    className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentDelivered ? 'bg-amber-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
+  6231→                  >
+  6232→                    <div className={`w-5 h-5 rounded-full transition-all shadow ${showEquipDetail.equipmentDelivered ? 'bg-white' : 'bg-cm-on-surface-variant/60'}`} />
+  6233→                  </button>
+  6234→                </div>
+  6235→                <div className="flex items-center justify-between">
+  6236→                  <div className="flex items-center gap-2">
+  6237→                    <span className="material-symbols-outlined text-[18px] text-green-400">done_all</span>
+  6238→                    <span className="text-sm text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">Devuelto</span>
+  6239→                  </div>
+  6240→                  <button type="button"
+  6241→                    onClick={() => handleToggleEquipment(showEquipDetail.id, 'equipmentReturned', !showEquipDetail.equipmentReturned)}
+  6242→                    className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${showEquipDetail.equipmentReturned ? 'bg-green-500 justify-end' : 'bg-cm-surface-container-highest justify-start'}`}
+  6243→                  >
+  6244→                    <div className={`w-5 h-5 rounded-full transition-all shadow ${showEquipDetail.equipmentReturned ? 'bg-white' : 'bg-cm-on-surface-variant/60'}`} />
+  6245→                  </button>
+  6246→                </div>
+  6247→              </div>
+  6248→            </motion.div>
+  6249→          </motion.div>
+  6250→        )}
+  6251→      </AnimatePresence>
+  6252→
+  6253→      {/* ─── Cancel Booking Dialog (advance handling) ─── */}
+  6254→      <Dialog open={showCancelDialog} onOpenChange={(open) => { if (!open) setShowCancelDialog(false) }}>
+  6255→        <DialogContent className="z-[70] bg-[#1a1a2e] border border-white/10 text-white max-w-md mx-4">
+  6256→          <DialogHeader>
+  6257→            <DialogTitle className="flex items-center gap-2 text-red-400">
+  6258→              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>warning</span>
+  6259→              Cancelar Reserva con Adelanto
+  6260→            </DialogTitle>
+  6261→            <DialogDescription className="text-cm-on-surface-variant">
+  6262→              Esta reserva tiene un adelanto pagado de <span className="font-bold text-orange-400">{cancelTarget ? fmtCurrency(cancelTarget.advanceAmount) : ''}</span>. Indica que se hizo con ese dinero.
+  6263→            </DialogDescription>
+  6264→          </DialogHeader>
+  6265→
+  6266→          {cancelTarget && (
+  6267→            <div className="space-y-4 mt-2">
+  6268→              {/* Booking summary */}
+  6269→              <div className="p-3 rounded-lg bg-cm-surface-container-highest/40 space-y-1.5">
+  6270→                <div className="flex justify-between text-xs">
+  6271→                  <span className="text-cm-on-surface-variant">Cliente</span>
+  6272→                  <span className="text-cm-on-surface font-medium">{cancelTarget.user?.name || 'Sin nombre'}</span>
+  6273→                </div>
+  6274→                <div className="flex justify-between text-xs">
+  6275→                  <span className="text-cm-on-surface-variant">Cancha</span>
+  6276→                  <span className="text-cm-on-surface font-medium">{cancelTarget.court?.name || '-'}</span>
+  6277→                </div>
+  6278→                <div className="flex justify-between text-xs">
+  6279→                  <span className="text-cm-on-surface-variant">Fecha</span>
+  6280→                  <span className="text-cm-on-surface font-medium">{cancelTarget.date}</span>
+  6281→                </div>
+  6282→                <div className="border-t border-white/5 pt-1.5 flex justify-between text-xs">
+  6283→                  <span className="text-cm-on-surface-variant">Adelanto pagado</span>
+  6284→                  <span className="text-orange-400 font-bold">{fmtCurrency(cancelTarget.advanceAmount)}</span>
+  6285→                </div>
+  6286→              </div>
+  6287→
+  6288→              {/* Action selection */}
+  6289→              <div>
+  6290→                <label className="text-xs text-cm-on-surface-variant font-medium mb-2 block">Que se hizo con el adelanto?</label>
+  6291→                <div className="grid grid-cols-2 gap-2">
+  6292→                  <button
+  6293→                    type="button"
+  6294→                    onClick={() => setCancelAdvanceAction('retain')}
+  6295→                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+  6296→                      cancelAdvanceAction === 'retain'
+  6297→                        ? 'border-orange-400 bg-orange-400/10'
+  6298→                        : 'border-white/10 bg-cm-surface-container-highest/20 hover:border-white/20'
+  6299→                    }`}
+  6300→                  >
+  6301→                    <div className="flex items-center gap-2 mb-1">
+  6302→                      <span className="material-symbols-outlined text-[18px] text-orange-400" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+  6303→                      <span className="text-sm font-semibold text-cm-on-surface">Retener</span>
+  6304→                    </div>
+  6305→                    <p className="text-[10px] text-cm-on-surface-variant">El dinero se queda en caja como compensacion</p>
+  6306→                  </button>
+  6307→                  <button
+  6308→                    type="button"
+  6309→                    onClick={() => setCancelAdvanceAction('refund')}
+  6310→                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+  6311→                      cancelAdvanceAction === 'refund'
+  6312→                        ? 'border-purple-400 bg-purple-400/10'
+  6313→                        : 'border-white/10 bg-cm-surface-container-highest/20 hover:border-white/20'
+  6314→                    }`}
+  6315→                  >
+  6316→                    <div className="flex items-center gap-2 mb-1">
+  6317→                      <span className="material-symbols-outlined text-[18px] text-purple-400" style={{ fontVariationSettings: '"FILL" 1' }}>currency_exchange</span>
+  6318→                      <span className="text-sm font-semibold text-cm-on-surface">Devolver</span>
+  6319→                    </div>
+  6320→                    <p className="text-[10px] text-cm-on-surface-variant">Se devolvio el dinero al cliente</p>
+  6321→                  </button>
+  6322→                </div>
+  6323→              </div>
+  6324→
+  6325→              {/* Reason */}
+  6326→              <div>
+  6327→                <label className="text-xs text-cm-on-surface-variant font-medium mb-1.5 block">Motivo de cancelacion (opcional)</label>
+  6328→                <input
+  6329→                  type="text"
+  6330→                  value={cancelReason}
+  6331→                  onChange={(e) => setCancelReason(e.target.value)}
+  6332→                  placeholder="Ej: El cliente no se presento..."
+  6333→                  className="w-full bg-cm-surface-container-highest/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  6334→                />
+  6335→              </div>
+  6336→            </div>
+  6337→          )}
+  6338→
+  6339→          <DialogFooter className="gap-2 mt-2">
+  6340→            <button
+  6341→              type="button"
+  6342→              onClick={() => setShowCancelDialog(false)}
+  6343→              disabled={cancellingBooking}
+  6344→              className="flex-1 px-4 py-2.5 rounded-xl border border-white/10 text-sm text-cm-on-surface-variant hover:bg-white/5 transition-colors font-[family-name:var(--font-inter)]"
+  6345→            >
+  6346→              No cancelar
+  6347→            </button>
+  6348→            <button
+  6349→              type="button"
+  6350→              onClick={handleConfirmCancel}
+  6351→              disabled={cancellingBooking}
+  6352→              className="flex-1 px-4 py-2.5 rounded-xl bg-red-500/20 text-red-400 text-sm font-semibold hover:bg-red-500/30 transition-colors flex items-center justify-center gap-2 font-[family-name:var(--font-inter)]"
+  6353→            >
+  6354→              {cancellingBooking && <Loader2 className="h-4 w-4 animate-spin" />}
+  6355→              {cancellingBooking ? 'Cancelando...' : 'Confirmar Cancelacion'}
+  6356→            </button>
+  6357→          </DialogFooter>
+  6358→        </DialogContent>
+  6359→      </Dialog>
+  6360→
+  6361→      {/* ─── Series Management Modal ─── */}
+  6362→      <AnimatePresence>
+  6363→        {showSeriesModal && (
+  6364→          <motion.div
+  6365→            initial={{ opacity: 0 }}
+  6366→            animate={{ opacity: 1 }}
+  6367→            exit={{ opacity: 0 }}
+  6368→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+  6369→            onClick={() => !cancellingSeries && setShowSeriesModal(false)}
+  6370→          >
+  6371→            <motion.div
+  6372→              initial={{ y: 100, opacity: 0 }}
+  6373→              animate={{ y: 0, opacity: 1 }}
+  6374→              exit={{ y: 100, opacity: 0 }}
+  6375→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  6376→              className="w-full max-w-2xl glass-card rounded-2xl p-6 border-cm-primary/20 overflow-hidden flex flex-col max-h-[85vh]"
+  6377→              onClick={(e) => e.stopPropagation()}
+  6378→            >
+  6379→              <div className="flex items-center justify-between mb-5 flex-shrink-0">
+  6380→                <div className="flex items-center gap-2">
+  6381→                  <div className="w-10 h-10 rounded-xl bg-cm-primary/10 flex items-center justify-center">
+  6382→                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>repeat</span>
+  6383→                  </div>
+  6384→                  <div>
+  6385→                    <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Serie Recurrente</h3>
+  6386→                    <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">{seriesBookings.length} reservas en la serie</p>
+  6387→                  </div>
+  6388→                </div>
+  6389→                <div className="flex items-center gap-2">
+  6390→                  {seriesBookings.some((b) => b.status !== 'cancelled') && (
+  6391→                    <button type="button"
+  6392→                      onClick={() => handleCancelSeries(seriesGroupId)}
+  6393→                      disabled={cancellingSeries}
+  6394→                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all disabled:opacity-50"
+  6395→                    >
+  6396→                      <span className="material-symbols-outlined text-[14px]">cancel</span>
+  6397→                      {cancellingSeries ? 'Cancelando...' : 'Cancelar toda la serie'}
+  6398→                    </button>
+  6399→                  )}
+  6400→                  {!cancellingSeries && (
+  6401→                    <button type="button" onClick={() => setShowSeriesModal(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  6402→                      <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  6403→                    </button>
+  6404→                  )}
+  6405→                </div>
+  6406→              </div>
+  6407→
+  6408→              <div className="overflow-auto flex-1">
+  6409→                <SeriesBookingsTable bookings={seriesBookings} onCancelSingle={handleCancelSingleFromSeries} use12hFormat={use12hFormat} />
+
+[showing lines 5910-6409 of 6519; use offset=6410 with limit to continue reading]

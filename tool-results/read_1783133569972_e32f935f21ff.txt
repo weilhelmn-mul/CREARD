@@ -1,0 +1,502 @@
+  3790→                {/* Advanced filters (collapsible) */}
+  3791→                <AnimatePresence>
+  3792→                  {showFilters && (
+  3793→                    <motion.div
+  3794→                      initial={{ height: 0, opacity: 0 }}
+  3795→                      animate={{ height: 'auto', opacity: 1 }}
+  3796→                      exit={{ height: 0, opacity: 0 }}
+  3797→                      transition={{ duration: 0.2 }}
+  3798→                      className="overflow-hidden"
+  3799→                    >
+  3800→                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3 pt-3 border-t border-white/5">
+  3801→                        <div>
+  3802→                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Desde</label>
+  3803→                          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  3804→                        </div>
+  3805→                        <div>
+  3806→                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Hasta</label>
+  3807→                          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  3808→                        </div>
+  3809→                        <div>
+  3810→                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Cancha</label>
+  3811→                          <select value={courtFilter} onChange={(e) => setCourtFilter(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]">
+  3812→                            <option value="all">Todas las canchas</option>
+  3813→                            {uniqueCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+  3814→                          </select>
+  3815→                        </div>
+  3816→                        <div>
+  3817→                          <label className="text-[11px] text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Deporte</label>
+  3818→                          <select value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} className="w-full px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]">
+  3819→                            <option value="all">Todos los deportes</option>
+  3820→                            {uniqueSports.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+  3821→                          </select>
+  3822→                        </div>
+  3823→                      </div>
+  3824→                      {activeFilterCount > 0 && (
+  3825→                        <button type="button" onClick={clearAllFilters} className="mt-2 text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)] hover:underline flex items-center gap-1">
+  3826→                          <span className="material-symbols-outlined text-[14px]">filter_list_off</span>
+  3827→                          Limpiar todos los filtros
+  3828→                        </button>
+  3829→                      )}
+  3830→                    </motion.div>
+  3831→                  )}
+  3832→                </AnimatePresence>
+  3833→
+  3834→                {/* Active filter badges */}
+  3835→                {!showFilters && activeFilterCount > 0 && (
+  3836→                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/5">
+  3837→                    {dateFrom && (
+  3838→                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+  3839→                        Desde: {fmtDate(dateFrom)}
+  3840→                        <button type="button" onClick={() => setDateFrom('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+  3841→                      </span>
+  3842→                    )}
+  3843→                    {dateTo && (
+  3844→                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+  3845→                        Hasta: {fmtDate(dateTo)}
+  3846→                        <button type="button" onClick={() => setDateTo('')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+  3847→                      </span>
+  3848→                    )}
+  3849→                    {courtFilter !== 'all' && (
+  3850→                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)]">
+  3851→                        {uniqueCourts.find(c => c.id === courtFilter)?.name || courtFilter}
+  3852→                        <button type="button" onClick={() => setCourtFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+  3853→                      </span>
+  3854→                    )}
+  3855→                    {sportFilter !== 'all' && (
+  3856→                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/60 text-[10px] text-cm-on-surface-variant font-medium font-[family-name:var(--font-inter)] capitalize">
+  3857→                        {sportFilter}
+  3858→                        <button type="button" onClick={() => setSportFilter('all')} className="hover:text-red-400 transition-colors"><span className="material-symbols-outlined text-[12px]">close</span></button>
+  3859→                      </span>
+  3860→                    )}
+  3861→                  </div>
+  3862→                )}
+  3863→              </div>
+  3864→
+  3865→              {/* Status filter */}
+  3866→              <div className="flex flex-wrap gap-2 mb-4">
+  3867→                <button type="button" onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
+  3868→                  Todos ({bookings.length})
+  3869→                </button>
+  3870→                {Object.entries(statusConfig).map(([key, val]) => {
+  3871→                  const count = bookings.filter((b) => b.status === key).length
+  3872→                  if (count === 0) return null
+  3873→                  return (
+  3874→                    <button type="button" key={key} onClick={() => setStatusFilter(key)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${statusFilter === key ? `${val.color} border-current/30` : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
+  3875→                      <span className={`w-1.5 h-1.5 rounded-full ${val.dot}`} />
+  3876→                      {val.label} ({count})
+  3877→                    </button>
+  3878→                  )
+  3879→                })}
+  3880→              </div>
+  3881→
+  3882→              {/* Results count + action buttons */}
+  3883→              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+  3884→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  3885→                  Mostrando <span className="font-semibold text-cm-on-surface">{filteredBookings.length}</span> de <span className="font-semibold text-cm-on-surface">{bookings.length}</span> reservas
+  3886→                </p>
+  3887→                <div className="flex items-center gap-2">
+  3888→                  <button type="button"
+  3889→                    onClick={() => setShowPastBookings(!showPastBookings)}
+  3890→                    className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all ${showPastBookings ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}
+  3891→                  >
+  3892→                    <span className="material-symbols-outlined text-[18px]">{showPastBookings ? 'history_toggle_off' : 'history'}</span>
+  3893→                    {showPastBookings ? 'Ocultar pasadas' : 'Ver pasadas'}
+  3894→                  </button>
+  3895→                  <button type="button"
+  3896→                    onClick={openBookingForm}
+  3897→                    className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:brightness-110 transition-all"
+  3898→                  >
+  3899→                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add_circle</span>
+  3900→                    Nueva Reserva
+  3901→                  </button>
+  3902→                  <button type="button"
+  3903→                    onClick={() => setShowSchedule(true)}
+  3904→                    className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+  3905→                  >
+  3906→                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>view_timeline</span>
+  3907→                    Ver Horarios
+  3908→                  </button>
+  3909→                </div>
+  3910→              </div>
+  3911→
+  3912→              {/* ═══ View Modes ═══ */}
+  3913→              {filteredBookings.length === 0 ? (
+  3914→                <div className="glass-card rounded-xl p-12 text-center">
+  3915→                  <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 block mb-2">search_off</span>
+  3916→                  <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2">No hay reservas con estos filtros</p>
+  3917→                  <div className="flex flex-col items-center gap-1 text-[11px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">
+  3918→                    <span>Total cargadas: {bookings.length} | Mostrando: {filteredBookings.length}</span>
+  3919→                    {!showPastBookings && <span className="text-cm-primary/70">Las reservas pasadas estan ocultas. Activa "Ver pasadas" para mostrarlas.</span>}
+  3920→                    {bookings.length === 0 && <span>No se encontraron reservas en el rango de fechas consultado.</span>}
+  3921→                  </div>
+  3922→                  {bookings.length === 0 && (
+  3923→                    <button type="button" onClick={fetchData} className="mt-4 px-4 py-2 bg-cm-primary/10 text-cm-primary text-xs font-semibold rounded-lg hover:bg-cm-primary/20 transition-colors font-[family-name:var(--font-inter)]">
+  3924→                      <span className="material-symbols-outlined text-[14px] align-middle mr-1">refresh</span>Reintentar carga
+  3925→                    </button>
+  3926→                  )}
+  3927→                </div>
+  3928→              ) : viewMode === 'table' ? (
+  3929→                /* ─── TABLE MODE ─── */
+  3930→                <BookingsTable
+  3931→                  bookings={filteredBookings}
+  3932→                  getAlertLevel={getAlertLevel}
+  3933→                  openSeriesModal={openSeriesModal}
+  3934→                  openAdvanceModal={openAdvanceModal}
+  3935→                  handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
+  3936→                  onShowEquipDetail={setShowEquipDetail}
+  3937→                  advanceAmount={advanceAmount}
+  3938→                  advanceTarget={advanceTarget}
+  3939→                  isSuperAdmin={isSuperAdmin}
+  3940→                  onDeleteBooking={handleDeleteBooking}
+  3941→                  use12hFormat={use12hFormat}
+  3942→                  onExtendTime={openExtendModal}
+  3943→                  onEditTime={isSuperAdmin ? openEditModal : undefined}
+  3944→                />
+  3945→              ) : viewMode === 'gallery' ? (
+  3946→                /* ─── GALLERY MODE ─── */
+  3947→                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+  3948→                  {filteredBookings.map((b, i) => {
+  3949→                    const st = statusConfig[b.status] || statusConfig.reserved
+  3950→                    const isGCompleted = b.status === 'completed'
+  3951→                    const statusAccent = isGCompleted ? 'bg-gradient-to-r from-green-400 via-emerald-400 to-green-400' : b.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'
+  3952→                    const galertLv = getAlertLevel(b.id)
+  3953→                    const cardBorder = isGCompleted
+  3954→                      ? 'border-green-400/40 shadow-[0_0_15px_rgba(34,197,94,0.12),0_0_3px_rgba(34,197,94,0.3)] animate-glow-green-row'
+  3955→                      : galertLv === 'expired' ? 'border-red-500/60 animate-pulse' : galertLv === 'warning' ? 'border-amber-500/60' : ''
+  3956→                    return (
+  3957→                      <motion.div
+  3958→                        key={b.id}
+  3959→                        initial={{ opacity: 0, y: 20 }}
+  3960→                        animate={{ opacity: 1, y: 0 }}
+  3961→                        transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
+  3962→                        className={`glass-card rounded-xl overflow-hidden hover:border-white/15 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 group relative ${cardBorder}`}
+  3963→                      >
+  3964→                        {/* Top accent bar */}
+  3965→                        <div className={`h-1 ${statusAccent}`} />
+  3966→                        {isGCompleted && (
+  3967→                          <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none rounded-t-xl" />
+  3968→                        )}
+  3969→                        <div className="p-4 space-y-3">
+  3970→                          {/* Date & Time */}
+  3971→                          <div>
+  3972→                            <div className="flex items-center gap-1.5 text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
+  3973→                              <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+  3974→                              {fmtDateFull(b.date)}
+  3975→                              {b.recurringGroupId && (
+  3976→                                <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+  3977→                                  <span className="material-symbols-outlined text-[13px]">repeat</span>
+  3978→                                </button>
+  3979→                              )}
+  3980→                            </div>
+  3981→                            <p className="font-[family-name:var(--font-sora)] font-bold text-cm-on-surface text-lg mt-0.5">
+  3982→                              {formatTimeRange(b.startTime, b.endTime, use12hFormat)}
+  3983→                            </p>
+  3984→                          </div>
+  3985→                          {/* Court */}
+  3986→                          <div className="flex items-center gap-2">
+  3987→                            <div className="w-8 h-8 rounded-lg bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+  3988→                              <span className="material-symbols-outlined text-cm-primary text-[16px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+  3989→                            </div>
+  3990→                            <div className="min-w-0">
+  3991→                              <p className="font-[family-name:var(--font-sora)] font-semibold text-xs text-cm-on-surface">
+  3992→                                {b.courtIds && b.courtIds.length > 1
+  3993→                                  ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+  3994→                                  : (b.court?.name || 'N/A')}
+  3995→                              </p>
+  3996→                              {b.court?.branch && <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{b.court.branch.name}</p>}
+  3997→                            </div>
+  3998→                          </div>
+  3999→                          {/* Client */}
+  4000→                          <div className="flex items-center gap-2">
+  4001→                            <div className="w-6 h-6 rounded-full bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+  4002→                              <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px]">person</span>
+  4003→                            </div>
+  4004→                            <div className="min-w-0">
+  4005→                              <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+  4006→                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+  4007→                            </div>
+  4008→                          </div>
+  4009→                          {/* Status badge + Payment method */}
+  4010→                          <div className="flex items-center gap-2">
+  4011→                            {isGCompleted ? (
+  4012→                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+  4013→                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+  4014→                                {st.label}
+  4015→                              </span>
+  4016→                            ) : (
+  4017→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+  4018→                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+  4019→                                {st.label}
+  4020→                              </span>
+  4021→                            )}
+  4022→                            {b.paymentMethod && (
+  4023→                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
+  4024→                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+  4025→                                <span>{b.paymentMethod}</span>
+  4026→                              </span>
+  4027→                            )}
+  4028→                          </div>
+  4029→                          {/* Price breakdown */}
+  4030→                          <div className="pt-2 border-t border-white/5 space-y-1">
+  4031→                            <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+  4032→                              <span className="text-cm-on-surface-variant">Adelanto</span>
+  4033→                              <span className="text-cm-on-surface">{fmtCurrency(b.advanceAmount)}</span>
+  4034→                            </div>
+  4035→                            <div className="flex justify-between text-[11px] font-[family-name:var(--font-inter)]">
+  4036→                              <span className="text-cm-on-surface-variant">Restante</span>
+  4037→                              <span className={b.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}>{fmtCurrency(b.remainingAmount)}</span>
+  4038→                            </div>
+  4039→                            <div className="flex justify-between text-xs font-[family-name:var(--font-sora)] pt-1">
+  4040→                              <span className="text-cm-on-surface font-medium">Total</span>
+  4041→                              <span className="text-cm-primary font-bold">{fmtCurrency(b.totalPrice)}</span>
+  4042→                            </div>
+  4043→                          </div>
+  4044→                          {/* Status dropdown + Advance */}
+  4045→                          <div className="flex items-center gap-2">
+  4046→                            {b.recurringGroupId && (
+  4047→                              <button type="button"
+  4048→                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+  4049→                                className="p-1.5 rounded-lg bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-colors flex-shrink-0"
+  4050→                                title="Ver serie recurrente"
+  4051→                              >
+  4052→                                <span className="material-symbols-outlined text-[16px]">repeat</span>
+  4053→                              </button>
+  4054→                            )}
+  4055→                            <select
+  4056→                              value={b.status}
+  4057→                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
+  4058→                              className="flex-1 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4059→                            >
+  4060→                              <option value="reserved">Reservado</option>
+  4061→                              <option value="completed">Completo</option>
+  4062→                              <option value="cancelled">Cancelado</option>
+  4063→                            </select>
+  4064→                            {/* B8 FIX: Always show payment button (not just when remainingAmount > 0) */}
+  4065→                            <button type="button"
+  4066→                              onClick={() => openAdvanceModal(b)}
+  4067→                              className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
+  4068→                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+  4069→                            >
+  4070→                              <span className="material-symbols-outlined text-[16px]">payments</span>
+  4071→                            </button>
+  4072→                            {b.status === 'reserved' && (
+  4073→                              <button type="button"
+  4074→                                onClick={() => openExtendModal(b)}
+  4075→                                className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-400/20 transition-colors flex-shrink-0"
+  4076→                                title="Extender tiempo"
+  4077→                              >
+  4078→                                <span className="material-symbols-outlined text-[16px]">schedule</span>
+  4079→                              </button>
+  4080→                            )}
+  4081→                            {isSuperAdmin && (
+  4082→                              <button type="button"
+  4083→                                onClick={() => openEditModal(b)}
+  4084→                                className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-400/20 transition-colors flex-shrink-0"
+  4085→                                title="Editar reserva"
+  4086→                              >
+  4087→                                <span className="material-symbols-outlined text-[16px]">edit</span>
+  4088→                              </button>
+  4089→                            )}
+  4090→                            {isSuperAdmin && (
+  4091→                              <button type="button"
+  4092→                                onClick={() => handleDeleteBooking(b.id)}
+  4093→                                className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-400/20 transition-colors flex-shrink-0"
+  4094→                                title="Eliminar permanentemente"
+  4095→                              >
+  4096→                                <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+  4097→                              </button>
+  4098→                            )}
+  4099→                          </div>
+  4100→                        </div>
+  4101→                      </motion.div>
+  4102→                    )
+  4103→                  })}
+  4104→                </div>
+  4105→              ) : (
+  4106→                /* ─── COMPACT MODE ─── */
+  4107→                <div className="space-y-2">
+  4108→                  {filteredBookings.map((b, i) => {
+  4109→                    const st = statusConfig[b.status] || statusConfig.reserved
+  4110→                    const isCCompleted = b.status === 'completed'
+  4111→                    const calertLv = getAlertLevel(b.id)
+  4112→                    const compactBorder = isCCompleted
+  4113→                      ? 'border-green-400/40 shadow-[0_0_12px_rgba(34,197,94,0.1),0_0_3px_rgba(34,197,94,0.25)] animate-glow-green-row relative overflow-hidden'
+  4114→                      : calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
+  4115→                    return (
+  4116→                      <motion.div
+  4117→                        key={b.id}
+  4118→                        initial={{ opacity: 0, x: -10 }}
+  4119→                        animate={{ opacity: 1, x: 0 }}
+  4120→                        transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
+  4121→                        className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
+  4122→                      >
+  4123→                        {isCCompleted && (
+  4124→                          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
+  4125→                        )}
+  4126→                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+  4127→                          {/* Date & Time */}
+  4128→                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
+  4129→                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
+  4130→                            <div>
+  4131→                              <div className="flex items-center gap-1">
+  4132→                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+  4133→                                {b.recurringGroupId && (
+  4134→                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+  4135→                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
+  4136→                                  </button>
+  4137→                                )}
+  4138→                              </div>
+  4139→                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
+  4140→                            </div>
+  4141→                          </div>
+  4142→                          {/* Court */}
+  4143→                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
+  4144→                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+  4145→                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
+  4146→                              {b.courtIds && b.courtIds.length > 1
+  4147→                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+  4148→                                : (b.court?.name || 'N/A')}
+  4149→                            </span>
+  4150→                          </div>
+  4151→                          {/* Client */}
+  4152→                          <div className="flex-1 min-w-0 hidden md:block">
+  4153→                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+  4154→                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+  4155→                          </div>
+  4156→                          {/* Status + Price + Action */}
+  4157→                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
+  4158→                            {b.recurringGroupId && (
+  4159→                              <button type="button"
+  4160→                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+  4161→                                className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+  4162→                                title="Ver serie recurrente"
+  4163→                              >
+  4164→                                <span className="material-symbols-outlined text-[14px]">repeat</span>
+  4165→                              </button>
+  4166→                            )}
+  4167→                            {b.status === 'completed' ? (
+  4168→                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+  4169→                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+  4170→                                {st.label}
+  4171→                              </span>
+  4172→                            ) : (
+  4173→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+  4174→                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+  4175→                                {st.label}
+  4176→                              </span>
+  4177→                            )}
+  4178→                            {b.paymentMethod && (
+  4179→                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex">
+  4180→                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+  4181→                                <span>{b.paymentMethod}</span>
+  4182→                              </span>
+  4183→                            )}
+  4184→                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
+  4185→                            {/* B8 FIX: Always show payment button */}
+  4186→                            <button type="button"
+  4187→                              onClick={() => openAdvanceModal(b)}
+  4188→                              className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+  4189→                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+  4190→                            >
+  4191→                              <span className="material-symbols-outlined text-[14px]">payments</span>
+  4192→                            </button>
+  4193→                            {b.status === 'reserved' && (
+  4194→                              <button type="button"
+  4195→                                onClick={() => openExtendModal(b)}
+  4196→                                className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+  4197→                                title="Extender tiempo"
+  4198→                              >
+  4199→                                <span className="material-symbols-outlined text-[14px]">schedule</span>
+  4200→                              </button>
+  4201→                            )}
+  4202→                            {isSuperAdmin && (
+  4203→                              <button type="button"
+  4204→                                onClick={() => openEditModal(b)}
+  4205→                                className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+  4206→                                title="Editar reserva"
+  4207→                              >
+  4208→                                <span className="material-symbols-outlined text-[14px]">edit</span>
+  4209→                              </button>
+  4210→                            )}
+  4211→                            <select
+  4212→                              value={b.status}
+  4213→                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
+  4214→                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+  4215→                            >
+  4216→                              <option value="reserved">Reservado</option>
+  4217→                              <option value="completed">Completo</option>
+  4218→                              <option value="cancelled">Cancelado</option>
+  4219→                            </select>
+  4220→                            {isSuperAdmin && (
+  4221→                              <button type="button"
+  4222→                                onClick={() => handleDeleteBooking(b.id)}
+  4223→                                className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+  4224→                                title="Eliminar permanentemente"
+  4225→                              >
+  4226→                                <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+  4227→                              </button>
+  4228→                            )}
+  4229→                          </div>
+  4230→                        </div>
+  4231→                      </motion.div>
+  4232→                    )
+  4233→                  })}
+  4234→                </div>
+  4235→              )}
+  4236→            </motion.div>
+  4237→          )}
+  4238→
+  4239→
+  4240→          {/* ─── FINANZAS ─── */}
+  4241→          {activeTab === 'finanzas' && (
+  4242→            <motion.div key="finanzas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-4">
+  4243→              {/* Row 1: Main income cards */}
+  4244→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  4245→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card rounded-xl p-4">
+  4246→                  <div className="flex items-center gap-2 mb-2">
+  4247→                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>account_balance_wallet</span>
+  4248→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Ingresos Totales</span>
+  4249→                  </div>
+  4250→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-primary">{fmtCurrency(totalIncome)}</p>
+  4251→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Completados + adelantos activos</p>
+  4252→                </motion.div>
+  4253→
+  4254→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card rounded-xl p-4">
+  4255→                  <div className="flex items-center gap-2 mb-2">
+  4256→                    <span className="material-symbols-outlined text-green-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+  4257→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Servicios Completados</span>
+  4258→                  </div>
+  4259→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-green-400">{fmtCurrency(completedIncome)}</p>
+  4260→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Pagos recibidos de completadas</p>
+  4261→                </motion.div>
+  4262→
+  4263→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass-card rounded-xl p-4">
+  4264→                  <div className="flex items-center gap-2 mb-2">
+  4265→                    <span className="material-symbols-outlined text-blue-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>savings</span>
+  4266→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelantos Activos</span>
+  4267→                  </div>
+  4268→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-blue-400">{fmtCurrency(reservedAdvances)}</p>
+  4269→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Saldo pendiente de reservas</p>
+  4270→                </motion.div>
+  4271→
+  4272→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card rounded-xl p-4">
+  4273→                  <div className="flex items-center gap-2 mb-2">
+  4274→                    <span className="material-symbols-outlined text-red-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>trending_down</span>
+  4275→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Egresos</span>
+  4276→                  </div>
+  4277→                  <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-red-400">{fmtCurrency(totalExpenses)}</p>
+  4278→                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Total de gastos registrados</p>
+  4279→                </motion.div>
+  4280→              </div>
+  4281→
+  4282→              {/* Row 2: Retained advances + Balance */}
+  4283→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  4284→                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card rounded-xl p-4">
+  4285→                  <div className="flex items-center gap-2 mb-3">
+  4286→                    <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>lock_person</span>
+  4287→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelantos por Cancelaciones</span>
+  4288→                  </div>
+  4289→                  <div className="grid grid-cols-2 gap-3 mb-3">
+
+[showing lines 3790-4289 of 6561; use offset=4290 with limit to continue reading]
