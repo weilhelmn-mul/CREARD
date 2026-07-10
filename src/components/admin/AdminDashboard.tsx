@@ -2276,6 +2276,9 @@ export default function AdminDashboard() {
   const [editingRaId, setEditingRaId] = useState<string | null>(null)
   const [editRaAmount, setEditRaAmount] = useState('')
   const [editRaReason, setEditRaReason] = useState('')
+  const [showRaForm, setShowRaForm] = useState(false)
+  const [raForm, setRaForm] = useState({ amount: '', reason: '', userName: '', courtName: '', bookingDate: '', paymentMethod: 'EFECTIVO' })
+  const [submittingRa, setSubmittingRa] = useState(false)
   const [allCourts, setAllCourts] = useState<Array<{ id: string; name: string; sport?: string; pricePerHour?: number }>>([])
 
   /* filters */
@@ -3651,6 +3654,46 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleAddRetainedAdvance = async () => {
+    const amount = parseFloat(raForm.amount)
+    if (!amount || amount <= 0) {
+      toast({ title: 'Error', description: 'Ingresa un monto válido mayor a 0', variant: 'destructive' })
+      return
+    }
+    setSubmittingRa(true)
+    try {
+      const res = await fetch('/api/retained-advances', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: `manual-${Date.now()}`,
+          userId: '',
+          userName: raForm.userName || 'Registro manual',
+          courtName: raForm.courtName || '-',
+          bookingDate: raForm.bookingDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }),
+          amount,
+          originalTotal: amount,
+          paymentMethod: raForm.paymentMethod || 'EFECTIVO',
+          reason: raForm.reason || 'Registro manual de adelanto retenido',
+          status: 'retained',
+        }),
+      })
+      if (res.ok) {
+        toast({ title: 'Registrado', description: `Adelanto retenido de ${fmtCurrency(amount)}` })
+        setRaForm({ amount: '', reason: '', userName: '', courtName: '', bookingDate: '', paymentMethod: 'EFECTIVO' })
+        setShowRaForm(false)
+        fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo registrar', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo registrar el adelanto', variant: 'destructive' })
+    } finally {
+      setSubmittingRa(false)
+    }
+  }
+
   const handleDeleteBooking = async (bookingId: string) => {
     if (!confirm('Eliminar permanentemente esta reserva? Se borrara de la base de datos y no se podra recuperar.')) return
     try {
@@ -4467,236 +4510,342 @@ export default function AdminDashboard() {
               )}
 
               {/* Row 4: Retained advances table */}
-              {retainedAdvances.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
-                      <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Historial de Adelantos por Cancelaciones</h3>
-                    </div>
-                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-orange-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>history</span>
+                    <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm">Adelantos por Cancelaciones</h3>
                   </div>
-                  <div className="overflow-x-auto -mx-4 px-4">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-white/5">
-                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Fecha</th>
-                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cliente</th>
-                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cancha</th>
-                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelanto</th>
-                          <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Total Reserva</th>
-                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Estado</th>
-                          <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Motivo</th>
-                          <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {retainedAdvances.slice((raPage - 1) * 8, raPage * 8).map((ra) => (
-                          <tr key={ra.id} className="border-b border-white/5 last:border-0">
-                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
-                              {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}
-                            </td>
-                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
-                            <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
-                            <td className="py-2 text-right">
-                              {editingRaId === ra.id ? (
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={editRaAmount}
-                                  onChange={(e) => setEditRaAmount(e.target.value)}
-                                  className="w-20 bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface text-right focus:outline-none focus:border-cm-primary/40"
-                                />
-                              ) : (
-                                <span className="font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</span>
-                              )}
-                            </td>
-                            <td className="py-2 text-right text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{fmtCurrency(ra.originalTotal)}</td>
-                            <td className="py-2 text-center">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium font-[family-name:var(--font-inter)] ${
-                                ra.status === 'retained'
-                                  ? 'bg-orange-400/20 text-orange-400'
-                                  : 'bg-purple-400/20 text-purple-400'
-                              }`}>
-                                <span className="material-symbols-outlined text-[10px]">
-                                  {ra.status === 'retained' ? 'lock' : 'currency_exchange'}
-                                </span>
-                                {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{retainedAdvances.length} registros</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowRaForm(!showRaForm)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-400/10 text-orange-400 text-[11px] font-semibold hover:bg-orange-400/20 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">{showRaForm ? 'close' : 'add'}</span>
+                      {showRaForm ? 'Cerrar' : 'Registro manual'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Manual creation form */}
+                {showRaForm && (
+                  <div className="p-3 rounded-xl bg-cm-surface-container-highest/30 border border-orange-400/20 mb-3 space-y-2">
+                    <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Registra un adelanto retenido manualmente (para cancelaciones anteriores que no se registraron)</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Monto (S/) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={raForm.amount}
+                          onChange={(e) => setRaForm((p) => ({ ...p, amount: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Cliente</label>
+                        <input
+                          type="text"
+                          placeholder="Nombre del cliente"
+                          value={raForm.userName}
+                          onChange={(e) => setRaForm((p) => ({ ...p, userName: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Cancha</label>
+                        <input
+                          type="text"
+                          placeholder="Nombre de la cancha"
+                          value={raForm.courtName}
+                          onChange={(e) => setRaForm((p) => ({ ...p, courtName: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Fecha reserva</label>
+                        <input
+                          type="date"
+                          value={raForm.bookingDate}
+                          onChange={(e) => setRaForm((p) => ({ ...p, bookingDate: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Método de pago</label>
+                        <select
+                          value={raForm.paymentMethod}
+                          onChange={(e) => setRaForm((p) => ({ ...p, paymentMethod: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        >
+                          <option value="EFECTIVO">Efectivo</option>
+                          <option value="YAPE">Yape</option>
+                          <option value="PLIN">Plin</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-cm-on-surface-variant font-medium mb-1 block">Motivo</label>
+                        <input
+                          type="text"
+                          placeholder="Motivo de la cancelación"
+                          value={raForm.reason}
+                          onChange={(e) => setRaForm((p) => ({ ...p, reason: e.target.value }))}
+                          className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-orange-400/40 font-[family-name:var(--font-inter)]"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddRetainedAdvance}
+                        disabled={submittingRa || !raForm.amount}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500/20 text-orange-400 text-xs font-semibold hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {submittingRa && <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>}
+                        <span className="material-symbols-outlined text-[14px]">save</span>
+                        Registrar Adelanto Retenido
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {retainedAdvances.length === 0 && !showRaForm && (
+                  <div className="text-center py-8">
+                    <span className="material-symbols-outlined text-[40px] text-cm-on-surface-variant/30" style={{ fontVariationSettings: '"FILL" 1' }}>lock_person</span>
+                    <p className="text-sm text-cm-on-surface-variant mt-2 font-[family-name:var(--font-inter)]">Sin adelantos retenidos registrados</p>
+                    <p className="text-[11px] text-cm-on-surface-variant/60 mt-1 font-[family-name:var(--font-inter)] max-w-sm mx-auto">
+                      Los adelantos se registran automáticamente al cancelar una reserva con adelanto pagado.
+                      También puedes registrar uno manualmente con el botón de arriba.
+                    </p>
+                  </div>
+                )}
+
+                {retainedAdvances.length > 0 && (
+                <div className="overflow-x-auto -mx-4 px-4">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Fecha</th>
+                        <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cliente</th>
+                        <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Cancha</th>
+                        <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Adelanto</th>
+                        <th className="text-right py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Total Reserva</th>
+                        <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Estado</th>
+                        <th className="text-left py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Motivo</th>
+                        <th className="text-center py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retainedAdvances.slice((raPage - 1) * 8, raPage * 8).map((ra) => (
+                        <tr key={ra.id} className="border-b border-white/5 last:border-0">
+                          <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)] whitespace-nowrap">
+                            {ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}
+                          </td>
+                          <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.userName || 'Sin nombre'}</td>
+                          <td className="py-2 text-cm-on-surface font-[family-name:var(--font-inter)]">{ra.courtName || '-'}</td>
+                          <td className="py-2 text-right">
+                            {editingRaId === ra.id ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={editRaAmount}
+                                onChange={(e) => setEditRaAmount(e.target.value)}
+                                className="w-20 bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface text-right focus:outline-none focus:border-cm-primary/40"
+                              />
+                            ) : (
+                              <span className="font-semibold font-[family-name:var(--font-inter)]">{fmtCurrency(ra.amount)}</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-right text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{fmtCurrency(ra.originalTotal)}</td>
+                          <td className="py-2 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium font-[family-name:var(--font-inter)] ${
+                              ra.status === 'retained'
+                                ? 'bg-orange-400/20 text-orange-400'
+                                : 'bg-purple-400/20 text-purple-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-[10px]">
+                                {ra.status === 'retained' ? 'lock' : 'currency_exchange'}
                               </span>
-                            </td>
-                            <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px]">
+                              {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
+                            </span>
+                          </td>
+                          <td className="py-2 text-cm-on-surface-variant font-[family-name:var(--font-inter)] max-w-[140px]">
+                            {editingRaId === ra.id ? (
+                              <input
+                                type="text"
+                                value={editRaReason}
+                                onChange={(e) => setEditRaReason(e.target.value)}
+                                className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+                              />
+                            ) : (
+                              <span className="truncate block">{ra.reason || '-'}</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
                               {editingRaId === ra.id ? (
-                                <input
-                                  type="text"
-                                  value={editRaReason}
-                                  onChange={(e) => setEditRaReason(e.target.value)}
-                                  className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded px-1.5 py-0.5 text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
-                                />
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const newAmount = parseFloat(editRaAmount)
+                                      if (isNaN(newAmount) || newAmount < 0) {
+                                        toast({ title: 'Error', description: 'Monto inválido', variant: 'destructive' })
+                                        return
+                                      }
+                                      try {
+                                        const updateBody: Record<string, unknown> = { id: ra.id, bookingId: ra.bookingId, amount: newAmount, reason: editRaReason }
+                                        const res = await fetch('/api/retained-advances', {
+                                          method: 'PUT',
+                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                          body: JSON.stringify(updateBody),
+                                        })
+                                        if (res.ok) {
+                                          toast({ title: 'Actualizado', description: 'Registro de adelanto actualizado' })
+                                          setEditingRaId(null)
+                                          fetchData()
+                                        } else {
+                                          const err = await res.json().catch(() => ({}))
+                                          toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar', variant: 'destructive' })
+                                        }
+                                      } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                                    }}
+                                    className="p-1 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
+                                    title="Guardar cambios"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">check</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingRaId(null)}
+                                    className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                    title="Cancelar edición"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">close</span>
+                                  </button>
+                                </>
                               ) : (
-                                <span className="truncate block">{ra.reason || '-'}</span>
-                              )}
-                            </td>
-                            <td className="py-2 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                {editingRaId === ra.id ? (
-                                  <>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingRaId(ra.id); setEditRaAmount(String(ra.amount)); setEditRaReason(ra.reason || '') }}
+                                    className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                    title="Editar monto/motivo"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                                  </button>
+                                  {ra.status === 'retained' ? (
                                     <button
                                       type="button"
                                       onClick={async () => {
-                                        const newAmount = parseFloat(editRaAmount)
-                                        if (isNaN(newAmount) || newAmount < 0) {
-                                          toast({ title: 'Error', description: 'Monto inválido', variant: 'destructive' })
-                                          return
-                                        }
+                                        if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como devuelto al cliente?`)) return
                                         try {
-                                          const updateBody: Record<string, unknown> = { id: ra.id, bookingId: ra.bookingId, amount: newAmount, reason: editRaReason }
                                           const res = await fetch('/api/retained-advances', {
                                             method: 'PUT',
                                             headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                            body: JSON.stringify(updateBody),
+                                            body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
                                           })
                                           if (res.ok) {
-                                            toast({ title: 'Actualizado', description: 'Registro de adelanto actualizado' })
-                                            setEditingRaId(null)
+                                            toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
                                             fetchData()
-                                          } else {
-                                            const err = await res.json().catch(() => ({}))
-                                            toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar', variant: 'destructive' })
                                           }
                                         } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
                                       }}
-                                      className="p-1 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
-                                      title="Guardar cambios"
+                                      className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                      title="Marcar como devuelto"
                                     >
-                                      <span className="material-symbols-outlined text-[14px]">check</span>
+                                      <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingRaId(null)}
-                                      className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
-                                      title="Cancelar edición"
-                                    >
-                                      <span className="material-symbols-outlined text-[14px]">close</span>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setEditingRaId(ra.id); setEditRaAmount(String(ra.amount)); setEditRaReason(ra.reason || '') }}
-                                      className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
-                                      title="Editar monto/motivo"
-                                    >
-                                      <span className="material-symbols-outlined text-[14px]">edit</span>
-                                    </button>
-                                    {ra.status === 'retained' ? (
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como devuelto al cliente?`)) return
-                                          try {
-                                            const res = await fetch('/api/retained-advances', {
-                                              method: 'PUT',
-                                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
-                                            })
-                                            if (res.ok) {
-                                              toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
-                                              fetchData()
-                                            }
-                                          } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
-                                        }}
-                                        className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
-                                        title="Marcar como devuelto"
-                                      >
-                                        <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como retenido en caja?`)) return
-                                          try {
-                                            const res = await fetch('/api/retained-advances', {
-                                              method: 'PUT',
-                                              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
-                                            })
-                                            if (res.ok) {
-                                              toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
-                                              fetchData()
-                                            }
-                                          } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
-                                        }}
-                                        className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
-                                        title="Marcar como retenido"
-                                      >
-                                        <span className="material-symbols-outlined text-[14px]">lock</span>
-                                      </button>
-                                    )}
+                                  ) : (
                                     <button
                                       type="button"
                                       onClick={async () => {
-                                        if (!confirm('Eliminar este registro de adelanto?')) return
+                                        if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como retenido en caja?`)) return
                                         try {
                                           const res = await fetch('/api/retained-advances', {
                                             method: 'PUT',
                                             headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, action: 'delete' }),
+                                            body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
                                           })
                                           if (res.ok) {
-                                            toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+                                            toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
                                             fetchData()
                                           }
-                                        } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+                                        } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
                                       }}
-                                      className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                                      title="Eliminar registro"
+                                      className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+                                      title="Marcar como retenido"
                                     >
-                                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                                      <span className="material-symbols-outlined text-[14px]">lock</span>
                                     </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* FIX Bug #4: Pagination */}
-                  {retainedAdvances.length > 8 && (
-                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/5">
-                      <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                        Mostrando {(raPage - 1) * 8 + 1}-{Math.min(raPage * 8, retainedAdvances.length)} de {retainedAdvances.length}
-                      </span>
-                      <div className="flex items-center gap-1">
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!confirm('Eliminar este registro de adelanto?')) return
+                                      try {
+                                        const res = await fetch('/api/retained-advances', {
+                                          method: 'PUT',
+                                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, action: 'delete' }),
+                                        })
+                                        if (res.ok) {
+                                          toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+                                          fetchData()
+                                        }
+                                      } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+                                    }}
+                                    className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                    title="Eliminar registro"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                )}
+                {/* Pagination */}
+                {retainedAdvances.length > 8 && (
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/5">
+                    <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                      Mostrando {(raPage - 1) * 8 + 1}-{Math.min(raPage * 8, retainedAdvances.length)} de {retainedAdvances.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={raPage <= 1}
+                        onClick={() => setRaPage((p) => p - 1)}
+                        className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >Anterior</button>
+                      {Array.from({ length: Math.ceil(retainedAdvances.length / 8) }, (_, i) => i + 1).slice(Math.max(0, raPage - 3), raPage + 2).map((p) => (
                         <button
+                          key={p}
                           type="button"
-                          disabled={raPage <= 1}
-                          onClick={() => setRaPage((p) => p - 1)}
-                          className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >Anterior</button>
-                        {Array.from({ length: Math.ceil(retainedAdvances.length / 8) }, (_, i) => i + 1).slice(Math.max(0, raPage - 3), raPage + 2).map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => setRaPage(p)}
-                            className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${p === raPage ? 'bg-cm-primary text-white' : 'text-cm-on-surface-variant hover:bg-white/5'}`}
-                          >{p}</button>
-                        ))}
-                        <button
-                          type="button"
-                          disabled={raPage >= Math.ceil(retainedAdvances.length / 8)}
-                          onClick={() => setRaPage((p) => p + 1)}
-                          className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >Siguiente</button>
-                      </div>
+                          onClick={() => setRaPage(p)}
+                          className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${p === raPage ? 'bg-cm-primary text-white' : 'text-cm-on-surface-variant hover:bg-white/5'}`}
+                        >{p}</button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={raPage >= Math.ceil(retainedAdvances.length / 8)}
+                        onClick={() => setRaPage((p) => p + 1)}
+                        className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >Siguiente</button>
                     </div>
-                  )}
-                </motion.div>
-              )}
+                  </div>
+                )}
+              </motion.div>
 
               {/* Revenue chart */}
               {stats?.revenueByMonth && stats.revenueByMonth.length > 0 && (
