@@ -888,6 +888,13 @@ export async function PUT(request: NextRequest) {
       if (isAdminCancellation) {
         try {
           if (bookingForCancel && ((bookingForCancel.advance_amount as number) || 0) > 0) {
+            // FIX Bug A: Only create retained advance when admin explicitly chose an action
+            // If advanceAction is missing (unexpected code path), skip creation to avoid
+            // incorrectly defaulting to 'refunded'
+            if (!advanceAction) {
+              console.warn('[BOOKINGS] Admin cancellation with advance but no advanceAction — skipping retained advance creation for booking', id);
+              warningFlags.push('no_advance_action');
+            } else {
             const advAmount = (bookingForCancel.advance_amount as number) || 0;
             const isRetained = advanceAction === 'retain';
             const statusAdvance = isRetained ? 'retained' : 'refunded';
@@ -956,6 +963,7 @@ export async function PUT(request: NextRequest) {
                 console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
                 warningFlags.push('payment_record_failed');
               }
+            }
             }
           }
         } catch (err) {

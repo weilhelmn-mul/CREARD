@@ -3575,6 +3575,8 @@ export default function AdminDashboard() {
           const warnings = (result as Record<string, unknown>).warnings as string[];
           if (warnings.includes('retained_advance_failed')) {
             toast({ title: 'Reserva cancelada con advertencia', description: 'No se pudo crear el registro de adelanto retenido. Verifica la pestaña Finanzas > Adelantos por Cancelaciones.', variant: 'destructive' })
+          } else if (warnings.includes('no_advance_action')) {
+            toast({ title: 'Reserva cancelada con advertencia', description: 'La reserva se canceló pero no se registró el adelanto. Crea el registro manualmente si es necesario.', variant: 'destructive' })
           } else if (warnings.includes('payment_record_failed')) {
             toast({ title: 'Reserva cancelada con advertencia', description: 'No se pudo crear el registro de pago asociado. Verifica manualmente.', variant: 'destructive' })
           } else {
