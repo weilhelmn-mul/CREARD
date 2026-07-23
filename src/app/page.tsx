@@ -21,6 +21,7 @@ import AdminDashboard from '@/components/admin/AdminDashboard'
 import AuthView from '@/components/auth/AuthView'
 import AuthInitializer from '@/components/auth/AuthInitializer'
 import ClaimsUserView from '@/components/claims/ClaimsUserView'
+import ClaimsFooterBanner from '@/components/home/ClaimsFooterBanner'
 
 function HomeView() {
   const { settings } = useSiteSettings()
@@ -59,6 +60,8 @@ function HomeView() {
       {sectionOrder.map((key) => renderSection(key))}
       {/* News section rendered after all ordered sections if there are active news */}
       <NewsSection />
+      {/* Libro de Reclamaciones - always at the end */}
+      <ClaimsFooterBanner />
     </motion.div>
   )
 }
