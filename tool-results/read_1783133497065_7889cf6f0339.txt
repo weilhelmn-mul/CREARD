@@ -1,0 +1,502 @@
+  1000→                      }} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1001→                        <span className="material-symbols-outlined text-[14px]">add</span> Agregar turno
+  1002→                      </button>
+  1003→                    </div>
+  1004→                    {((sport.pricingDetails as Array<Record<string, unknown>>) || []).map((pd, pdIdx) => (
+  1005→                      <div key={pdIdx} className="flex items-center gap-1.5 mb-1.5 p-2 rounded-lg bg-cm-surface-container-highest/20">
+  1006→                        <input value={String(pd.label || '')} onChange={(e) => {
+  1007→                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1008→                          arr[pdIdx] = { ...arr[pdIdx], label: e.target.value }
+  1009→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1010→                        }} placeholder="Turno" className="w-20 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1011→                        <input value={String(pd.timeRange || '')} onChange={(e) => {
+  1012→                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1013→                          arr[pdIdx] = { ...arr[pdIdx], timeRange: e.target.value }
+  1014→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1015→                        }} placeholder="7:00 - 5:00 PM" className="flex-1 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1016→                        <div className="flex items-center gap-0.5">
+  1017→                          <span className="text-[10px] text-cm-on-surface-variant">S/.</span>
+  1018→                          <input type="number" value={String(pd.price || 0)} onChange={(e) => {
+  1019→                            const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1020→                            arr[pdIdx] = { ...arr[pdIdx], price: parseFloat(e.target.value) || 0 }
+  1021→                            updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1022→                          }} className="w-14 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1023→                        </div>
+  1024→                        <button type="button" onClick={() => {
+  1025→                          const arr = ((sport.pricingDetails as Array<Record<string, unknown>>) || []).filter((_, i) => i !== pdIdx)
+  1026→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1027→                        }} className="p-1 rounded text-red-400 hover:bg-red-500/10">
+  1028→                          <span className="material-symbols-outlined text-[14px]">delete</span>
+  1029→                        </button>
+  1030→                      </div>
+  1031→                    ))}
+  1032→                  </div>
+  1033→                </div>
+  1034→              ))}
+  1035→            </>
+  1036→          )}
+  1037→          {editSection === 'featuredCourts' && (
+  1038→            <>
+  1039→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} placeholder="Ej. Nuestras canchas" />
+  1040→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} placeholder="Canchas Destacadas" />
+  1041→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" placeholder="Elige tu espacio ideal y reserva al instante" />
+  1042→              <FormField label="Texto del botón CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} placeholder="Ver Todas" />
+  1043→              <div className="p-3 rounded-xl bg-cm-surface-container-highest/20 border border-white/5">
+  1044→                <p className="text-[10px] text-cm-on-surface-variant flex items-center gap-1.5">
+  1045→                  <span className="material-symbols-outlined text-[14px]">info</span>
+  1046→                  Las canchas mostradas provienen del módulo "Canchas". Usa esa pestaña para editar nombres, precios e imágenes de cada cancha.
+  1047→                </p>
+  1048→              </div>
+  1049→            </>
+  1050→          )}
+  1051→          {editSection === 'promoBanner' && (
+  1052→            <>
+  1053→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+  1054→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+  1055→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+  1056→              <FormField label="Texto CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} />
+  1057→              <div>
+  1058→                <div className="flex items-center justify-between mb-2">
+  1059→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Puntos de venta</label>
+  1060→                  <button type="button" onClick={() => addArrayItem('sellingPoints', { icon: 'star', title: '', description: '', highlight: false })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1061→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1062→                  </button>
+  1063→                </div>
+  1064→                {(getArray('sellingPoints') as Array<Record<string, unknown>>).map((pt, idx) => (
+  1065→                  <div key={idx} className="p-2 rounded-lg border border-white/10 mb-2 space-y-2">
+  1066→                    <div className="flex items-center justify-between">
+  1067→                      <span className="text-[10px] text-cm-on-surface-variant font-semibold">#{idx + 1}</span>
+  1068→                      <div className="flex items-center gap-2">
+  1069→                        <label className="flex items-center gap-1 text-[10px] text-cm-primary cursor-pointer">
+  1070→                          <input type="checkbox" checked={!!pt.highlight} onChange={(e) => updateArrayItem('sellingPoints', idx, 'highlight', e.target.checked)} className="accent-green-500" />
+  1071→                          Destacado
+  1072→                        </label>
+  1073→                        <button type="button" onClick={() => removeArrayItem('sellingPoints', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+  1074→                      </div>
+  1075→                    </div>
+  1076→                    <div className="grid grid-cols-3 gap-2">
+  1077→                      <FormField label="Icono" value={String(pt.icon || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'icon', v)} />
+  1078→                      <FormField label="Título" value={String(pt.title || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'title', v)} />
+  1079→                      <FormField label="Descripción" value={String(pt.description || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'description', v)} />
+  1080→                    </div>
+  1081→                  </div>
+  1082→                ))}
+  1083→              </div>
+  1084→              <div>
+  1085→                <div className="flex items-center justify-between mb-2">
+  1086→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Métodos de pago</label>
+  1087→                  <button type="button" onClick={() => addArrayItem('paymentMethods', { name: '', icon: 'payments', color: 'text-gray-400' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1088→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1089→                  </button>
+  1090→                </div>
+  1091→                {(getArray('paymentMethods') as Array<Record<string, unknown>>).map((pm, idx) => (
+  1092→                  <div key={idx} className="flex items-center gap-2 mb-2">
+  1093→                    <input value={String(pm.name || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'name', e.target.value)} placeholder="Nombre" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1094→                    <input value={String(pm.icon || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'icon', e.target.value)} placeholder="Icono" className="w-28 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1095→                    <button type="button" onClick={() => removeArrayItem('paymentMethods', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+  1096→                  </div>
+  1097→                ))}
+  1098→              </div>
+  1099→            </>
+  1100→          )}
+  1101→          {editSection === 'howItWorks' && (
+  1102→            <>
+  1103→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+  1104→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+  1105→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+  1106→              <div className="grid grid-cols-2 gap-3">
+  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+  1108→                <FormField label="Texto Soporte" value={getField('supportText')} onChange={(v) => updateField('supportText', v)} />
+  1109→              </div>
+  1110→              <div>
+  1111→                <div className="flex items-center justify-between mb-2">
+  1112→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Pasos</label>
+  1113→                  <button type="button" onClick={() => addArrayItem('steps', { number: '', title: '', description: '', icon: 'star', detail: '' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1114→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1115→                  </button>
+  1116→                </div>
+  1117→                {(getArray('steps') as Array<Record<string, unknown>>).map((step, idx) => (
+  1118→                  <div key={idx} className="p-3 rounded-xl border border-white/10 mb-3 space-y-2">
+  1119→                    <div className="flex items-center justify-between">
+  1120→                      <span className="text-[10px] text-cm-primary font-bold font-[family-name:var(--font-sora)]">Paso {step.number || idx + 1}</span>
+  1121→                      <button type="button" onClick={() => removeArrayItem('steps', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+  1122→                    </div>
+  1123→                    <div className="grid grid-cols-2 gap-2">
+  1124→                      <FormField label="Título" value={String(step.title || '')} onChange={(v) => updateArrayItem('steps', idx, 'title', v)} />
+  1125→                      <FormField label="Icono" value={String(step.icon || '')} onChange={(v) => updateArrayItem('steps', idx, 'icon', v)} />
+  1126→                    </div>
+  1127→                    <FormField label="Descripción" value={String(step.description || '')} onChange={(v) => updateArrayItem('steps', idx, 'description', v)} type="textarea" rows={2} />
+  1128→                    <FormField label="Detalle" value={String(step.detail || '')} onChange={(v) => updateArrayItem('steps', idx, 'detail', v)} />
+  1129→                  </div>
+  1130→                ))}
+  1131→              </div>
+  1132→            </>
+  1133→          )}
+  1134→        </EditModal>
+  1135→      )}
+  1136→
+  1137→      {/* ═══════ CUSTOM SECTION MODAL ═══════ */}
+  1138→      <EditModal
+  1139→        open={!!editingCustom}
+  1140→        onClose={() => { setEditingCustom(null); setCustomForm(null) }}
+  1141→        title={customForm?.id && settings?.customSections.some((s) => s.id === customForm.id) ? 'Editar sección personalizada' : 'Nueva sección personalizada'}
+  1142→        onSave={handleSaveCustom}
+  1143→        saving={savingCustom}
+  1144→      >
+  1145→        {customForm && (
+  1146→          <>
+  1147→            <div>
+  1148→              <label className="text-xs text-cm-on-surface-variant font-semibold mb-1.5 block font-[family-name:var(--font-inter)]">Tipo de sección</label>
+  1149→              <select
+  1150→                value={customForm.type}
+  1151→                onChange={(e) => setCustomForm({ ...customForm, type: e.target.value as CustomSection['type'] })}
+  1152→                className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+  1153→              >
+  1154→                <option value="banner">Banner (imagen completa)</option>
+  1155→                <option value="notice">Aviso / Noticia</option>
+  1156→                <option value="highlight">Destacado</option>
+  1157→                <option value="cta">Llamada a la acción (CTA)</option>
+  1158→                <option value="gallery">Galería de imágenes</option>
+  1159→              </select>
+  1160→            </div>
+  1161→            <FormField label="Título" value={customForm.title} onChange={(v) => setCustomForm({ ...customForm, title: v })} />
+  1162→            <FormField label="Subtítulo" value={customForm.subtitle || ''} onChange={(v) => setCustomForm({ ...customForm, subtitle: v })} type="textarea" />
+  1163→            {customForm.type !== 'notice' && (
+  1164→              <ImageUploader label="Imagen" path="" currentUrl={customForm.image || ''} onUpload={(url) => setCustomForm({ ...customForm, image: url })} uploadId="custom-image" />
+  1165→            )}
+  1166→            <FormField label="Enlace (URL opcional)" value={customForm.link || ''} onChange={(v) => setCustomForm({ ...customForm, link: v })} />
+  1167→            {(customForm.type === 'banner' || customForm.type === 'cta') && (
+  1168→              <FormField label="Texto del botón CTA" value={customForm.ctaText || ''} onChange={(v) => setCustomForm({ ...customForm, ctaText: v })} />
+  1169→            )}
+  1170→            {/* Gallery items management */}
+  1171→            {customForm.type === 'gallery' && (
+  1172→              <div>
+  1173→                <div className="flex items-center justify-between mb-1.5">
+  1174→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Imágenes de la galería</label>
+  1175→                  <button type="button" onClick={() => setCustomForm({
+  1176→                    ...customForm,
+  1177→                    items: [...(customForm.items || []), { image: '', title: '', description: '' }],
+  1178→                  })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1179→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar imagen
+  1180→                  </button>
+  1181→                </div>
+  1182→                <div className="grid grid-cols-2 gap-2">
+  1183→                  {(customForm.items || []).map((item, idx) => (
+  1184→                    <div key={idx} className="rounded-xl border border-white/10 p-2 space-y-1.5">
+  1185→                      {item.image ? (
+  1186→                        <div className="relative group rounded-lg overflow-hidden">
+  1187→                          <img src={item.image} alt={item.title || ''} className="w-full h-20 object-cover" />
+  1188→                          <button type="button" onClick={() => {
+  1189→                            const items = [...(customForm.items || [])]
+  1190→                            items[idx] = { ...items[idx], image: '' }
+  1191→                            setCustomForm({ ...customForm, items })
+  1192→                          }} className="absolute top-1 right-1 p-0.5 rounded bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+  1193→                            <span className="material-symbols-outlined text-[12px]">close</span>
+  1194→                          </button>
+  1195→                        </div>
+  1196→                      ) : (
+  1197→                        <label className="flex items-center justify-center h-20 rounded-lg border border-dashed border-white/10 cursor-pointer hover:border-cm-primary/30 transition-colors">
+  1198→                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+  1199→                            const file = e.target.files?.[0]
+  1200→                            if (file) {
+  1201→                              const fd = new FormData()
+  1202→                              fd.append('file', file)
+  1203→                              fd.append('folder', 'gallery')
+  1204→                              fetch('/api/upload', { method: 'POST', body: fd })
+  1205→                                .then((r) => r.json())
+  1206→                                .then((data) => {
+  1207→                                  const items = [...(customForm.items || [])]
+  1208→                                  items[idx] = { ...items[idx], image: data.url }
+  1209→                                  setCustomForm({ ...customForm, items })
+  1210→                                  toast({ title: 'Imagen subida' })
+  1211→                                })
+  1212→                                .catch(() => toast({ title: 'Error al subir', variant: 'destructive' }))
+  1213→                            }
+  1214→                            e.target.value = ''
+  1215→                          }} />
+  1216→                          <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">add_photo_alternate</span>
+  1217→                        </label>
+  1218→                      )}
+  1219→                      <input value={item.title || ''} onChange={(e) => {
+  1220→                        const items = [...(customForm.items || [])]
+  1221→                        items[idx] = { ...items[idx], title: e.target.value }
+  1222→                        setCustomForm({ ...customForm, items })
+  1223→                      }} placeholder="Título" className="w-full px-2 py-1 bg-transparent border border-white/10 rounded-lg text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1224→                      <button type="button" onClick={() => {
+  1225→                        const items = (customForm.items || []).filter((_, i) => i !== idx)
+  1226→                        setCustomForm({ ...customForm, items })
+  1227→                      }} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-[10px]">
+  1228→                        <span className="material-symbols-outlined text-[12px]">delete</span> Eliminar
+  1229→                      </button>
+  1230→                    </div>
+  1231→                  ))}
+  1232→                </div>
+  1233→              </div>
+  1234→            )}
+  1235→            <div className="flex items-center gap-2">
+  1236→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1237→                <input type="checkbox" checked={customForm.visible} onChange={(e) => setCustomForm({ ...customForm, visible: e.target.checked })} className="accent-green-500" />
+  1238→                Sección visible
+  1239→              </label>
+  1240→            </div>
+  1241→          </>
+  1242→        )}
+  1243→      </EditModal>
+  1244→
+  1245→      {/* ═══════ PROMOTION MODAL ═══════ */}
+  1246→      <EditModal
+  1247→        open={!!editingPromo}
+  1248→        onClose={() => { setEditingPromo(null); setPromoForm(null) }}
+  1249→        title="Promoción"
+  1250→        onSave={handleSavePromo}
+  1251→        saving={savingPromo}
+  1252→      >
+  1253→        {promoForm && (
+  1254→          <>
+  1255→            <FormField label="Título" value={promoForm.title} onChange={(v) => setPromoForm({ ...promoForm, title: v })} />
+  1256→            <FormField label="Descripción" value={promoForm.description} onChange={(v) => setPromoForm({ ...promoForm, description: v })} type="textarea" />
+  1257→            <div className="grid grid-cols-2 gap-3">
+  1258→              <FormField label="Descuento (ej. 20%)" value={promoForm.discount || ''} onChange={(v) => setPromoForm({ ...promoForm, discount: v })} />
+  1259→              <div className="flex items-center gap-2">
+  1260→                <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1261→                  <input type="checkbox" checked={promoForm.active} onChange={(e) => setPromoForm({ ...promoForm, active: e.target.checked })} className="accent-green-500" />
+  1262→                  Activar
+  1263→                </label>
+  1264→              </div>
+  1265→            </div>
+  1266→            <div className="grid grid-cols-2 gap-3">
+  1267→              <FormField label="Válido desde" value={promoForm.validFrom || ''} onChange={(v) => setPromoForm({ ...promoForm, validFrom: v })} />
+  1268→              <FormField label="Válido hasta" value={promoForm.validUntil || ''} onChange={(v) => setPromoForm({ ...promoForm, validUntil: v })} />
+  1269→            </div>
+  1270→            <ImageUploader label="Imagen de promoción" path="" currentUrl={promoForm.image || ''} onUpload={(url) => setPromoForm({ ...promoForm, image: url })} uploadId="promo-image" />
+  1271→          </>
+  1272→        )}
+  1273→      </EditModal>
+  1274→
+  1275→      {/* ═══════ HERO BANNER MODAL ═══════ */}
+  1276→      <EditModal
+  1277→        open={!!editingBanner}
+  1278→        onClose={() => { setEditingBanner(null); setBannerForm(null) }}
+  1279→        title="Banner del Hero"
+  1280→        onSave={handleSaveBanner}
+  1281→        saving={savingBanner}
+  1282→      >
+  1283→        {bannerForm && (
+  1284→          <>
+  1285→            <FormField label="Título" value={bannerForm.title || ''} onChange={(v) => setBannerForm({ ...bannerForm, title: v })} />
+  1286→            <FormField label="Subtítulo" value={bannerForm.subtitle || ''} onChange={(v) => setBannerForm({ ...bannerForm, subtitle: v })} />
+  1287→            <FormField label="Enlace (URL)" value={bannerForm.link || ''} onChange={(v) => setBannerForm({ ...bannerForm, link: v })} />
+  1288→            <ImageUploader label="Imagen del banner" path="" currentUrl={bannerForm.image || ''} onUpload={(url) => setBannerForm({ ...bannerForm, image: url })} uploadId="banner-image" />
+  1289→            <div className="flex items-center gap-2">
+  1290→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1291→                <input type="checkbox" checked={bannerForm.active} onChange={(e) => setBannerForm({ ...bannerForm, active: e.target.checked })} className="accent-green-500" />
+  1292→                Banner activo
+  1293→              </label>
+  1294→            </div>
+  1295→          </>
+  1296→        )}
+  1297→      </EditModal>
+  1298→
+  1299→      {/* ═══════ NEWS MODAL ═══════ */}
+  1300→      <EditModal
+  1301→        open={!!editingNews}
+  1302→        onClose={() => { setEditingNews(null); setNewsForm(null) }}
+  1303→        title={newsForm?.id && settings?.news.some((n) => n.id === newsForm.id) ? 'Editar noticia' : 'Nueva noticia'}
+  1304→        onSave={handleSaveNews}
+  1305→        saving={savingNews}
+  1306→      >
+  1307→        {newsForm && (
+  1308→          <>
+  1309→            <FormField label="Título" value={newsForm.title} onChange={(v) => setNewsForm({ ...newsForm, title: v })} placeholder="Título de la noticia" />
+  1310→            <FormField label="Contenido" value={newsForm.content} onChange={(v) => setNewsForm({ ...newsForm, content: v })} type="textarea" rows={4} placeholder="Escribe el contenido o descripción de la noticia..." />
+  1311→            <FormField label="Enlace (URL opcional)" value={newsForm.link || ''} onChange={(v) => setNewsForm({ ...newsForm, link: v })} placeholder="https://..." />
+  1312→            <ImageUploader label="Imagen de la noticia" path="" currentUrl={newsForm.image || ''} onUpload={(url) => setNewsForm({ ...newsForm, image: url })} uploadId="news-image" />
+  1313→            <div className="grid grid-cols-2 gap-3">
+  1314→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1315→                <input type="checkbox" checked={newsForm.active} onChange={(e) => setNewsForm({ ...newsForm, active: e.target.checked })} className="accent-green-500" />
+  1316→                Publicada (activa)
+  1317→              </label>
+  1318→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1319→                <input type="checkbox" checked={newsForm.pinned} onChange={(e) => setNewsForm({ ...newsForm, pinned: e.target.checked })} className="accent-cm-primary" />
+  1320→                Fijar como destacada
+  1321→              </label>
+  1322→            </div>
+  1323→          </>
+  1324→        )}
+  1325→      </EditModal>
+  1326→
+  1327→      {/* ═══════ PREVIEW MODAL ═══════ */}
+  1328→      <AnimatePresence>
+  1329→        {showPreview && (
+  1330→          <motion.div
+  1331→            initial={{ opacity: 0 }}
+  1332→            animate={{ opacity: 1 }}
+  1333→            exit={{ opacity: 0 }}
+  1334→            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+  1335→            onClick={() => setShowPreview(false)}
+  1336→          >
+  1337→            <motion.div
+  1338→              initial={{ y: 40, opacity: 0, scale: 0.95 }}
+  1339→              animate={{ y: 0, opacity: 1, scale: 1 }}
+  1340→              exit={{ y: 40, opacity: 0, scale: 0.95 }}
+  1341→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  1342→              className="w-full max-w-5xl max-h-[90vh] glass-card rounded-2xl overflow-hidden flex flex-col border-cm-primary/20"
+  1343→              onClick={(e) => e.stopPropagation()}
+  1344→            >
+  1345→              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-cm-surface-container/50">
+  1346→                <div className="flex items-center gap-2">
+  1347→                  <span className="material-symbols-outlined text-cm-primary text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>preview</span>
+  1348→                  <h2 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Vista Previa — Inicio</h2>
+  1349→                </div>
+  1350→                <div className="flex items-center gap-2">
+  1351→                  <span className="px-2 py-1 rounded-lg bg-cm-primary/10 text-cm-primary text-[10px] font-bold">{sectionOrder.filter((k) => {
+  1352→                    const v = k.startsWith('custom_') ? customSections.find((s) => s.id === k.replace('custom_', ''))?.visible ?? true : (visibility[k as keyof typeof visibility] ?? true)
+  1353→                    return v
+  1354→                  }).length} secciones visibles</span>
+  1355→                  <button type="button" onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  1356→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  1357→                  </button>
+  1358→                </div>
+  1359→              </div>
+  1360→              <div className="flex-1 overflow-y-auto bg-cm-background/50">
+  1361→                {/* Mobile frame preview */}
+  1362→                <div className="flex justify-center py-6 px-4">
+  1363→                  <div className="w-full max-w-[390px] bg-cm-background rounded-[2rem] shadow-2xl shadow-black/40 overflow-hidden border border-white/10">
+  1364→                    {/* Status bar */}
+  1365→                    <div className="flex items-center justify-between px-6 pt-3 pb-1">
+  1366→                      <span className="text-[10px] text-cm-on-surface-variant font-medium">9:41</span>
+  1367→                      <div className="w-20 h-5 bg-cm-on-surface rounded-full"></div>
+  1368→                      <div className="flex items-center gap-1">
+  1369→                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">signal_cellular_alt</span>
+  1370→                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">battery_full</span>
+  1371→                      </div>
+  1372→                    </div>
+  1373→                    {/* Content preview */}
+  1374→                    <div className="overflow-y-auto max-h-[70vh]">
+  1375→                      {sectionOrder.map((key) => {
+  1376→                        const isVisible = key.startsWith('custom_')
+  1377→                          ? customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true
+  1378→                          : (visibility[key as keyof typeof visibility] ?? true)
+  1379→                        if (!isVisible) return null
+  1380→
+  1381→                        return (
+  1382→                          <div key={key} className="relative">
+  1383→                            {/* Hidden sections indicator */}
+  1384→                            {!isVisible && (
+  1385→                              <div className="px-4 py-2 bg-white/5 border-l-2 border-gray-500/50">
+  1386→                                <span className="text-[10px] text-cm-on-surface-variant/50 font-medium">OCULTO — {sectionMeta[key]?.label || key}</span>
+  1387→                              </div>
+  1388→                            )}
+  1389→
+  1390→                            {/* ── Hero Section Preview ── */}
+  1391→                            {key === 'hero' && (
+  1392→                              <div className="relative overflow-hidden">
+  1393→                                {settings.hero.backgroundImage ? (
+  1394→                                  <img src={settings.hero.backgroundImage} alt="" className="w-full h-56 object-cover" />
+  1395→                                ) : (
+  1396→                                  <div className="w-full h-56 bg-gradient-to-br from-cm-primary/30 to-cm-primary/5" />
+  1397→                                )}
+  1398→                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+  1399→                                <div className="absolute bottom-0 left-0 right-0 p-5">
+  1400→                                  <div className="flex items-center gap-1.5 mb-2">
+  1401→                                    <span className="material-symbols-outlined text-[12px] text-cm-primary">location_on</span>
+  1402→                                    <span className="text-[10px] text-white/70">{settings.hero.location}</span>
+  1403→                                  </div>
+  1404→                                  <div className="px-2.5 py-1 rounded-full bg-cm-primary/20 backdrop-blur-sm inline-block mb-2">
+  1405→                                    <span className="text-[10px] text-cm-primary font-bold">{settings.hero.badge}</span>
+  1406→                                  </div>
+  1407→                                  <h3 className="text-lg font-bold text-white font-[family-name:var(--font-sora)] leading-tight">
+  1408→                                    {settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span>
+  1409→                                  </h3>
+  1410→                                  <p className="text-[10px] text-white/60 mt-1 line-clamp-2">{settings.hero.subtitle}</p>
+  1411→                                  <div className="flex gap-3 mt-3">
+  1412→                                    {settings.hero.stats.map((stat, i) => (
+  1413→                                      <div key={i} className="text-center">
+  1414→                                        <span className="text-sm font-bold text-white font-[family-name:var(--font-sora)]">{stat.value}</span>
+  1415→                                        <p className="text-[9px] text-white/50">{stat.label}</p>
+  1416→                                      </div>
+  1417→                                    ))}
+  1418→                                  </div>
+  1419→                                </div>
+  1420→                              </div>
+  1421→                            )}
+  1422→
+  1423→                            {/* ── Sports Section Preview ── */}
+  1424→                            {key === 'sportsSection' && (
+  1425→                              <div className="p-4">
+  1426→                                <div className="px-2.5 py-1 rounded-full bg-green-500/15 inline-block mb-1">
+  1427→                                  <span className="text-[10px] text-green-400 font-bold">{settings.sportsSection.badge}</span>
+  1428→                                </div>
+  1429→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.sportsSection.title}</h3>
+  1430→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.sportsSection.subtitle}</p>
+  1431→                                <div className="mt-3 space-y-3">
+  1432→                                  {settings.sportsSection.sports.map((sport) => (
+  1433→                                    <div key={sport.id} className="rounded-xl overflow-hidden border border-white/10">
+  1434→                                      {sport.image ? (
+  1435→                                        <img src={sport.image} alt={sport.label} className="w-full h-28 object-cover" />
+  1436→                                      ) : (
+  1437→                                        <div className="w-full h-28 bg-cm-surface-container-highest flex items-center justify-center">
+  1438→                                          <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/20">{sport.icon || 'sports'}</span>
+  1439→                                        </div>
+  1440→                                      )}
+  1441→                                      <div className="p-3">
+  1442→                                        <div className="flex items-center justify-between">
+  1443→                                          <div className="flex items-center gap-2">
+  1444→                                            <span className="font-bold text-sm text-cm-on-surface font-[family-name:var(--font-sora)]">{sport.label}</span>
+  1445→                                            {sport.badge && (
+  1446→                                              <span className="px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[8px] font-bold">{sport.badge}</span>
+  1447→                                            )}
+  1448→                                          </div>
+  1449→                                          <span className="text-sm font-bold text-cm-primary">{sport.priceRange}</span>
+  1450→                                        </div>
+  1451→                                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+  1452→                                          {sport.pricingDetails?.map((pd, i) => (
+  1453→                                            <span key={i} className="px-2 py-0.5 rounded-lg bg-white/5 text-[9px] text-cm-on-surface-variant">
+  1454→                                              {pd.label}: {pd.timeRange} — S/. {pd.price}
+  1455→                                            </span>
+  1456→                                          ))}
+  1457→                                        </div>
+  1458→                                        <div className="flex gap-1 mt-2 flex-wrap">
+  1459→                                          {sport.amenities.map((a, i) => (
+  1460→                                            <span key={i} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] text-cm-on-surface-variant">{a}</span>
+  1461→                                          ))}
+  1462→                                        </div>
+  1463→                                      </div>
+  1464→                                    </div>
+  1465→                                  ))}
+  1466→                                </div>
+  1467→                              </div>
+  1468→                            )}
+  1469→
+  1470→                            {/* ── Featured Courts Preview ── */}
+  1471→                            {key === 'featuredCourts' && (
+  1472→                              <div className="p-4">
+  1473→                                {settings.featuredCourts?.badge && (
+  1474→                                  <div className="px-2.5 py-1 rounded-full bg-teal-500/15 inline-block mb-1">
+  1475→                                    <span className="text-[10px] text-teal-400 font-bold">{settings.featuredCourts.badge}</span>
+  1476→                                  </div>
+  1477→                                )}
+  1478→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1">{settings.featuredCourts?.title || 'Canchas Destacadas'}</h3>
+  1479→                                <p className="text-[10px] text-cm-on-surface-variant mb-3">{settings.featuredCourts?.subtitle || 'Reserva tu espacio favorito'}</p>
+  1480→                                <div className="grid grid-cols-2 gap-2">
+  1481→                                  {['Cancha Fútbol 1', 'Cancha Fútbol 2', 'Cancha Vóley A', 'Cancha Vóley B'].map((name, i) => (
+  1482→                                    <div key={i} className="rounded-xl border border-white/10 p-2.5 bg-cm-surface-container/30">
+  1483→                                      <div className="w-full h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center mb-1.5">
+  1484→                                        <span className="material-symbols-outlined text-xl text-cm-on-surface-variant/20">{i < 2 ? 'sports_soccer' : 'sports_volleyball'}</span>
+  1485→                                      </div>
+  1486→                                      <span className="text-[10px] font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{name}</span>
+  1487→                                    </div>
+  1488→                                  ))}
+  1489→                                </div>
+  1490→                              </div>
+  1491→                            )}
+  1492→
+  1493→                            {/* ── Promo Banner Preview ── */}
+  1494→                            {key === 'promoBanner' && (
+  1495→                              <div className="p-4">
+  1496→                                <div className="px-2.5 py-1 rounded-full bg-purple-500/15 inline-block mb-1">
+  1497→                                  <span className="text-[10px] text-purple-400 font-bold">{settings.promoBanner.badge}</span>
+  1498→                                </div>
+  1499→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.promoBanner.title}</h3>
+
+[showing lines 1000-1499 of 6561; use offset=1500 with limit to continue reading]

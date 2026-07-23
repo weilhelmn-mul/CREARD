@@ -1,0 +1,502 @@
+  1500→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.promoBanner.subtitle}</p>
+  1501→                                <div className="mt-3 space-y-2">
+  1502→                                  {settings.promoBanner.sellingPoints.map((sp, i) => (
+  1503→                                    <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl ${sp.highlight ? 'bg-cm-primary/10 border border-cm-primary/20' : 'bg-white/5'}`}>
+  1504→                                      <span className="material-symbols-outlined text-[18px] text-cm-primary mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>{sp.icon || 'star'}</span>
+  1505→                                      <div>
+  1506→                                        <span className="text-xs font-bold text-cm-on-surface">{sp.title}</span>
+  1507→                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5">{sp.description}</p>
+  1508→                                      </div>
+  1509→                                    </div>
+  1510→                                  ))}
+  1511→                                </div>
+  1512→                                <div className="mt-3 flex items-center gap-2">
+  1513→                                  {settings.promoBanner.paymentMethods.map((pm, i) => (
+  1514→                                    <span key={i} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5">
+  1515→                                      <span className="material-symbols-outlined text-[12px]">{pm.icon}</span>
+  1516→                                      <span className="text-[9px] text-cm-on-surface-variant">{pm.name}</span>
+  1517→                                    </span>
+  1518→                                  ))}
+  1519→                                </div>
+  1520→                              </div>
+  1521→                            )}
+  1522→
+  1523→                            {/* ── How It Works Preview ── */}
+  1524→                            {key === 'howItWorks' && (
+  1525→                              <div className="p-4">
+  1526→                                <div className="px-2.5 py-1 rounded-full bg-sky-500/15 inline-block mb-1">
+  1527→                                  <span className="text-[10px] text-sky-400 font-bold">{settings.howItWorks.badge}</span>
+  1528→                                </div>
+  1529→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.howItWorks.title}</h3>
+  1530→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5 mb-3">{settings.howItWorks.subtitle}</p>
+  1531→                                <div className="space-y-2.5">
+  1532→                                  {settings.howItWorks.steps.map((step, i) => (
+  1533→                                    <div key={i} className="flex items-start gap-3">
+  1534→                                      <div className="w-8 h-8 rounded-full bg-cm-primary/15 flex items-center justify-center flex-shrink-0">
+  1535→                                        <span className="text-[10px] font-bold text-cm-primary">{step.number}</span>
+  1536→                                      </div>
+  1537→                                      <div className="flex-1 pt-0.5">
+  1538→                                        <span className="text-xs font-bold text-cm-on-surface">{step.title}</span>
+  1539→                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5 line-clamp-2">{step.description}</p>
+  1540→                                      </div>
+  1541→                                      {i < settings.howItWorks.steps.length - 1 && (
+  1542→                                        <div className="absolute left-[22px] top-8 w-0.5 h-3 bg-cm-primary/20" />
+  1543→                                      )}
+  1544→                                    </div>
+  1545→                                  ))}
+  1546→                                </div>
+  1547→                              </div>
+  1548→                            )}
+  1549→
+  1550→                            {/* ── Custom Section Preview ── */}
+  1551→                            {key.startsWith('custom_') && (() => {
+  1552→                              const cs = customSections.find((s) => s.id === key.replace('custom_', ''))
+  1553→                              if (!cs) return null
+  1554→                              const typeConfig: Record<string, { color: string; icon: string }> = {
+  1555→                                banner: { color: 'border-l-cm-primary', icon: 'image' },
+  1556→                                notice: { color: 'border-l-amber-400', icon: 'campaign' },
+  1557→                                highlight: { color: 'border-l-purple-400', icon: 'star' },
+  1558→                                cta: { color: 'border-l-sky-400', icon: 'touch_app' },
+  1559→                                gallery: { color: 'border-l-teal-400', icon: 'photo_library' },
+  1560→                              }
+  1561→                              const cfg = typeConfig[cs.type] || typeConfig.banner
+  1562→                              return (
+  1563→                                <div className={`border-l-2 ${cfg.color} p-3 mx-4 my-2 rounded-r-xl bg-white/5`}>
+  1564→                                  {cs.image && (
+  1565→                                    <img src={cs.image} alt={cs.title} className="w-full h-32 object-cover rounded-lg mb-2" />
+  1566→                                  )}
+  1567→                                  <div className="flex items-center gap-1.5 mb-1">
+  1568→                                    <span className="material-symbols-outlined text-[14px] text-cm-on-surface-variant">{cfg.icon}</span>
+  1569→                                    <span className="text-[10px] text-cm-on-surface-variant/60 font-semibold uppercase">{cs.type}</span>
+  1570→                                  </div>
+  1571→                                  <h4 className="text-sm font-bold text-cm-on-surface">{cs.title}</h4>
+  1572→                                  {cs.subtitle && <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{cs.subtitle}</p>}
+  1573→                                  {cs.ctaText && (
+  1574→                                    <div className="mt-2">
+  1575→                                      <span className="px-3 py-1.5 rounded-lg bg-cm-primary text-cm-on-primary text-[10px] font-bold inline-block">{cs.ctaText}</span>
+  1576→                                    </div>
+  1577→                                  )}
+  1578→                                  {cs.type === 'gallery' && cs.items && cs.items.length > 0 && (
+  1579→                                    <div className="mt-2 grid grid-cols-3 gap-1">
+  1580→                                      {cs.items.map((item, i) => (
+  1581→                                        <img key={i} src={item.image} alt={item.title || ''} className="w-full h-16 object-cover rounded-lg" />
+  1582→                                      ))}
+  1583→                                    </div>
+  1584→                                  )}
+  1585→                                </div>
+  1586→                              )
+  1587→                            })()}
+  1588→                          </div>
+  1589→                        )
+  1590→                      })}
+  1591→
+  1592→                      {/* Active promotions strip */}
+  1593→                      {settings.activePromotions.filter((p) => p.active).length > 0 && (
+  1594→                        <div className="px-4 pb-3">
+  1595→                          <div className="rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/20 p-3">
+  1596→                            <div className="flex items-center gap-1.5 mb-2">
+  1597→                              <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>local_offer</span>
+  1598→                              <span className="text-[10px] text-amber-400 font-bold">Promociones</span>
+  1599→                            </div>
+  1600→                            <div className="flex gap-2 overflow-x-auto pb-1">
+  1601→                              {settings.activePromotions.filter((p) => p.active).map((p) => (
+  1602→                                <div key={p.id} className="flex-shrink-0 w-48 rounded-lg bg-white/5 p-2">
+  1603→                                  {p.image && <img src={p.image} alt={p.title} className="w-full h-16 object-cover rounded-md mb-1.5" />}
+  1604→                                  <div className="flex items-center gap-1">
+  1605→                                    <span className="text-[10px] font-bold text-cm-on-surface truncate">{p.title}</span>
+  1606→                                    {p.discount && <span className="px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[8px] font-bold flex-shrink-0">{p.discount}</span>}
+  1607→                                  </div>
+  1608→                                  {p.description && <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{p.description}</p>}
+  1609→                                </div>
+  1610→                              ))}
+  1611→                            </div>
+  1612→                          </div>
+  1613→                        </div>
+  1614→                      )}
+  1615→
+  1616→                      {/* Hero banners strip */}
+  1617→                      {settings.heroBanners.filter((b) => b.active).length > 0 && (
+  1618→                        <div className="px-4 pb-4">
+  1619→                          <div className="flex items-center gap-1.5 mb-2">
+  1620→                            <span className="material-symbols-outlined text-sky-400 text-[14px]">view_carousel</span>
+  1621→                            <span className="text-[10px] text-sky-400 font-bold">Carrusel Hero ({settings.heroBanners.filter((b) => b.active).length})</span>
+  1622→                          </div>
+  1623→                          <div className="flex gap-2 overflow-x-auto pb-1">
+  1624→                            {settings.heroBanners.filter((b) => b.active).map((b) => (
+  1625→                              <div key={b.id} className="flex-shrink-0 w-56 rounded-lg overflow-hidden border border-white/10">
+  1626→                                {b.image ? (
+  1627→                                  <img src={b.image} alt={b.title || ''} className="w-full h-24 object-cover" />
+  1628→                                ) : (
+  1629→                                  <div className="w-full h-24 bg-cm-surface-container-highest flex items-center justify-center">
+  1630→                                    <span className="material-symbols-outlined text-cm-on-surface-variant/20">image</span>
+  1631→                                  </div>
+  1632→                                )}
+  1633→                                <div className="p-2">
+  1634→                                  {b.title && <span className="text-[10px] font-bold text-cm-on-surface">{b.title}</span>}
+  1635→                                  {b.subtitle && <p className="text-[8px] text-cm-on-surface-variant">{b.subtitle}</p>}
+  1636→                                </div>
+  1637→                              </div>
+  1638→                            ))}
+  1639→                          </div>
+  1640→                        </div>
+  1641→                      )}
+  1642→
+  1643→                      {/* News strip */}
+  1644→                      {settings.news && settings.news.filter((n) => n.active).length > 0 && (
+  1645→                        <div className="px-4 pb-3">
+  1646→                          <div className="rounded-xl bg-gradient-to-r from-cm-primary/10 to-teal-500/10 border border-cm-primary/20 p-3">
+  1647→                            <div className="flex items-center gap-1.5 mb-2">
+  1648→                              <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>newspaper</span>
+  1649→                              <span className="text-[10px] text-cm-primary font-bold">Noticias</span>
+  1650→                            </div>
+  1651→                            <div className="space-y-2">
+  1652→                              {[...settings.news].filter((n) => n.active).sort((a, b) => (a.pinned && !b.pinned ? -1 : 0)).slice(0, 3).map((n) => (
+  1653→                                <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+  1654→                                  {n.image && <img src={n.image} alt={n.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />}
+  1655→                                  <div className="flex-1 min-w-0">
+  1656→                                    <div className="flex items-center gap-1">
+  1657→                                      {n.pinned && <span className="material-symbols-outlined text-[10px] text-cm-primary">push_pin</span>}
+  1658→                                      <span className="text-[10px] font-bold text-cm-on-surface truncate">{n.title}</span>
+  1659→                                    </div>
+  1660→                                    <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{n.content}</p>
+  1661→                                  </div>
+  1662→                                </div>
+  1663→                              ))}
+  1664→                            </div>
+  1665→                          </div>
+  1666→                        </div>
+  1667→                      )}
+  1668→                    </div>
+  1669→                    {/* Bottom nav hint */}
+  1670→                    <div className="flex items-center justify-around py-2 border-t border-white/10 bg-cm-surface-container/50">
+  1671→                      {['home', 'search', 'calendar_month', 'person'].map((icon, i) => (
+  1672→                        <span key={i} className={`material-symbols-outlined text-[20px] ${i === 0 ? 'text-cm-primary' : 'text-cm-on-surface-variant/30'}`}>{icon}</span>
+  1673→                      ))}
+  1674→                    </div>
+  1675→                  </div>
+  1676→                </div>
+  1677→              </div>
+  1678→            </motion.div>
+  1679→          </motion.div>
+  1680→        )}
+  1681→      </AnimatePresence>
+  1682→    </>
+  1683→  )
+  1684→}
+  1685→
+  1686→/* ═══════════════════════════════════════════════════
+  1687→   COURTS MANAGEMENT TAB
+  1688→   ═══════════════════════════════════════════════════ */
+  1689→
+  1690→function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; name: string; sport?: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }>; onRefresh: () => void }) {
+  1691→  const [migrating, setMigrating] = useState(false)
+  1692→  const [editingCourt, setEditingCourt] = useState<string | null>(null)
+  1693→  const [editName, setEditName] = useState('')
+  1694→  const [editPrice, setEditPrice] = useState('')
+  1695→  const [editSchedule, setEditSchedule] = useState<PricingScheduleItem[]>([])
+  1696→  const [saving, setSaving] = useState(false)
+  1697→  const [showSchedule, setShowSchedule] = useState<string | null>(null)
+  1698→
+  1699→  const blockPresets = [
+  1700→    { label: 'Mañana', startHour: 7, endHour: 13, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+  1701→    { label: 'Tarde', startHour: 13, endHour: 18, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
+  1702→    { label: 'Noche', startHour: 18, endHour: 23, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
+  1703→  ]
+  1704→
+  1705→  const handleMigrate = async () => {
+  1706→    setMigrating(true)
+  1707→    try {
+  1708→      const res = await fetch('/api/migrate/courts', { method: 'PUT', headers: getAuthHeaders() })
+  1709→      if (res.ok) {
+  1710→        toast({ title: 'Migración exitosa', description: 'Canchas actualizadas correctamente en Firestore.' })
+  1711→        onRefresh()
+  1712→      } else {
+  1713→        const err = await res.json().catch(() => ({ error: 'Error' }))
+  1714→        toast({ title: 'Error en migración', description: err.error || 'No se pudo migrar', variant: 'destructive' })
+  1715→      }
+  1716→    } catch {
+  1717→      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+  1718→    } finally {
+  1719→      setMigrating(false)
+  1720→    }
+  1721→  }
+  1722→
+  1723→
+  1724→  // Check for overlapping blocks
+  1725→  const getOverlapWarnings = (schedule: PricingScheduleItem[]): string[] => {
+  1726→    const warnings: string[] = []
+  1727→    const sorted = [...schedule]
+  1728→      .filter(s => s.startHour < s.endHour)
+  1729→      .sort((a, b) => a.startHour - b.startHour)
+  1730→    for (let i = 0; i < sorted.length - 1; i++) {
+  1731→      if (sorted[i].endHour > sorted[i + 1].startHour) {
+  1732→        warnings.push(
+  1733→          `"${sorted[i].label}" (${fmtHour(sorted[i].startHour)}–${fmtHour(sorted[i].endHour)}) se solapa con "${sorted[i + 1].label}" (${fmtHour(sorted[i + 1].startHour)}–${fmtHour(sorted[i + 1].endHour)})`
+  1734→        )
+  1735→      }
+  1736→    }
+  1737→    return warnings
+  1738→  }
+  1739→
+  1740→  const getZeroPriceWarnings = (schedule: PricingScheduleItem[]): string[] => {
+  1741→    return schedule
+  1742→      .filter(s => s.startHour < s.endHour && s.pricePerHour <= 0)
+  1743→      .map(s => `"${s.label}" (${fmtHour(s.startHour)}–${fmtHour(s.endHour)}) tiene precio S/ 0 — no generará cobro`)
+  1744→  }
+  1745→
+  1746→  const handleSaveCourt = async () => {
+  1747→    if (!editingCourt || !editName) return
+  1748→
+  1749→    const overlaps = getOverlapWarnings(editSchedule)
+  1750→    if (overlaps.length > 0) {
+  1751→      toast({ title: 'Bloques solapados', description: overlaps[0], variant: 'destructive' })
+  1752→      return
+  1753→    }
+  1754→
+  1755→    const validSchedule = editSchedule
+  1756→      .filter(s => s.startHour < s.endHour)
+  1757→      .sort((a, b) => a.startHour - b.startHour)
+  1758→
+  1759→    const zeroWarnings = getZeroPriceWarnings(validSchedule)
+  1760→
+  1761→    setSaving(true)
+  1762→    try {
+  1763→      const res = await fetch('/api/admin/courts', {
+  1764→        method: 'PUT',
+  1765→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  1766→        body: JSON.stringify({
+  1767→          id: editingCourt,
+  1768→          name: editName,
+  1769→          price_per_hour: parseFloat(editPrice) || undefined,
+  1770→          pricing_schedule: validSchedule,
+  1771→        }),
+  1772→      })
+  1773→      if (res.ok) {
+  1774→        const blockCount = validSchedule.filter(s => s.pricePerHour > 0).length
+  1775→        const msg = blockCount > 0
+  1776→          ? `"${editName}" guardada con ${blockCount} bloque${blockCount > 1 ? 's' : ''} de tarifa activos.`
+  1777→          : `"${editName}" guardada. Todos los bloques tienen precio S/ 0 — se usará el precio base.`
+  1778→        toast({
+  1779→          title: 'Cancha actualizada',
+  1780→          description: msg,
+  1781→          ...(zeroWarnings.length > 0 && { variant: 'destructive' }),
+  1782→        })
+  1783→        setEditingCourt(null)
+  1784→        onRefresh()
+  1785→      } else {
+  1786→        const err = await res.json().catch(() => ({ error: 'Error' }))
+  1787→        toast({ title: 'Error', description: err.error || 'No se pudo actualizar', variant: 'destructive' })
+  1788→      }
+  1789→    } catch {
+  1790→      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+  1791→    } finally {
+  1792→      setSaving(false)
+  1793→    }
+  1794→  }
+  1795→
+  1796→  const startEdit = (court: { id: string; name: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }) => {
+  1797→    setEditingCourt(court.id)
+  1798→    setEditName(court.name)
+  1799→    setEditPrice(String(court.pricePerHour || 0))
+  1800→    setEditSchedule(
+  1801→      Array.isArray(court.pricingSchedule) && court.pricingSchedule.length > 0
+  1802→        ? court.pricingSchedule.map(s => ({ ...s }))
+  1803→        : blockPresets.map(p => ({ label: p.label, startHour: p.startHour, endHour: p.endHour, pricePerHour: 0 }))
+  1804→    )
+  1805→  }
+  1806→
+  1807→  const updateScheduleItem = (idx: number, field: keyof PricingScheduleItem, value: string | number) => {
+  1808→    setEditSchedule(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  1809→  }
+  1810→
+  1811→  const addScheduleBlock = () => {
+  1812→    setEditSchedule(prev => [...prev, { label: 'Bloque', startHour: 0, endHour: 1, pricePerHour: 0 }])
+  1813→  }
+  1814→
+  1815→  const removeScheduleBlock = (idx: number) => {
+  1816→    setEditSchedule(prev => prev.filter((_, i) => i !== idx))
+  1817→  }
+  1818→
+  1819→  const sportLabels: Record<string, string> = { futbol: 'Fútbol 7', voley: 'Vóley' }
+  1820→  const sportColors: Record<string, string> = { futbol: 'bg-green-500/15 text-green-400 border-green-500/30', voley: 'bg-amber-500/15 text-amber-400 border-amber-500/30' }
+  1821→
+  1822→  const getBlockStyle = (label: string) => {
+  1823→    const l = label.toLowerCase()
+  1824→    if (l.includes('mañana') || l.includes('manana') || l.includes('dia')) return { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', dot: 'bg-amber-400' }
+  1825→    if (l.includes('tarde')) return { color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30', dot: 'bg-orange-400' }
+  1826→    if (l.includes('noche')) return { color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', dot: 'bg-indigo-400' }
+  1827→    return { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', dot: 'bg-blue-400' }
+  1828→  }
+  1829→
+  1830→  return (
+  1831→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+  1832→      {/* Header */}
+  1833→      <div className="flex items-center justify-between">
+  1834→        <div>
+  1835→          <h2 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestión de Canchas</h2>
+  1836→          <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
+  1837→            {allCourts.length} canchas registradas · Configura tarifas por bloques horarios
+  1838→          </p>
+  1839→        </div>
+  1840→        <button type="button"
+  1841→          onClick={handleMigrate}
+  1842→          disabled={migrating}
+  1843→          className="flex items-center gap-2 px-4 py-2.5 bg-[#00ff41]/10 text-[#00ff41] text-sm font-semibold rounded-xl border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all disabled:opacity-50 font-[family-name:var(--font-sora)]"
+  1844→        >
+  1845→          <span className="material-symbols-outlined text-[18px]">{migrating ? 'progress_activity' : 'sync'}</span>
+  1846→          {migrating ? 'Migrando...' : 'Sincronizar'}
+  1847→        </button>
+  1848→      </div>
+  1849→
+  1850→      {/* Courts List */}
+  1851→      <div className="space-y-4">
+  1852→        {allCourts.map((court) => {
+  1853→          const schedule = court.pricingSchedule || []
+  1854→          const courtEditing = editingCourt === court.id
+  1855→
+  1856→          return (
+  1857→            <div key={court.id} className="glass-card rounded-xl overflow-hidden">
+  1858→              {courtEditing ? (
+  1859→                /* ─── EDIT MODE ─── */
+  1860→                <div className="p-5 space-y-5">
+  1861→                  {/* Name + Base Price */}
+  1862→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1863→                    <div>
+  1864→                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Nombre de la cancha</label>
+  1865→                      <input
+  1866→                        value={editName}
+  1867→                        onChange={(e) => setEditName(e.target.value)}
+  1868→                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+  1869→                      />
+  1870→                    </div>
+  1871→                    <div>
+  1872→                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio base / respaldo (S/ hora)</label>
+  1873→                      <input
+  1874→                        type="number"
+  1875→                        min="0"
+  1876→                        step="1"
+  1877→                        value={editPrice}
+  1878→                        onChange={(e) => setEditPrice(e.target.value)}
+  1879→                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+  1880→                      />
+  1881→                    </div>
+  1882→                  </div>
+  1883→
+  1884→                  {/* Pricing Schedule */}
+  1885→                  <div>
+  1886→                    <div className="flex items-center justify-between mb-3">
+  1887→                      <div>
+  1888→                        <h4 className="text-sm font-bold text-cm-on-surface font-[family-name:var(--font-sora)] flex items-center gap-2">
+  1889→                          <span className="material-symbols-outlined text-[16px] text-[#00ff41]">schedule</span>
+  1890→                          Tarifas por Bloques Horarios
+  1891→                        </h4>
+  1892→                        <p className="text-[10px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)]">Define precios diferentes según el turno. Las reservas calcularán automáticamente.</p>
+  1893→                      </div>
+  1894→                      <button type="button"
+  1895→                        onClick={addScheduleBlock}
+  1896→                        className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-[#00ff41] bg-[#00ff41]/10 border border-[#00ff41]/30 rounded-lg hover:bg-[#00ff41]/20 transition-all"
+  1897→                      >
+  1898→                        <span className="material-symbols-outlined text-[14px]">add</span>
+  1899→                        Bloque
+  1900→                      </button>
+  1901→                    </div>
+  1902→
+  1903→                    {editSchedule.length === 0 ? (
+  1904→                      <div className="text-center py-6 border border-dashed border-white/10 rounded-xl">
+  1905→                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[32px]">schedule</span>
+  1906→                        <p className="text-xs text-cm-on-surface-variant mt-2">Sin bloques de tarifa. Se usará el precio base.</p>
+  1907→                      </div>
+  1908→                    ) : (
+  1909→                      <div className="space-y-2">
+  1910→                        {editSchedule.map((slot, idx) => {
+  1911→                          const style = getBlockStyle(slot.label)
+  1912→                          return (
+  1913→                            <div key={idx} className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${style.bg} ${style.border}`}>
+  1914→                              {/* Label */}
+  1915→                              <input
+  1916→                                value={slot.label}
+  1917→                                onChange={(e) => updateScheduleItem(idx, 'label', e.target.value)}
+  1918→                                className="w-24 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs font-semibold text-cm-on-surface focus:outline-none focus:border-white/30 font-[family-name:var(--font-sora)]"
+  1919→                                placeholder="Turno"
+  1920→                              />
+  1921→                              {/* Time Range */}
+  1922→                              <div className="flex items-center gap-1">
+  1923→                                <input
+  1924→                                  type="number"
+  1925→                                  min={0}
+  1926→                                  max={23}
+  1927→                                  value={slot.startHour}
+  1928→                                  onChange={(e) => updateScheduleItem(idx, 'startHour', parseInt(e.target.value) || 0)}
+  1929→                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+  1930→                                />
+  1931→                                <span className="text-cm-on-surface-variant text-xs font-mono">:</span>
+  1932→                                <span className="text-cm-on-surface-variant text-[10px]">00</span>
+  1933→                                <span className="text-cm-on-surface-variant text-xs mx-1">—</span>
+  1934→                                <input
+  1935→                                  type="number"
+  1936→                                  min={1}
+  1937→                                  max={24}
+  1938→                                  value={slot.endHour}
+  1939→                                  onChange={(e) => updateScheduleItem(idx, 'endHour', parseInt(e.target.value) || 1)}
+  1940→                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+  1941→                                />
+  1942→                                <span className="text-cm-on-surface-variant text-xs font-mono">:00</span>
+  1943→                              </div>
+  1944→                              {/* Price */}
+  1945→                              <div className="flex items-center gap-1 ml-auto">
+  1946→                                <span className="text-cm-on-surface-variant text-xs">S/</span>
+  1947→                                <input
+  1948→                                  type="number"
+  1949→                                  min={0}
+  1950→                                  step="1"
+  1951→                                  value={slot.pricePerHour}
+  1952→                                  onChange={(e) => updateScheduleItem(idx, 'pricePerHour', parseFloat(e.target.value) || 0)}
+  1953→                                  className={`w-20 px-2 py-1.5 border rounded-lg text-xs text-center focus:outline-none font-mono font-semibold transition-colors ${
+  1954→                                    slot.pricePerHour <= 0
+  1955→                                      ? 'bg-red-500/10 border-red-500/30 text-red-300 focus:border-red-500/50'
+  1956→                                      : 'bg-black/20 border-white/10 text-cm-on-surface focus:border-white/30'
+  1957→                                  }`}
+  1958→                                />
+  1959→                                <span className="text-cm-on-surface-variant text-[10px]">/hr</span>
+  1960→                              </div>
+  1961→                              {/* Remove */}
+  1962→                              <button type="button"
+  1963→                                onClick={() => removeScheduleBlock(idx)}
+  1964→                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
+  1965→                              >
+  1966→                                <span className="material-symbols-outlined text-[14px]">close</span>
+  1967→                              </button>
+  1968→                            </div>
+  1969→                          )
+  1970→                        })}
+  1971→                      </div>
+  1972→                    )}
+  1973→
+  1974→                    {/* Real-time Validation Warnings */}
+  1975→                    {editSchedule.length > 0 && (
+  1976→                      <div className="mt-2 space-y-1">
+  1977→                        {getOverlapWarnings(editSchedule).map((w, i) => (
+  1978→                          <div key={`ov-${i}`} className="flex items-start gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
+  1979→                            <span className="material-symbols-outlined text-red-400 text-[14px] mt-0.5 shrink-0">warning</span>
+  1980→                            <p className="text-[11px] text-red-300 font-[family-name:var(--font-inter)]">{w}</p>
+  1981→                          </div>
+  1982→                        ))}
+  1983→                        {getZeroPriceWarnings(editSchedule).map((w, i) => (
+  1984→                          <div key={`zp-${i}`} className="flex items-start gap-1.5 px-3 py-2 bg-amber-500/10 border border-amber-500/25 rounded-lg">
+  1985→                            <span className="material-symbols-outlined text-amber-400 text-[14px] mt-0.5 shrink-0">info</span>
+  1986→                            <p className="text-[11px] text-amber-300 font-[family-name:var(--font-inter)]">{w}</p>
+  1987→                          </div>
+  1988→                        ))}
+  1989→                      </div>
+  1990→                    )}
+  1991→
+  1992→                    {/* Visual Timeline Preview */}
+  1993→                    {editSchedule.length > 0 && (
+  1994→                      <div className="mt-3 pt-3 border-t border-white/5">
+  1995→                        <p className="text-[10px] text-cm-on-surface-variant mb-2 font-semibold uppercase tracking-wider">Vista previa del horario</p>
+  1996→                        <div className="flex rounded-lg overflow-hidden h-8 border border-white/10">
+  1997→                          {(() => {
+  1998→                            const sorted = [...editSchedule].sort((a, b) => a.startHour - b.startHour)
+  1999→                            const totalHours = 24
+
+[showing lines 1500-1999 of 6561; use offset=2000 with limit to continue reading]
