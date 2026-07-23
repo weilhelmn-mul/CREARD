@@ -123,6 +123,12 @@ export interface FeaturedCourtsSettings {
   ctaText: string
 }
 
+// ── Legal section (admin editable) ──
+export interface LegalSection {
+  title: string
+  content: string // HTML content
+}
+
 export interface SiteSettings {
   hero: {
     location: string
@@ -159,6 +165,18 @@ export interface SiteSettings {
     supportText: string
     steps: StepItem[]
   }
+  // Contact & Social (admin editable)
+  contact_phone: string
+  contact_whatsapp: string
+  contact_email: string
+  contact_address: string
+  business_hours: string
+  social_facebook: string
+  social_instagram: string
+  social_tiktok: string
+  // Legal content (admin editable)
+  legal_terms: LegalSection[]
+  legal_refund: LegalSection[]
   // CMS fields
   sectionOrder: string[]
   sectionVisibility: SectionVisibility

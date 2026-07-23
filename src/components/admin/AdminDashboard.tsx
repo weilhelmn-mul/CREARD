@@ -13,6 +13,7 @@ import ClaimsAdminTab from '@/components/claims/ClaimsAdminTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
 import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
 import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
+import SiteConfigTab from '@/components/admin/SiteConfigTab'
 import { formatTime12, formatTime24, formatTimeRange, generateTimeSlots } from '@/lib/timeUtils'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
@@ -138,7 +139,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'config'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -172,6 +173,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
+  { key: 'config',     label: 'Configuración', icon: 'settings' },
 ]
 
 /* ─── helpers ─── */
@@ -5053,6 +5055,13 @@ export default function AdminDashboard() {
           {activeTab === 'reclamaciones' && (
             <motion.div key='reclamaciones' initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
               <ClaimsAdminTab />
+            </motion.div>
+          )}
+
+          {/* ─── CONFIGURACIÓN (Contacto, Redes Sociales, Legal) ─── */}
+          {activeTab === 'config' && (
+            <motion.div key='config' initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+              <SiteConfigTab />
             </motion.div>
           )}
         </AnimatePresence>
