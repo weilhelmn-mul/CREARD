@@ -110,24 +110,8 @@ export const useAppStore = create<AppState>((set) => ({
   user: persistedUser,
   firebaseToken: persistedToken,
   authChecked: false,
-  notifications: [
-    {
-      id: '1',
-      title: 'Reserva confirmada',
-      message: 'Tu reserva en CREARD para mañana a las 18:00 ha sido confirmada.',
-      type: 'success',
-      read: false,
-      createdAt: new Date(),
-    },
-    {
-      id: '2',
-      title: 'Pago pendiente',
-      message: 'Tienes un pago restante de S/ 17.50 por tu reserva de Vóley A.',
-      type: 'warning',
-      read: false,
-      createdAt: new Date(),
-    },
-  ],
+  // FIX P3-13: Start with empty notifications (no fake samples)
+  notifications: [],
   sportFilter: 'todos',
   isMobile: false,
 

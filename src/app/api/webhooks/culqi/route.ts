@@ -10,6 +10,7 @@ import {
   updateBooking,
   getBookingById,
   findPaymentByExternalRef,
+  getPayments,
 } from '@/lib/db';
 import { verifyWebhookSignature, getPaymentMethodLabel } from '@/lib/culqi';
 
@@ -130,11 +131,11 @@ async function handleSuccessfulCharge(chargeId: string, chargeData: Record<strin
     if (payment.type === 'remaining') {
       const newAdvance = (booking.advance_amount || 0) + paymentAmount;
       let newRemaining = (booking.total_price || 0) - newAdvance;
-      let newStatus = booking.status || 'partially_paid';
+      let newStatus = 'reserved'; // FIX P1-8: canonical status
 
       if (newRemaining <= 0.5) {
         newRemaining = 0;
-        newStatus = 'fully_paid';
+        newStatus = 'completed'; // FIX P1-8: canonical status
       }
 
       await updateBooking(bookingId, {
@@ -148,7 +149,7 @@ async function handleSuccessfulCharge(chargeId: string, chargeData: Record<strin
         : payment.method;
 
       await updateBooking(bookingId, {
-        status: 'partially_paid',
+        status: 'reserved', // FIX P1-8: canonical status (not 'partially_paid')
         slot_status: 'reserved',
         payment_method: methodLabel,
         advance_amount: paymentAmount,
@@ -176,20 +177,23 @@ async function handleFailedCharge(chargeId: string) {
       culqi_state: 'failed',
     });
 
-    // Si era un adelanto y falló, volver la reserva a 'pending'
+    // Si era un adelanto y falló, volver la reserva a estado disponible
     const booking = await getBookingById(bookingId);
-    if (booking && payment.type === 'advance' && booking.status === 'partially_paid') {
-      const otherPayments = await getPayments(bookingId);
-      const completedPayments = otherPayments.filter(
-        (p: any) => p.id !== payment.id && p.status === 'completed'
-      );
-      if (completedPayments.length === 0) {
-        await updateBooking(bookingId, {
-          status: 'pending',
-          slot_status: 'available',
-          advance_amount: 0,
-          remaining_amount: booking.total_price || 0,
-        });
+    if (booking && payment.type === 'advance') {
+      // FIX P1-8: Check canonical 'reserved' status (not 'partially_paid')
+      if (booking.status === 'reserved' || booking.status === 'partially_paid') {
+        const otherPayments = await getPayments(bookingId);
+        const completedPayments = otherPayments.filter(
+          (p: any) => p.id !== payment.id && p.status === 'completed'
+        );
+        if (completedPayments.length === 0) {
+          await updateBooking(bookingId, {
+            status: 'reserved',
+            slot_status: 'available',
+            advance_amount: 0,
+            remaining_amount: booking.total_price || 0,
+          });
+        }
       }
     }
 

@@ -247,6 +247,17 @@ export default function BookingForm() {
       toast({ title: 'Datos incompletos', description: 'Nombre y teléfono son requeridos.', variant: 'destructive' })
       return
     }
+    // FIX P2-10: Validate email format
+    if (clientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail.trim())) {
+      toast({ title: 'Email inválido', description: 'Ingresa un email válido.', variant: 'destructive' })
+      return
+    }
+    // FIX P2-10: Validate Peruvian phone format (9 digits, optionally +51)
+    const phoneDigits = clientPhone.replace(/[^0-9]/g, '')
+    if (phoneDigits.length < 9 || phoneDigits.length > 11) {
+      toast({ title: 'Teléfono inválido', description: 'Ingresa un número de 9 dígitos.', variant: 'destructive' })
+      return
+    }
 
     setSubmitting(true)
 

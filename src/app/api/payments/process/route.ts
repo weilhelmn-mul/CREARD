@@ -94,11 +94,12 @@ export async function POST(request: NextRequest) {
           });
 
           // Actualizar reserva
+          // FIX P1-8: Use canonical status values in demo mode
           if (type === 'remaining') {
             const newAdvance = (booking.advance_amount || 0) + paymentAmountSoles;
             let newRemaining = (booking.total_price || 0) - newAdvance;
-            let newStatus = booking.status || 'partially_paid';
-            if (newRemaining <= 0.5) { newRemaining = 0; newStatus = 'fully_paid'; }
+            let newStatus = 'reserved';
+            if (newRemaining <= 0.5) { newRemaining = 0; newStatus = 'completed'; }
             await updateBooking(bookingId, {
               advance_amount: Math.round(newAdvance * 100) / 100,
               remaining_amount: Math.round(Math.max(0, newRemaining) * 100) / 100,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
             });
           } else if (type === 'advance') {
             await updateBooking(bookingId, {
-              status: 'partially_paid',
+              status: 'reserved',
               slot_status: 'reserved',
               payment_method: demoMethod,
               advance_amount: paymentAmountSoles,
@@ -150,7 +151,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 7. Validar estado de la reserva ──
-    const validStatuses = ['pending', 'confirmed', 'partially_paid'];
+    // FIX P0-1: 'reserved' is the canonical status for newly created bookings.
+    // Without it, users cannot pay for freshly created bookings.
+    const validStatuses = ['pending', 'confirmed', 'partially_paid', 'reserved'];
     if (!validStatuses.includes(booking.status as string)) {
       return NextResponse.json(
         { error: `La reserva no permite pagos (estado actual: ${booking.status}).` },
@@ -267,15 +270,16 @@ export async function POST(request: NextRequest) {
     });
 
     // ── 13. Actualizar la reserva según el tipo de pago ──
+    // FIX P1-8: Use canonical status values (reserved/completed)
     if (paymentStatus === 'completed' && booking) {
       if (type === 'remaining') {
         const newAdvance = (booking.advance_amount || 0) + amountInSoles;
         let newRemaining = (booking.total_price || 0) - newAdvance;
-        let newStatus = booking.status || 'partially_paid';
+        let newStatus = 'reserved'; // FIX: canonical status
 
         if (newRemaining <= 0.5) { // Tolerancia de 0.5 soles
           newRemaining = 0;
-          newStatus = 'fully_paid';
+          newStatus = 'completed'; // FIX: canonical status for fully paid
         }
 
         await updateBooking(bookingId, {
@@ -285,7 +289,7 @@ export async function POST(request: NextRequest) {
         });
       } else if (type === 'advance') {
         await updateBooking(bookingId, {
-          status: 'partially_paid',
+          status: 'reserved', // FIX: canonical status (not 'partially_paid')
           slot_status: 'reserved',
           payment_method: paymentMethod,
           advance_amount: amountInSoles,

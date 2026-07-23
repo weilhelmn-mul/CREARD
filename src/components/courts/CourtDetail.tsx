@@ -338,12 +338,9 @@ export default function CourtDetail() {
   /* ──── Fetch bookings for selected date ──── */
   useEffect(() => {
     if (!selectedCourtId) return
-    // Non-admin users cannot see today's reservations
+    // FIX P2-9: Allow regular users to see today's future bookings (not all blocked)
     const todayFlag = isToday(selectedDate)
-    if (todayFlag && !isAdmin) {
-      setBookings([])
-      return
-    }
+    // Removed: if (todayFlag && !isAdmin) block that prevented fetching today's bookings
     const dateStr = formatDateISO(selectedDate)
     let cancelled = false
     fetch(`/api/bookings?courtId=${selectedCourtId}&date=${dateStr}`, {
@@ -394,9 +391,14 @@ export default function CourtDetail() {
     if (!todayFlag) return new Set<number>()
     // Admin/super_admin: NO time restrictions — no hours are blocked
     if (isAdmin) return new Set<number>()
-    // Regular users: all today's slots are unavailable (users cannot book today last-minute)
+    // FIX P2-9: Only block hours that are already past (not future hours)
+    // Slots within 30 min of now are also blocked per API rule
     const hours = new Set<number>()
-    for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
+    const curHour = getCurrentHour()
+    const restrictedHour = getRestrictedHour()
+    for (let h = SLOT_START; h <= SLOT_END; h++) {
+      if (h <= restrictedHour) hours.add(h) // Block past + 30-min rule
+    }
     return hours
   }
 
@@ -941,7 +943,14 @@ export default function CourtDetail() {
                 {selectedCourtIds.map((cid) => (
                   <span key={cid} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#00ff41]/10 border border-[#00ff41]/20">
                     <span className="material-symbols-outlined text-[12px] text-[#00ff41]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                      {courtNamesMap[cid] && courtNamesMap[cid].includes('Vóley') ? 'sports_volleyball' : 'sports_soccer'}
+                      {(() => {
+                        const name = courtNamesMap[cid] || ''
+                        if (name.includes('Vóley') || name.toLowerCase().includes('voley')) return 'sports_volleyball'
+                        if (name.includes('Básquet') || name.toLowerCase().includes('basket')) return 'sports_basketball'
+                        if (name.includes('Tenis')) return 'sports_tennis'
+                        if (name.includes('Pádel') || name.toLowerCase().includes('padel')) return 'sports_tennis'
+                        return 'sports_soccer'
+                      })()}
                     </span>
                     <span className="text-xs font-semibold text-[#00ff41] font-[family-name:var(--font-sora)]">
                       {courtNamesMap[cid] || cid}

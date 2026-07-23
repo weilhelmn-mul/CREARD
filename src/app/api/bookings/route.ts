@@ -12,6 +12,8 @@ import {
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // Migrate old status values to the new 3-status system
 function migrateStatus(s: string): string {
@@ -430,10 +432,13 @@ export async function POST(request: NextRequest) {
         : [];
 
     // ── Validate payment method (restricted set, UPPERCASE) ──
-    const VALID_PAYMENT_METHODS = ['EFECTIVO', 'YAPE', 'PLIN'];
-    const normalizedPaymentMethod = VALID_PAYMENT_METHODS.includes(paymentMethod)
-      ? paymentMethod
-      : 'EFECTIVO';
+    // FIX P1-7: Added 'CULQI', 'TARJETA', 'CARD' so online payments are stored correctly
+    const VALID_PAYMENT_METHODS = ['EFECTIVO', 'YAPE', 'PLIN', 'CULQI', 'TARJETA', 'CARD'];
+    const normalizedPaymentMethod = VALID_PAYMENT_METHODS.includes((paymentMethod || '').toUpperCase())
+      ? (paymentMethod || '').toUpperCase()
+      : paymentMethod?.toLowerCase() === 'culqi' ? 'CULQI'
+        : paymentMethod?.toLowerCase() === 'card' ? 'TARJETA'
+          : 'EFECTIVO';
 
     if (allCourtIds.length === 0 || !userId || !date || !startTime || !endTime) {
       return NextResponse.json(
@@ -477,75 +482,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Check overlap for ALL courts ──
-    const conflicts: Array<{ courtId: string; courtName: string }> = [];
-    for (const cId of allCourtIds) {
-      const existing = await getBookings({ courtId: cId, date });
-      const overlapping = existing.filter(
-        (b) => {
-          const bCourtIds: string[] = Array.isArray(b.court_ids)
-            ? b.court_ids as string[]
-            : [b.court_id as string];
-          // Skip if this existing booking doesn't include the court we're checking
-          if (!bCourtIds.includes(cId)) return false;
-          return (
-            !['cancelled'].includes(migrateStatus(b.status || '')) &&
-            (b.start_time || '') < endTime &&
-            (b.end_time || '') > startTime
-          );
-        }
-      );
-      if (overlapping.length > 0) {
-        let courtName = cId;
-        try {
-          const c = await getCourtById(cId);
-          if (c?.name) courtName = c.name as string;
-        } catch { /* use ID */ }
-        conflicts.push({ courtId: cId, courtName });
-      }
-    }
-
-    if (conflicts.length > 0) {
-      const conflictNames = conflicts.map((c) => c.courtName).join(', ');
-      return NextResponse.json(
-        {
-          error: `Cancha${conflicts.length > 1 ? 's' : ''} no disponible${conflicts.length > 1 ? 's' : ''}: ${conflictNames}. Por favor selecciona otro horario o cancha.`,
-          conflicts,
-        },
-        { status: 409 }
-      );
-    }
-
-    // ── Calculate price ──
-    // Frontend sends totalPrice as grand total (court + equipment combined).
-    // We compute courtSubtotal and equipmentSubtotal separately for storage/display.
+    // ── Calculate price (BEFORE transaction — needed for booking data) ──
     const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
     let equipmentSubtotal = 0;
     for (const eq of eqItems) {
       equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
     }
 
-    let courtPriceTotal: number;
-    const providedTotal = parseFloat(totalPrice) || 0;
-    if (providedTotal > 0) {
-      // Frontend already included equipment in totalPrice — extract court portion
-      courtPriceTotal = Math.max(0, providedTotal - equipmentSubtotal);
-    } else {
-      // No price from frontend — calculate from court rates
-      courtPriceTotal = 0;
-      for (const cId of allCourtIds) {
-        const court = await getCourtById(cId);
-        if (court) {
-          const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
-          let courtPrice = 0;
-          if (schedule && schedule.length > 0) {
-            courtPrice = calculatePriceForTimeSlot(schedule, startTime, endTime);
-            if (courtPrice <= 0) courtPrice = (court.price_per_hour as number) || 0;
-          } else {
-            courtPrice = (court.price_per_hour as number) || 0;
-          }
-          courtPriceTotal += courtPrice;
+    // FIX P1-6: ALWAYS recalculate price server-side from court rates.
+    // Client-sent totalPrice is ignored for storage — used only as a UI hint.
+    let courtPriceTotal = 0;
+    for (const cId of allCourtIds) {
+      const court = await getCourtById(cId);
+      if (court) {
+        const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
+        let courtPrice = 0;
+        if (schedule && schedule.length > 0) {
+          courtPrice = calculatePriceForTimeSlot(schedule, startTime, endTime);
+          if (courtPrice <= 0) courtPrice = (court.price_per_hour as number) || 0;
+        } else {
+          courtPrice = (court.price_per_hour as number) || 0;
         }
+        courtPriceTotal += courtPrice;
       }
     }
 
@@ -565,28 +523,77 @@ export async function POST(request: NextRequest) {
       if (clientUser?.email) clientEmail = clientUser.email;
     } catch { /* fallback to admin email */ }
 
-    // Save to Firestore — single booking with all courts
-    const id = await createBooking({
-      court_ids: allCourtIds,
-      user_id: userId,
-      user_email: clientEmail,
-      date,
-      start_time: startTime,
-      end_time: endTime,
-      total_price: price,
-      court_subtotal: courtPriceTotal,
-      equipment_subtotal: equipmentSubtotal,
-      equipment_items: eqItems,
-      advance_amount: adv,
-      remaining_amount: rem,
-      status: bookingStatus,
-      slot_status: 'available',
-      payment_method: normalizedPaymentMethod || null,
-      notes: notes || null,
-      selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
-    });
+    // ── FIX P1-5: Check overlap + create booking in Firestore transaction ──
+    const db = await getAdminDb();
+    let bookingId: string;
 
-    console.log(`[BOOKINGS] POST: Created booking ${id} for user=${userId} date=${date} ${startTime}-${endTime} courts=${allCourtIds.join(',')} total=${price} advance=${adv} remaining=${rem} method=${normalizedPaymentMethod} email=${clientEmail}`);
+    try {
+      bookingId = await db.runTransaction(async (transaction) => {
+        // Re-check overlap inside transaction for each court
+        for (const cId of allCourtIds) {
+          const bookingsRef = db.collection('bookings')
+            .where('date', '==', date)
+            .where('court_ids', 'array-contains', cId);
+          const snapshot = await transaction.get(bookingsRef);
+
+          for (const doc of snapshot.docs) {
+            const b = doc.data();
+            const bCourtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : [b.court_id];
+            if (!bCourtIds.includes(cId)) continue;
+            if (migrateStatus(b.status || '') === 'cancelled') continue;
+            if ((b.start_time || '') < endTime && (b.end_time || '') > startTime) {
+              let courtName = cId;
+              try {
+                const c = await getCourtById(cId);
+                if (c?.name) courtName = c.name as string;
+              } catch { /* use ID */ }
+              throw new Error(`Cancha no disponible: ${courtName}. Por favor selecciona otro horario o cancha.`);
+            }
+          }
+        }
+
+        // All clear — create the booking inside the transaction
+        const now = Timestamp.now();
+        const docRef = db.collection('bookings').doc();
+        transaction.set(docRef, {
+          court_id: allCourtIds[0],
+          court_ids: allCourtIds,
+          user_id: userId,
+          user_email: clientEmail || null,
+          date,
+          start_time: startTime,
+          end_time: endTime,
+          total_price: price,
+          court_subtotal: courtPriceTotal,
+          equipment_subtotal: equipmentSubtotal,
+          equipment_items: eqItems,
+          equipment_delivered: false,
+          equipment_returned: false,
+          advance_amount: adv,
+          remaining_amount: rem,
+          status: bookingStatus,
+          slot_status: 'available',
+          payment_method: normalizedPaymentMethod || null,
+          notes: notes || null,
+          recurring_group_id: null,
+          recurring_index: null,
+          selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
+          created_at: now,
+          updated_at: now,
+          // FIX P0-4: Auto-expire unpaid bookings after 15 minutes
+          expires_at: Timestamp.fromMillis(now.toMillis() + 15 * 60 * 1000),
+        });
+        return docRef.id;
+      });
+    } catch (txError: any) {
+      if (txError?.message?.includes('Cancha no disponible')) {
+        return NextResponse.json({ error: txError.message }, { status: 409 });
+      }
+      throw txError;
+    }
+
+    // Booking was already created inside the transaction (P1-5)
+    const id = bookingId;
 
     // B5 FIX: Only create payment record if advance > 0
     if (adv > 0.01) {
@@ -615,7 +622,7 @@ export async function POST(request: NextRequest) {
       advanceAmount: adv,
       remainingAmount: rem,
       status: bookingStatus,
-      paymentMethod: paymentMethod || null,
+      paymentMethod: normalizedPaymentMethod || paymentMethod || null,
       success: true,
     }, { status: 201 });
   } catch (error: unknown) {
@@ -674,8 +681,10 @@ export async function PUT(request: NextRequest) {
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
     if (reqPaymentMethod) {
-      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
-      updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+      // FIX P1-7: Include online payment methods
+      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN', 'CULQI', 'TARJETA', 'CARD'];
+      const upper = (reqPaymentMethod as string).toUpperCase();
+      updateData.payment_method = VALID_PM.includes(upper) ? upper : 'EFECTIVO';
     }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
@@ -815,8 +824,10 @@ export async function PUT(request: NextRequest) {
 
       // Payment method
       if (reqPaymentMethod) {
-        const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
-        updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+        // FIX P1-7: Include online payment methods
+        const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN', 'CULQI', 'TARJETA', 'CARD'];
+        const upper = (reqPaymentMethod as string).toUpperCase();
+        updateData.payment_method = VALID_PM.includes(upper) ? upper : 'EFECTIVO';
       }
 
       // Status change (with guard: cancelled → other is blocked, completed → cancelled is blocked)

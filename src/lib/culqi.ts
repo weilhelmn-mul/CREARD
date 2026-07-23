@@ -162,7 +162,8 @@ export async function getCharge(chargeId: string): Promise<CulqiChargeResponse> 
 
 /**
  * Verifica el signature de un webhook de Culqi
- * Usa el secret del webhook para validar la autenticidad
+ * Usa HMAC-SHA256 para validar la autenticidad
+ * Formato del header: timestamp=v1:hex_signature
  */
 export function verifyWebhookSignature(
   payload: string,
@@ -177,15 +178,47 @@ export function verifyWebhookSignature(
     return false;
   }
 
-  // Culqi envía el signature en el header: x-culqi-signature
-  // El formato es: timestamp=v1:signature
-  // Para producción, implementar verificación HMAC-SHA256
-  // Por ahora, verificamos que el header existe y contiene datos
   if (!signatureHeader || signatureHeader.length < 10) {
     return false;
   }
 
-  return true;
+  // FIX P0-3: Implement proper HMAC-SHA256 verification
+  try {
+    const crypto = require('crypto');
+    // Header format: timestamp=v1:hex_signature
+    const parts = signatureHeader.split('=');
+    if (parts.length < 3) return false;
+    // parts: ['timestamp', 'v1', 'hex_signature', ...] — join the signature part
+    const timestamp = parts[0];
+    const signature = signatureHeader.substring(signatureHeader.indexOf('v1:') + 3);
+
+    // Validate timestamp (reject webhooks older than 5 minutes)
+    const ts = parseInt(timestamp, 10);
+    if (isNaN(ts)) return false;
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - ts) > 300) {
+      console.warn('[CULQI] Webhook timestamp too old or too far in future.');
+      return false;
+    }
+
+    // Compute expected signature: HMAC-SHA256(webhookSecret, timestamp + ':' + payload)
+    const expected = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${timestamp}:${payload}`)
+      .digest('hex');
+
+    // Constant-time comparison to prevent timing attacks
+    if (signature.length !== expected.length) return false;
+    let result = 0;
+    for (let i = 0; i < signature.length; i++) {
+      result |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+    }
+    return result === 0;
+  } catch {
+    // If crypto fails, reject in production
+    if (process.env.NODE_ENV === 'development') return true;
+    return false;
+  }
 }
 
 /**

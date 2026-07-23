@@ -45,6 +45,8 @@ const sportIcons: Record<string, string> = {
   voley: 'sports_volleyball',
   basket: 'sports_basketball',
   tenis: 'sports_tennis',
+  // FIX P2-11: Added padel
+  padel: 'sports_tennis',
   eventos: 'celebration',
 }
 
@@ -53,6 +55,8 @@ const sportLabels: Record<string, string> = {
   voley: 'Vóley',
   basket: 'Básquet',
   tenis: 'Tenis',
+  // FIX P2-11: Added padel
+  padel: 'Pádel',
   eventos: 'Eventos',
 }
 
@@ -142,25 +146,29 @@ export default function BookingsView() {
 
   const filtered = bookings.filter((b) => {
     const bd = parseLocalDate(b.date)
-    // Users cannot see today's reservations
-    if (bd >= today && bd < tomorrow) return false
+    // FIX P2-9: Show today's bookings for regular users
     switch (activeTab) {
       case 'upcoming':
         return (
-          bd >= tomorrow &&
+          bd >= today &&
           !['cancelled', 'completed'].includes(b.status)
         )
       case 'completed':
-        return b.status === 'completed' && !(bd >= today && bd < tomorrow)
+        return b.status === 'completed'
       case 'cancelled':
-        return b.status === 'cancelled' && !(bd >= today && bd < tomorrow)
+        return b.status === 'cancelled'
       default:
         return true
     }
   })
 
   /* ─── actions ─── */
+  // FIX P2-12: Add loading state to prevent double-click
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
   const handleCancel = async (id: string) => {
+    if (cancellingId) return // Prevent double-click
+    setCancellingId(id)
     try {
       const res = await fetch('/api/bookings', {
         method: 'PUT',
@@ -174,6 +182,8 @@ export default function BookingsView() {
       }
     } catch {
       toast({ title: 'Error', description: 'No se pudo cancelar la reserva', variant: 'destructive' })
+    } finally {
+      setCancellingId(null)
     }
   }
 
@@ -477,10 +487,11 @@ export default function BookingsView() {
                                     e.stopPropagation()
                                     handleCancel(booking.id)
                                   }}
-                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-500/30 text-red-400 rounded-xl text-sm font-semibold hover:bg-red-500/10 transition-colors font-[family-name:var(--font-sora)]"
+                                  disabled={cancellingId === booking.id}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-500/30 text-red-400 rounded-xl text-sm font-semibold hover:bg-red-500/10 transition-colors font-[family-name:var(--font-sora)] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  <span className="material-symbols-outlined text-[18px]">cancel</span>
-                                  Cancelar
+                                  <span className="material-symbols-outlined text-[18px]">{cancellingId === booking.id ? 'progress_activity' : 'cancel'}</span>
+                                  {cancellingId === booking.id ? 'Cancelando...' : 'Cancelar'}
                                 </button>
                               )}
                             </div>

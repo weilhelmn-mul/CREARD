@@ -1,0 +1,590 @@
+   480→          { status: 403 }
+   481→        );
+   482→      }
+   483→    }
+   484→
+   485→    // ── Check overlap for ALL courts ──
+   486→    const conflicts: Array<{ courtId: string; courtName: string }> = [];
+   487→    for (const cId of allCourtIds) {
+   488→      const existing = await getBookings({ courtId: cId, date });
+   489→      const overlapping = existing.filter(
+   490→        (b) => {
+   491→          const bCourtIds: string[] = Array.isArray(b.court_ids)
+   492→            ? b.court_ids as string[]
+   493→            : [b.court_id as string];
+   494→          // Skip if this existing booking doesn't include the court we're checking
+   495→          if (!bCourtIds.includes(cId)) return false;
+   496→          return (
+   497→            !['cancelled'].includes(migrateStatus(b.status || '')) &&
+   498→            (b.start_time || '') < endTime &&
+   499→            (b.end_time || '') > startTime
+   500→          );
+   501→        }
+   502→      );
+   503→      if (overlapping.length > 0) {
+   504→        let courtName = cId;
+   505→        try {
+   506→          const c = await getCourtById(cId);
+   507→          if (c?.name) courtName = c.name as string;
+   508→        } catch { /* use ID */ }
+   509→        conflicts.push({ courtId: cId, courtName });
+   510→      }
+   511→    }
+   512→
+   513→    if (conflicts.length > 0) {
+   514→      const conflictNames = conflicts.map((c) => c.courtName).join(', ');
+   515→      return NextResponse.json(
+   516→        {
+   517→          error: `Cancha${conflicts.length > 1 ? 's' : ''} no disponible${conflicts.length > 1 ? 's' : ''}: ${conflictNames}. Por favor selecciona otro horario o cancha.`,
+   518→          conflicts,
+   519→        },
+   520→        { status: 409 }
+   521→      );
+   522→    }
+   523→
+   524→    // ── Calculate price ──
+   525→    // Frontend sends totalPrice as grand total (court + equipment combined).
+   526→    // We compute courtSubtotal and equipmentSubtotal separately for storage/display.
+   527→    const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
+   528→    let equipmentSubtotal = 0;
+   529→    for (const eq of eqItems) {
+   530→      equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
+   531→    }
+   532→
+   533→    // FIX P1-6: ALWAYS recalculate price server-side from court rates.
+   534→    // Client-sent totalPrice is ignored for storage — used only as a UI hint.
+   535→    let courtPriceTotal = 0;
+   536→    for (const cId of allCourtIds) {
+   537→      const court = await getCourtById(cId);
+   538→      if (court) {
+   539→        const schedule = court.pricing_schedule as Array<{ label: string; startHour: number; endHour: number; pricePerHour: number }> | undefined;
+   540→        let courtPrice = 0;
+   541→        if (schedule && schedule.length > 0) {
+   542→          courtPrice = calculatePriceForTimeSlot(schedule, startTime, endTime);
+   543→          if (courtPrice <= 0) courtPrice = (court.price_per_hour as number) || 0;
+   544→        } else {
+   545→          courtPrice = (court.price_per_hour as number) || 0;
+   546→        }
+   547→        courtPriceTotal += courtPrice;
+   548→      }
+   549→    }
+   550→
+   551→    const price = courtPriceTotal + equipmentSubtotal;
+   552→
+   553→    // B4 FIX: Validate advance + remaining === total consistency
+   554→    const adv = parseFloat(advanceAmount) || price * 0.5;
+   555→    let rem = parseFloat(remainingAmount) || price - adv;
+   556→    // Force consistency: remaining must equal total - advance
+   557→    rem = Math.max(0, Math.round((price - adv) * 100) / 100);
+   558→    const bookingStatus = migrateStatus(status || 'reserved');
+   559→
+   560→    // Resolve client email for denormalized search
+   561→    let clientEmail = authUser.email;
+   562→    try {
+   563→      const clientUser = await getUserById(userId);
+   564→      if (clientUser?.email) clientEmail = clientUser.email;
+   565→    } catch { /* fallback to admin email */ }
+   566→
+   567→    // Save to Firestore — single booking with all courts
+   568→    const id = await createBooking({
+   569→      court_ids: allCourtIds,
+   570→      user_id: userId,
+   571→      user_email: clientEmail,
+   572→      date,
+   573→      start_time: startTime,
+   574→      end_time: endTime,
+   575→      total_price: price,
+   576→      court_subtotal: courtPriceTotal,
+   577→      equipment_subtotal: equipmentSubtotal,
+   578→      equipment_items: eqItems,
+   579→      advance_amount: adv,
+   580→      remaining_amount: rem,
+   581→      status: bookingStatus,
+   582→      slot_status: 'available',
+   583→      payment_method: normalizedPaymentMethod || null,
+   584→      notes: notes || null,
+   585→      selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
+   586→    });
+   587→
+   588→    console.log(`[BOOKINGS] POST: Created booking ${id} for user=${userId} date=${date} ${startTime}-${endTime} courts=${allCourtIds.join(',')} total=${price} advance=${adv} remaining=${rem} method=${normalizedPaymentMethod} email=${clientEmail}`);
+   589→
+   590→    // B5 FIX: Only create payment record if advance > 0
+   591→    if (adv > 0.01) {
+   592→      try {
+   593→        await createPayment(id, {
+   594→          user_id: userId,
+   595→          amount: adv,
+   596→          type: 'advance',
+   597→          method: normalizedPaymentMethod || 'EFECTIVO',
+   598→          status: 'completed',
+   599→        });
+   600→      } catch (payErr) {
+   601→        console.error('[BOOKINGS] Warning: could not create payment record:', payErr);
+   602→      }
+   603→    }
+   604→
+   605→    return NextResponse.json({
+   606→      id,
+   607→      courtId: allCourtIds[0],
+   608→      courtIds: allCourtIds,
+   609→      userId,
+   610→      date,
+   611→      startTime,
+   612→      endTime,
+   613→      totalPrice: price,
+   614→      advanceAmount: adv,
+   615→      remainingAmount: rem,
+   616→      status: bookingStatus,
+   617→      paymentMethod: paymentMethod || null,
+   618→      success: true,
+   619→    }, { status: 201 });
+   620→  } catch (error: unknown) {
+   621→    const err = error as { message?: string; code?: string; stack?: string };
+   622→    console.error('[BOOKINGS] POST error:', err?.message || err);
+   623→    console.error('[BOOKINGS] Stack:', err?.stack || 'no stack');
+   624→    return NextResponse.json({
+   625→      error: 'Failed to create booking',
+   626→      detail: err?.message || 'Unknown error'
+   627→    }, { status: 500 });
+   628→  }
+   629→}
+   630→
+   631→export async function PUT(request: NextRequest) {
+   632→  try {
+   633→    const authResult = await requireAnyAuth(request);
+   634→    if (authResult instanceof NextResponse) return authResult;
+   635→    const authUser = authResult.user;
+   636→
+   637→    if (!isFirebaseAvailable()) {
+   638→      return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
+   639→    }
+   640→
+   641→    const body = await request.json();
+   642→    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems, selectedSlots: reqSelectedSlots } = body;
+   643→
+   644→    if (!id) {
+   645→      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
+   646→    }
+   647→
+   648→    // Non-admin users can only cancel their own bookings
+   649→    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+   650→      if (status === 'cancelled') {
+   651→        // Verify the booking belongs to the user (by both userId and email)
+   652→        const bookings = await searchBookingsForUser(authUser.id, authUser.email);
+   653→        const booking = bookings.find((b) => b.id === id);
+   654→        if (!booking) {
+   655→          return NextResponse.json(
+   656→            { error: 'No puedes modificar reservas de otros usuarios.' },
+   657→            { status: 403 }
+   658→          );
+   659→        }
+   660→      } else {
+   661→        return NextResponse.json(
+   662→          { error: 'Solo puedes cancelar tus propias reservas.' },
+   663→          { status: 403 }
+   664→        );
+   665→      }
+   666→    }
+   667→
+   668→    const updateData: Record<string, unknown> = {};
+   669→    // Bug fix #7: Only set status from generic handler if NOT in editBooking mode
+   670→    // (editBooking handles status via its own branch to avoid double-processing)
+   671→    if (status && !editBooking) updateData.status = migrateStatus(status);
+   672→    if (slot_status) updateData.slot_status = slot_status;
+   673→    if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
+   674→    if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
+   675→    if (reqPaymentMethod) {
+   676→      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
+   677→      updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+   678→    }
+   679→    if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
+   680→    if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
+   681→
+   682→    // Extend time: update end_time and total_price, create payment record
+   683→    if (extendTime && reqEndTime && reqTotalPrice) {
+   684→      // Validate: new end must be after current end
+   685→      const booking = await getBookingById(id);
+   686→      if (booking) {
+   687→        const currentEnd = booking.end_time as string || '';
+   688→        if (reqEndTime <= currentEnd) {
+   689→          return NextResponse.json({ error: 'La nueva hora de fin debe ser posterior a la actual' }, { status: 400 });
+   690→        }
+   691→        // Check for conflicts with other bookings (same court, same date, overlapping time)
+   692→        const allCourtIds: string[] = Array.isArray(booking.court_ids) ? booking.court_ids : (booking.court_id ? [booking.court_id] : []);
+   693→        const bookingDate = booking.date as string;
+   694→        if (allCourtIds.length > 0 && bookingDate) {
+   695→          // B10 FIX: Filter by date and courts instead of fetching ALL bookings
+   696→          const conflictQueries = allCourtIds.map(cid => getBookings({ courtId: cid, date: bookingDate }));
+   697→          const conflictResults = await Promise.all(conflictQueries);
+   698→          const allConflicting = conflictResults.flat();
+   699→          const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
+   700→            const obId = ob.id as string;
+   701→            if (obId === id) return false;
+   702→            // B9 FIX: Use migrateStatus for legacy status values
+   703→            if (migrateStatus(ob.status || '') === 'cancelled') return false;
+   704→            if (ob.date !== bookingDate) return false;
+   705→            const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
+   706→            if (!obCourtIds.some((cid: string) => allCourtIds.includes(cid))) return false;
+   707→            return (ob.start_time as string) < reqEndTime && (ob.end_time as string) > (booking.start_time as string);
+   708→          });
+   709→          // Filter to only real conflicts (overlapping with the NEW extended period)
+   710→          const realConflicts = conflicts.filter((ob: Record<string, unknown>) => {
+   711→            return (ob.start_time as string) < reqEndTime && (ob.end_time as string) > currentEnd;
+   712→          });
+   713→          if (realConflicts.length > 0) {
+   714→            return NextResponse.json({ error: 'Hay una reserva que ocupa ese horario. No se puede extender.' }, { status: 409 });
+   715→          }
+   716→        }
+   717→
+   718→        const extraCost = Math.max(0, (reqTotalPrice - ((booking.total_price as number) || 0)));
+   719→        updateData.end_time = reqEndTime;
+   720→        updateData.total_price = reqTotalPrice;
+   721→
+   722→        // If admin collected payment for the extension, create a payment record
+   723→        if (typeof reqAdvance === 'number' && extraCost > 0.01) {
+   724→          const prevAdvance = (booking.advance_amount as number) || 0;
+   725→          const paymentIncrement = reqAdvance - prevAdvance;
+   726→          if (paymentIncrement > 0.01) {
+   727→            try {
+   728→              await createPayment(id, {
+   729→                user_id: booking.user_id as string,
+   730→                amount: paymentIncrement,
+   731→                type: 'extension',
+   732→                method: (reqPaymentMethod as string) || 'EFECTIVO',
+   733→                status: 'completed',
+   734→              });
+   735→            } catch (payErr) {
+   736→              console.error('[BOOKINGS] Warning: could not create payment record for extension:', payErr);
+   737→            }
+   738→          }
+   739→        }
+   740→      }
+   741→    }
+   742→
+   743→    // Edit booking (super_admin only): change any field
+   744→    if (editBooking) {
+   745→      if (authUser.role !== 'super_admin') {
+   746→        return NextResponse.json({ error: 'Solo el super administrador puede editar reservas.' }, { status: 403 });
+   747→      }
+   748→
+   749→      const booking = await getBookingById(id);
+   750→      if (!booking) {
+   751→        return NextResponse.json({ error: 'Reserva no encontrada.' }, { status: 404 });
+   752→      }
+   753→
+   754→      // Don't allow editing completed or cancelled bookings (unless only changing notes/status)
+   755→      const bStatus = migrateStatus(booking.status || 'reserved');
+   756→      const hasTimeOrCourtChange = reqStartTime || reqEndTime || reqDate || (reqCourtIds && reqCourtIds.length > 0);
+   757→      if ((bStatus === 'completed' || bStatus === 'cancelled') && hasTimeOrCourtChange) {
+   758→        return NextResponse.json({ error: 'No se puede editar el horario/cancha de una reserva completada o cancelada.' }, { status: 400 });
+   759→      }
+   760→
+   761→      // Validate time if provided
+   762→      if (reqStartTime && reqEndTime) {
+   763→        if (reqStartTime >= reqEndTime) {
+   764→          return NextResponse.json({ error: 'La hora de inicio debe ser anterior a la hora de fin.' }, { status: 400 });
+   765→        }
+   766→      }
+   767→
+   768→      // Date & time
+   769→      if (reqDate) updateData.date = reqDate;
+   770→      if (reqStartTime) updateData.start_time = reqStartTime;
+   771→      if (reqEndTime) updateData.end_time = reqEndTime;
+   772→      if (reqStartTime && reqEndTime && Array.isArray(reqSelectedSlots)) {
+   773→        updateData.selected_slots = reqSelectedSlots;
+   774→      }
+   775→
+   776→      // Court change
+   777→      if (reqCourtIds && Array.isArray(reqCourtIds) && reqCourtIds.length > 0) {
+   778→        updateData.court_ids = reqCourtIds;
+   779→        updateData.court_id = reqCourtIds[0]; // backward compat
+   780→      }
+   781→
+   782→      // Client change
+   783→      if (reqUserId) {
+   784→        updateData.user_id = reqUserId;
+   785→      }
+   786→
+   787→      // Notes
+   788→      if (reqNotes !== undefined) {
+   789→        updateData.notes = reqNotes;
+   790→      }
+   791→
+   792→      // Equipment items
+   793→      if (reqEquipmentItems && Array.isArray(reqEquipmentItems)) {
+   794→        const equipSub = reqEquipmentItems.reduce((s: number, eq: Record<string, unknown>) => s + ((eq.quantity as number) || 0) * ((eq.unit_price as number) || 0), 0);
+   795→        updateData.equipment_items = reqEquipmentItems;
+   796→        updateData.equipment_subtotal = Math.round(equipSub * 100) / 100;
+   797→      }
+   798→
+   799→      // Price fields
+   800→      if (typeof reqTotalPrice === 'number' && reqTotalPrice > 0) {
+   801→        updateData.total_price = reqTotalPrice;
+   802→        const currentAdvance = typeof reqAdvance === 'number' ? reqAdvance : (booking.advance_amount as number) || 0;
+   803→        updateData.advance_amount = Math.min(currentAdvance, reqTotalPrice);
+   804→        updateData.remaining_amount = Math.max(0, Math.round((reqTotalPrice - currentAdvance) * 100) / 100);
+   805→        // Recalc court_subtotal
+   806→        const equipSub = (updateData.equipment_subtotal as number) || (booking.equipment_subtotal as number) || 0;
+   807→        updateData.court_subtotal = Math.max(0, Math.round((reqTotalPrice - equipSub) * 100) / 100);
+   808→      } else if (typeof reqAdvance === 'number') {
+   809→        // Only advance changed, not total
+   810→        const currentTotal = (booking.total_price as number) || 0;
+   811→        updateData.advance_amount = reqAdvance;
+   812→        updateData.remaining_amount = Math.max(0, Math.round((currentTotal - reqAdvance) * 100) / 100);
+   813→      }
+   814→
+   815→      // Payment method
+   816→      if (reqPaymentMethod) {
+   817→        const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN'];
+   818→        updateData.payment_method = VALID_PM.includes(reqPaymentMethod) ? reqPaymentMethod : 'EFECTIVO';
+   819→      }
+   820→
+   821→      // Status change (with guard: cancelled → other is blocked, completed → cancelled is blocked)
+   822→      if (status) {
+   823→        const newStatus = migrateStatus(status);
+   824→        // Enforce same rules as generic handler
+   825→        if (bStatus === 'cancelled' && newStatus !== 'cancelled') {
+   826→          return NextResponse.json({ error: 'No se puede reactivar una reserva cancelada.' }, { status: 400 });
+   827→        }
+   828→        if (bStatus === 'completed' && newStatus === 'cancelled') {
+   829→          return NextResponse.json({ error: 'No se puede cancelar una reserva completada.' }, { status: 400 });
+   830→        }
+   831→        updateData.status = newStatus;
+   832→      }
+   833→
+   834→      // Conflict check (only if time or court or date changed)
+   835→      const finalCourtIds: string[] = (updateData.court_ids as string[]) || (Array.isArray(booking.court_ids) ? booking.court_ids : (booking.court_id ? [booking.court_id] : []));
+   836→      const finalDate = (updateData.date as string) || (booking.date as string);
+   837→      const finalStart = (updateData.start_time as string) || (booking.start_time as string);
+   838→      const finalEnd = (updateData.end_time as string) || (booking.end_time as string);
+   839→
+   840→      if (finalCourtIds.length > 0 && finalDate && finalStart && finalEnd) {
+   841→        const conflictQueries = finalCourtIds.map(cid => getBookings({ courtId: cid, date: finalDate }));
+   842→        const conflictResults = await Promise.all(conflictQueries);
+   843→        const allConflicting = conflictResults.flat();
+   844→        const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
+   845→          const obId = ob.id as string;
+   846→          if (obId === id) return false;
+   847→          if (migrateStatus(ob.status || '') === 'cancelled') return false;
+   848→          const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
+   849→          if (!obCourtIds.some((cid: string) => finalCourtIds.includes(cid))) return false;
+   850→          return (ob.start_time as string) < finalEnd && (ob.end_time as string) > finalStart;
+   851→        });
+   852→        if (conflicts.length > 0) {
+   853→          const c = conflicts[0];
+   854→          return NextResponse.json({
+   855→            error: 'Hay una reserva que ocupa ese horario.',
+   856→            detail: `Conflicto con reserva: ${(c.start_time as string)} - ${(c.end_time as string)}`,
+   857→          }, { status: 409 });
+   858→        }
+   859→      }
+   860→
+   861→      // Skip the generic advance payment record creation below — we handle it here
+   862→      // (prevent double payment records)
+   863→    }
+   864→
+   865→    // B11 FIX: Track if this is a cancellation to skip advance payment record
+   866→    const isCancelling = status === 'cancelled' || (status && migrateStatus(status) === 'cancelled');
+   867→
+   868→    // FIX Bug #9: Track warnings to return to frontend
+   869→    const warningFlags: string[] = [];
+   870→
+   871→    // When cancelling a booking with advance, handle retained/refunded advance
+   872→    // Only create retained advance records when an admin explicitly provides advanceAction
+   873→    // (user-side cancellations should NOT auto-create records — the admin decides later)
+   874→    const isAdminCancellation = authUser.role === 'admin' || authUser.role === 'super_admin';
+   875→    if (isCancelling) {
+   876→      // B6 FIX: Fetch booking once, reuse for both checks
+   877→      let bookingForCancel: Record<string, unknown> | null = null;
+   878→      try {
+   879→        bookingForCancel = await getBookingById(id);
+   880→      } catch { /* non-blocking */ }
+   881→
+   882→      // Prevent cancelling completed bookings
+   883→      if (bookingForCancel && (bookingForCancel.status === 'completed' || migrateStatus(bookingForCancel.status as string || '') === 'completed')) {
+   884→        return NextResponse.json({ error: 'No se puede cancelar una reserva completada. Contacta soporte si es necesario.' }, { status: 400 });
+   885→      }
+   886→
+   887→      if (isAdminCancellation) {
+   888→        try {
+   889→          if (bookingForCancel && ((bookingForCancel.advance_amount as number) || 0) > 0) {
+   890→            // FIX Bug A: Only create retained advance when admin explicitly chose an action
+   891→            // If advanceAction is missing (unexpected code path), skip creation to avoid
+   892→            // incorrectly defaulting to 'refunded'
+   893→            if (!advanceAction) {
+   894→              console.warn('[BOOKINGS] Admin cancellation with advance but no advanceAction — skipping retained advance creation for booking', id);
+   895→              warningFlags.push('no_advance_action');
+   896→            } else {
+   897→            const advAmount = (bookingForCancel.advance_amount as number) || 0;
+   898→            const isRetained = advanceAction === 'retain';
+   899→            const statusAdvance = isRetained ? 'retained' : 'refunded';
+   900→
+   901→            // Check for duplicate retained advance
+   902→            const { getRetainedAdvances } = await import('@/lib/db');
+   903→            const existing = await getRetainedAdvances({ bookingId: id });
+   904→            if (existing.length > 0) {
+   905→              console.warn('[BOOKINGS] Retained advance already exists for booking', id, '- skipping creation');
+   906→            } else {
+   907→              // Get court name for the record
+   908→              let courtName = '';
+   909→              try {
+   910→                const cId = (bookingForCancel.court_ids as string[])?.[0] || (bookingForCancel.court_id as string) || '';
+   911→                if (cId) {
+   912→                  const court = await getCourtById(cId);
+   913→                  courtName = (court?.name as string) || '';
+   914→                }
+   915→              } catch { /* non-critical */ }
+   916→
+   917→              // Get user name
+   918→              let userName = '';
+   919→              let userEmail = (bookingForCancel.user_email as string) || null;
+   920→              try {
+   921→                const uId = bookingForCancel.user_id as string;
+   922→                if (uId) {
+   923→                  const user = await getUserById(uId);
+   924→                  userName = (user?.name as string) || '';
+   925→                  // FIX Bug #8: Fallback userEmail from user doc if missing in booking
+   926→                  if (!userEmail) {
+   927→                    userEmail = (user?.email as string) || null;
+   928→                  }
+   929→                }
+   930→              } catch { /* non-critical */ }
+   931→
+   932→              // Create retained advance record
+   933→              try {
+   934→                await createRetainedAdvance({
+   935→                  booking_id: id,
+   936→                  user_id: (bookingForCancel.user_id as string) || '',
+   937→                  user_name: userName,
+   938→                  user_email: userEmail,
+   939→                  court_name: courtName,
+   940→                  booking_date: (bookingForCancel.date as string) || '',
+   941→                  amount: advAmount,
+   942→                  original_total: (bookingForCancel.total_price as number) || 0,
+   943→                  payment_method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
+   944→                  reason: cancelReason || 'Cancelación de reserva',
+   945→                  status: statusAdvance,
+   946→                });
+   947→              } catch (raErr) {
+   948→                console.error('[BOOKINGS] Error: could not create retained advance record:', raErr);
+   949→                warningFlags.push('retained_advance_failed');
+   950→              }
+   951→
+   952→              // Create a payment record for the refund/retention
+   953→              try {
+   954→                await createPayment(id, {
+   955→                  user_id: (bookingForCancel.user_id as string) || '',
+   956→                  amount: advAmount,
+   957→                  type: isRetained ? 'retained' : 'refund',
+   958→                  method: (bookingForCancel.payment_method as string) || 'EFECTIVO',
+   959→                  status: 'completed',
+   960→                });
+   961→              } catch (payErr) {
+   962→                console.error('[BOOKINGS] Warning: could not create payment record for cancellation:', payErr);
+   963→                warningFlags.push('payment_record_failed');
+   964→              }
+   965→            }
+   966→            }
+   967→          }
+   968→        } catch (err) {
+   969→          console.error('[BOOKINGS] Warning: could not process retained advance on cancellation:', err);
+   970→          warningFlags.push('retained_advance_failed');
+   971→        }
+   972→      }
+   973→    }
+   974→
+   975→    // B11 FIX: Skip advance payment record when cancelling or editBooking (handled above / no record needed)
+   976→    if (typeof reqAdvance === 'number' && typeof reqRemaining === 'number' && !isCancelling && !editBooking) {
+   977→      try {
+   978→        const booking = await getBookingById(id);
+   979→        if (booking) {
+   980→          const prevAdvance = (booking.advance_amount as number) || 0;
+   981→          const paymentIncrement = reqAdvance - prevAdvance;
+   982→          if (paymentIncrement > 0.01) {
+   983→            try {
+   984→              await createPayment(id, {
+   985→                user_id: booking.user_id as string,
+   986→                amount: paymentIncrement,
+   987→                type: reqRemaining <= 0 ? 'full_payment' : 'advance',
+   988→                method: (updateData.payment_method as string) || 'EFECTIVO',
+   989→                status: 'completed',
+   990→              });
+   991→            } catch (payErr) {
+   992→              console.error('[BOOKINGS] Warning: could not create payment record for advance update:', payErr);
+   993→            }
+   994→          }
+   995→        }
+   996→      } catch { /* non-critical: proceed with booking update */ }
+   997→    }
+   998→
+   999→    await updateBooking(id, updateData);
+  1000→
+  1001→    // FIX Bug #9: Return warnings if any
+  1002→    if (warningFlags.length > 0) {
+  1003→      return NextResponse.json({ success: true, warnings: warningFlags });
+  1004→    }
+  1005→    return NextResponse.json({ success: true });
+  1006→  } catch (error) {
+  1007→    console.error('[BOOKINGS] PUT error:', error);
+  1008→    const msg = error instanceof Error ? error.message : 'Unknown error';
+  1009→    return NextResponse.json({ error: 'Error al actualizar reserva', detail: msg }, { status: 500 });
+  1010→  }
+  1011→}
+  1012→
+  1013→// DELETE /api/bookings — permanently delete a booking (super_admin only)
+  1014→export async function DELETE(request: NextRequest) {
+  1015→  try {
+  1016→    const authResult = await requireAuth(request, 'super_admin');
+  1017→    if (authResult instanceof NextResponse) return authResult;
+  1018→
+  1019→    if (!isFirebaseAvailable()) {
+  1020→      return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
+  1021→    }
+  1022→
+  1023→    const { searchParams } = new URL(request.url);
+  1024→    const id = searchParams.get('id');
+  1025→
+  1026→    if (!id) {
+  1027→      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
+  1028→    }
+  1029→
+  1030→    // Delete the booking document and its payments subcollection
+  1031→    const { getAdminDb } = await import('@/lib/firebase-admin');
+  1032→    const db = await getAdminDb();
+  1033→
+  1034→    // Delete payments subcollection
+  1035→    try {
+  1036→      const paymentsSnapshot = await db.collection('bookings').doc(id).collection('payments').get();
+  1037→      for (const doc of paymentsSnapshot.docs) {
+  1038→        await doc.ref.delete();
+  1039→      }
+  1040→    } catch (err) {
+  1041→      console.error('[BOOKINGS] Warning: could not delete payments subcollection:', err);
+  1042→    }
+  1043→
+  1044→    // Delete associated retained advance record (Bug #12 fix)
+  1045→    try {
+  1046→      const { getRetainedAdvances, deleteRetainedAdvance } = await import('@/lib/db');
+  1047→      const retained = await getRetainedAdvances({ bookingId: id });
+  1048→      for (const ra of retained) {
+  1049→        if (ra.id) {
+  1050→          await deleteRetainedAdvance(ra.id);
+  1051→          console.log('[BOOKINGS] Deleted orphaned retained advance:', ra.id);
+  1052→        }
+  1053→      }
+  1054→    } catch (err) {
+  1055→      console.error('[BOOKINGS] Warning: could not delete retained advance for booking:', id, err);
+  1056→    }
+  1057→
+  1058→    // Delete the booking document itself
+  1059→    await deleteDocById('bookings', id);
+  1060→
+  1061→    console.log('[BOOKINGS] Booking permanently deleted:', id);
+  1062→    return NextResponse.json({ success: true });
+  1063→  } catch (error) {
+  1064→    console.error('[BOOKINGS] DELETE error:', error);
+  1065→    const msg = error instanceof Error ? error.message : 'Unknown error';
+  1066→    return NextResponse.json({ error: 'Error al eliminar reserva', detail: msg }, { status: 500 });
+  1067→  }
+  1068→}
+  1069→
