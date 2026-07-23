@@ -44,6 +44,9 @@ export type ViewType =
   | 'login'
   | 'register'
   | 'claims'
+  // REQUISITO 2 (AUDITORÍA): Vistas legales independientes
+  | 'terms'
+  | 'refund-policy'
 
 export interface Notification {
   id: string

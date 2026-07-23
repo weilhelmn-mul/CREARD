@@ -145,6 +145,15 @@ function getDefaults() {
       subtitle: 'Elige tu espacio ideal y reserva al instante',
       ctaText: 'Ver Todas',
     },
+    // REQUISITO 1 (AUDITORÍA): Datos de contacto y redes sociales (admin editable)
+    contact_phone: '',
+    contact_whatsapp: '51984000000',
+    contact_email: 'contacto@creard.com',
+    contact_address: 'San Sebastian, Cusco, Peru',
+    business_hours: 'Lun-Dom 7:00 AM - 11:00 PM',
+    social_facebook: 'https://facebook.com/creard.cusco',
+    social_instagram: 'https://instagram.com/creard.cusco',
+    social_tiktok: 'https://tiktok.com/@creard.cusco',
     // ── CMS: Section order & visibility ──
     sectionOrder: ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks'],
     sectionVisibility: {

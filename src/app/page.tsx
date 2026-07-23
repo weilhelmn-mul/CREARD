@@ -22,6 +22,11 @@ import AuthView from '@/components/auth/AuthView'
 import AuthInitializer from '@/components/auth/AuthInitializer'
 import ClaimsUserView from '@/components/claims/ClaimsUserView'
 import ClaimsFooterBanner from '@/components/home/ClaimsFooterBanner'
+// REQUISITO 2 (AUDITORÍA): Páginas legales independientes
+import TermsAndConditions from '@/components/legal/TermsAndConditions'
+import RefundPolicy from '@/components/legal/RefundPolicy'
+// REQUISITO 1 (AUDITORÍA): Footer con datos de contacto y redes sociales
+import SiteFooter from '@/components/layout/SiteFooter'
 
 function HomeView() {
   const { settings } = useSiteSettings()
@@ -107,6 +112,17 @@ function ViewRouter() {
           <ClaimsUserView />
         </motion.div>
       )}
+      {/* REQUISITO 2 (AUDITORÍA): Páginas legales independientes */}
+      {currentView === 'terms' && (
+        <motion.div key="terms" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+          <TermsAndConditions />
+        </motion.div>
+      )}
+      {currentView === 'refund-policy' && (
+        <motion.div key="refund-policy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+          <RefundPolicy />
+        </motion.div>
+      )}
       {(currentView === 'login' || currentView === 'register') && (
         <motion.div key="auth" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }}>
           <AuthView />
@@ -118,6 +134,7 @@ function ViewRouter() {
 
 export default function Home() {
   const { currentView } = useAppStore()
+  // REQUISITO 1 (AUDITORÍA): Footer visible en todas las vistas no-fullpage
   const isFullPage = currentView === 'booking-form' || currentView === 'login' || currentView === 'register'
 
   return (
@@ -128,6 +145,8 @@ export default function Home() {
         <ViewRouter />
       </main>
       {!isFullPage && <BottomNavBar />}
+      {/* REQUISITO 1 (AUDITORÍA): Footer con datos de contacto obligatorios */}
+      {!isFullPage && <SiteFooter />}
     </div>
   )
 }

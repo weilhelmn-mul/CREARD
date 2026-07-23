@@ -12,6 +12,52 @@ import {
   ClaimStatus,
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
+// REQUISITO 2 (AUDITORÍA): Importar nodemailer para envío de correo de confirmación
+import nodemailer from 'nodemailer';
+
+// REQUISITO 2 (AUDITORÍA): Envío de correo de confirmación al consumidor
+// al registrar un reclamo en el Libro de Reclamaciones Virtual
+async function sendClaimConfirmationEmail(data: {
+  consumerName: string
+  consumerEmail: string
+  claimNumber: string
+  claimType: string
+  description: string
+  request: string
+  deadlineDate: Date
+}) {
+  try {
+    const smtpUser = process.env.SMTP_USER || '';
+    const smtpPass = process.env.SMTP_PASS || '';
+    const smtpFrom = process.env.SMTP_FROM || smtpUser || 'no-reply@creard.com';
+
+    if (!smtpUser || !smtpPass) {
+      console.warn('[API /claims] SMTP no configurado. Saltando envío de correo.');
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    const deadlineStr = data.deadlineDate.toLocaleDateString('es-PE', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+
+    await transporter.sendMail({
+      from: `"CREARD - Libro de Reclamaciones" <${smtpFrom}>`,
+      to: data.consumerEmail,
+      subject: `Confirmacion de ${data.claimType === 'queja' ? 'Queja' : 'Reclamo'} N. ${data.claimNumber} - CREARD`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333"><div style="background:#0a0a0a;padding:20px;border-radius:12px 12px 0 0;text-align:center"><h1 style="color:#00ff41;margin:0;font-size:24px">CREARD</h1><p style="color:#888;margin:4px 0 0;font-size:13px">Libro de Reclamaciones Virtual</p></div><div style="background:#fff;padding:30px;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px"><p>Estimado/a <strong>${data.consumerName}</strong>,</p><p>Hemos recibido su <strong>${data.claimType === 'queja' ? 'queja' : 'reclamo'}</strong> registrada con el numero:</p><div style="background:#f0fdf4;border:2px solid #00ff41;border-radius:8px;padding:16px;text-align:center;margin:20px 0"><p style="margin:0 0 4px;font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px">Numero de registro</p><p style="margin:0;font-size:28px;font-weight:bold;color:#0a0a0a">${data.claimNumber}</p></div><p style="font-size:13px;color:#666">Puede hacer seguimiento desde nuestra aplicacion web.</p><div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin:20px 0"><p style="margin:0 0 4px;font-size:12px;color:#92400e;font-weight:bold">Plazo maximo de atencion</p><p style="margin:0;font-size:16px;font-weight:bold;color:#92400e">${deadlineStr}</p><p style="margin:6px 0 0;font-size:12px;color:#92400e">(15 dias habiles - Ley N. 29571)</p></div></div><p style="text-align:center;font-size:11px;color:#999;margin-top:20px">Resolucion N. 007-2016-CCD-INDECOPI · Ley N. 29571<br/>CREARD · San Sebastian, Cusco, Peru</p></div>`,
+    });
+    console.log(`[API /claims] Correo enviado a ${data.consumerEmail}`);
+  } catch (emailError) {
+    console.error('[API /claims] Error enviando correo:', emailError);
+  }
+}
 
 // ============================================================
 // Helper: calculate 15 business days deadline (exclude weekends)
@@ -205,6 +251,17 @@ export async function POST(request: NextRequest) {
       user.role,
       `Reclamo ${claim_number} creado via web`
     );
+
+    // REQUISITO 2 (AUDITORÍA): Enviar correo de confirmación al consumidor
+    await sendClaimConfirmationEmail({
+      consumerName: String(claimData.consumer_name),
+      consumerEmail: String(claimData.consumer_email),
+      claimNumber: claim_number,
+      claimType: String(claimData.claim_type),
+      description: String(claimData.description),
+      request: String(claimData.consumer_request),
+      deadlineDate: deadline_date,
+    });
 
     // Fetch and return the created claim
     const claim = await getClaimById(claimId);

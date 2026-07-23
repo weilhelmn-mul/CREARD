@@ -272,7 +272,11 @@ export default function ProfileView() {
               </div>
               <span className="material-symbols-outlined text-cm-on-surface-variant text-[18px]">chevron_right</span>
             </div>
-            <div className="flex items-center justify-between p-4">
+            {/* REQUISITO 2 (AUDITORÍA): Enlace clicable a Términos y Condiciones */}
+            <button
+              onClick={() => setView('terms')}
+              className="w-full flex items-center justify-between p-4 hover:bg-cm-surface-container-highest/40 transition-colors"
+            >
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-cm-on-surface-variant text-[20px]">description</span>
                 <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">Términos y condiciones</span>
