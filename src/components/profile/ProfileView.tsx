@@ -282,7 +282,7 @@ export default function ProfileView() {
                 <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">Términos y condiciones</span>
               </div>
               <span className="material-symbols-outlined text-cm-on-surface-variant text-[18px]">chevron_right</span>
-            </div>
+            </button>
           </div>
         </motion.div>
 
