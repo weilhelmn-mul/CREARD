@@ -1,0 +1,252 @@
+/home/z/my-project/src/app/api/settings/route.ts:101:        { name: 'Plin', icon: 'phone_iphone', color: 'text-blue-400' },
+/home/z/my-project/src/app/api/settings/route.ts:110:      whatsappText: '¿Tienes dudas? Escríbenos por WhatsApp',
+/home/z/my-project/src/app/api/claims/route.ts:94:      consumer_phone,
+/home/z/my-project/src/app/api/claims/route.ts:170:      consumer_phone: consumer_phone || '',
+/home/z/my-project/src/app/api/claims/[id]/pdf/route.ts:89:        ['Teléfono', claim.consumer_phone || ''],
+/home/z/my-project/src/app/api/claims/export/route.ts:34:        'Tel\u00e9fono': c.consumer_phone || '',
+/home/z/my-project/src/app/api/claims/export/route.ts:99:          c.consumer_phone || '',
+/home/z/my-project/scripts/seed-firestore.js:61:    phone: '+51 084 123456',
+/home/z/my-project/scripts/seed-firestore.js:134:  phone: '+51 084 123456',
+/home/z/my-project/scripts/seed-firestore.js:135:  whatsapp: '+51987654321',
+/home/z/my-project/scripts/fix-voley-courts.ts:124:      phone: '+51 984 000 000',
+/home/z/my-project/scripts/seed-firebase.ts:72:  phone: string;
+/home/z/my-project/scripts/seed-firebase.ts:93:  phone: '+51 984 000 000',
+/home/z/my-project/scripts/seed-firebase.ts:104:    phone: '+51 984 111 111',
+/home/z/my-project/scripts/seed-firebase.ts:112:    phone: '+51 984 222 222',
+/home/z/my-project/scripts/seed-firebase.ts:120:    phone: '+51 984 333 333',
+/home/z/my-project/scripts/seed-firebase.ts:225:        phone: user.phone,
+/home/z/my-project/scripts/seed-firebase.ts:240:          phone: user.phone,
+/home/z/my-project/src/app/api/bookings/route.ts:62:    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1783133542804_2082f73d34ae.txt:89:  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1783133542804_2082f73d34ae.txt:277:  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+/home/z/my-project/tool-results/read_1783133542804_2082f73d34ae.txt:280:  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:99:    99→  phone: string
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:134:   134→  phone: z.string().optional(),
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:257:   257→      phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:391:   391→        phone: data.phone,
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:431:   431→        phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:635:   635→                        {...form.register('phone')}
+/home/z/my-project/tool-results/read_1784765679555_837a9623906f.txt:1179:  1179→                  <InfoRow label="Teléfono" value={selectedClaim.phone || 'No indicado'} />
+/home/z/my-project/tool-results/read_1783133538268_30638a81d75d.txt:129:   129→  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1783133538268_30638a81d75d.txt:317:   317→  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+/home/z/my-project/tool-results/read_1783133538268_30638a81d75d.txt:320:   320→  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+/home/z/my-project/tool-results/read_1783133533617_fd1c274ba416.txt:129:  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1783133533617_fd1c274ba416.txt:317:  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+/home/z/my-project/tool-results/read_1783133533617_fd1c274ba416.txt:320:  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+/home/z/my-project/tool-results/read_1782519150631_9efcd9aa662c.txt:130:   130→  6039→                    placeholder="Buscar por nombre, email o telefono..."
+/home/z/my-project/tool-results/read_1782519150631_9efcd9aa662c.txt:145:   145→  6054→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+/home/z/my-project/tool-results/read_1781748913650_e4152d62b5d2.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1781740875324_a23dba883239.txt:589:   589→                      { key: 'plin', label: 'Plin', icon: 'phone_android' },
+/home/z/my-project/tool-results/read_1781740883241_ded3ee184b19.txt:48:    48→  user?: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781740883241_ded3ee184b19.txt:1075:  1075→                        {popupBooking.user.phone && ` · ${popupBooking.user.phone}`}
+/home/z/my-project/tool-results/read_1781740883241_ded3ee184b19.txt:1131:  1131→                          ? 'phone_iphone'
+/home/z/my-project/tool-results/read_1781740883241_ded3ee184b19.txt:1133:  1133→                          ? 'phone_iphone'
+/home/z/my-project/tool-results/read_1783133635666_67352cf2f1f7.txt:133:   133→  6032→                    placeholder="Buscar por nombre, email o telefono..."
+/home/z/my-project/tool-results/read_1783133635666_67352cf2f1f7.txt:148:   148→  6047→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+/home/z/my-project/src/app/api/admin/settings/route.ts:30:  'contact_phone', 'contact_whatsapp', 'contact_email', 'contact_address',
+/home/z/my-project/tool-results/read_1781748846289_fee9020827e0.txt:62:    62→    62→    phone: userRaw.phone,
+/home/z/my-project/src/app/api/admin/users/route.ts:23:    const { email, password, name, phone, role } = body;
+/home/z/my-project/src/app/api/admin/users/route.ts:68:        phone: phone || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:92:        ...(phone ? { phoneNumber: phone } : {}),
+/home/z/my-project/src/app/api/admin/users/route.ts:126:      phone: phone || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:196:          phone: user.phoneNumber || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:225:        phone: fs.phone || authData.phone || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:240:          phone: fs.phone || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:269:      phone: u.phone || null,
+/home/z/my-project/src/app/api/admin/users/route.ts:361:          if (data.phone !== undefined) updates.phone = data.phone;
+/home/z/my-project/src/app/api/admin/users/route.ts:396:          phone: authUser.phoneNumber || undefined,
+/home/z/my-project/src/app/api/admin/users/route.ts:503:        if (data.phone !== undefined) updates.phone = data.phone;
+/home/z/my-project/tool-results/read_1784765674962_5fad8ca3ef6f.txt:95:    95→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1784765674962_5fad8ca3ef6f.txt:1113:  1113→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1782519157023_8da2b71abb4a.txt:130:   130→   130→  6039→                    placeholder="Buscar por nombre, email o telefono..."
+/home/z/my-project/tool-results/read_1782519157023_8da2b71abb4a.txt:145:   145→   145→  6054→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+/home/z/my-project/tool-results/read_1783133456227_93143b747510.txt:93:    93→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1783133456227_93143b747510.txt:1107:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783133463448_d65ca899c238.txt:62:    62→    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:19:    19→  phone: string | null;
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:52:    52→  phone: string | null;
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:154:   154→export type ClaimChannel = 'presencial' | 'escrito' | 'telefono' | 'correo' | 'web';
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:188:   188→  consumer_phone: string;
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:646:   646→  phone?: string;
+/home/z/my-project/tool-results/read_1784760078248_937515eda9ba.txt:654:   654→    phone: data.phone || null,
+/home/z/my-project/tool-results/read_1782519144421_a62ab43d9255.txt:130:  6039→                    placeholder="Buscar por nombre, email o telefono..."
+/home/z/my-project/tool-results/read_1782519144421_a62ab43d9255.txt:145:  6054→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1355:  5002→                            return selected ? `${selected.name}${selected.phone ? ` · ${selected.phone}` : ''}${selected.email ? ` (${selected.email})` : ''}` : 'Buscar o seleccionar cliente...'
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1371:  5018→                            placeholder="Buscar por nombre, telefono o email..."
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1397:  5044→                                  || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1424:  5071→                                        {[u.phone, u.email].filter(Boolean).join(' · ') || 'Sin contacto'}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1883:  5530→                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-phone')?.focus() }}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1895:  5542→                  id="new-client-phone"
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1896:  5543→                  value={newClientForm.phone}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1897:  5544→                  onChange={(e) => { setNewClientForm(p => ({ ...p, phone: e.target.value })); if (newClientErrors.phone) setNewClientErrors(p => { const n = { ...p }; delete n.phone; return n }) }}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1900:  5547→                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/30 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)] ${newClientErrors.phone ? 'border-red-400' : 'border-white/10'}`}
+/home/z/my-project/tool-results/read_1782700418867_ac933f179b09.txt:1902:  5549→                {newClientErrors.phone && <p className="text-[10px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">{newClientErrors.phone}</p>}
+/home/z/my-project/tool-results/read_1781748833226_e4152d62b5d2.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/src/app/api/auth/route.ts:18:      const { name, email, phone, password } = body;
+/home/z/my-project/src/app/api/auth/route.ts:43:          phone: phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:55:              phone: phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:83:        phone: phone || undefined,
+/home/z/my-project/src/app/api/auth/route.ts:93:            phone: phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:128:            phone: null,
+/home/z/my-project/src/app/api/auth/route.ts:139:              phone: null,
+/home/z/my-project/src/app/api/auth/route.ts:155:          phone: existingUser?.phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:166:            phone: existingUser?.phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:252:          phone: userData?.phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:279:            phone: existingUser?.phone || null,
+/home/z/my-project/src/app/api/auth/route.ts:294:          phone: userData?.phone || null,
+/home/z/my-project/tool-results/read_1782680298792_2b8417b3234a.txt:93:    93→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1782680298792_2b8417b3234a.txt:1107:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783133604450_c484fc32a6ec.txt:133:  6032→                    placeholder="Buscar por nombre, email o telefono..."
+/home/z/my-project/tool-results/read_1783133604450_c484fc32a6ec.txt:148:  6047→                          {u.phone && <span className="text-cm-on-surface-variant ml-auto">{u.phone}</span>}
+/home/z/my-project/src/app/api/auth/session/route.ts:43:        phone: userData?.phone || null,
+/home/z/my-project/tool-results/read_1781749190418_950465295dec.txt:93:    93→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781749190418_950465295dec.txt:1107:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1781740874769_53f9436d5481.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:99:    99→    99→  phone: string
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:134:   134→   134→  phone: z.string().optional(),
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:257:   257→   257→      phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:391:   391→   391→        phone: data.phone,
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:431:   431→   431→        phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:635:   635→   635→                        {...form.register('phone')}
+/home/z/my-project/tool-results/read_1784765792992_26929d386cce.txt:1179:  1179→  1179→                  <InfoRow label="Teléfono" value={selectedClaim.phone || 'No indicado'} />
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:99:    99→  phone: string
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:134:   134→  phone: z.string().optional(),
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:257:   257→      phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:391:   391→        phone: data.phone,
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:431:   431→        phone: user?.phone ?? '',
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:635:   635→                        {...form.register('phone')}
+/home/z/my-project/tool-results/read_1784765788861_837a9623906f.txt:1179:  1179→                  <InfoRow label="Teléfono" value={selectedClaim.phone || 'No indicado'} />
+/home/z/my-project/tool-results/read_1781748912753_950465295dec.txt:93:    93→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781748912753_950465295dec.txt:1107:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/src/app/api/notifications/settings/route.ts:19:        whatsappEnabled: false,
+/home/z/my-project/src/app/api/notifications/settings/route.ts:20:        whatsappApiUrl: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:21:        whatsappAuthToken: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:22:        whatsappAdminPhone: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:23:        whatsappClientReminder: false,
+/home/z/my-project/src/app/api/notifications/settings/route.ts:24:        whatsappClientMinutesBefore: 10,
+/home/z/my-project/src/app/api/notifications/settings/route.ts:43:      whatsappEnabled: false,
+/home/z/my-project/src/app/api/notifications/settings/route.ts:44:      whatsappApiUrl: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:45:      whatsappAuthToken: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:46:      whatsappAdminPhone: '',
+/home/z/my-project/src/app/api/notifications/settings/route.ts:47:      whatsappClientReminder: false,
+/home/z/my-project/src/app/api/notifications/settings/route.ts:48:      whatsappClientMinutesBefore: 10,
+/home/z/my-project/tool-results/read_1783557132977_b1efc51e8526.txt:94:    94→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1783557132977_b1efc51e8526.txt:1111:  1111→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783557133270_5412f3779267.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:24:    24→  phone: string | null
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:59:    59→  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', phone: '', role: 'user' })
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:108:   108→    const { name, email, password, phone, role } = createForm
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:121:   121→        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, phone: phone.trim() || null, role }),
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:129:   129→      setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' })
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:205:   205→            onClick={() => { setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' }); setShowCreateForm(true) }}
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:300:   300→                      {user.phone && (
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:302:   302→                          <span className="material-symbols-outlined text-[14px]">phone</span>
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:303:   303→                          {user.phone}
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:440:   440→                    value={createForm.phone}
+/home/z/my-project/tool-results/read_1781736799028_99526beb2c30.txt:441:   441→                    onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))}
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:71:    const waEnabled = settings.whatsappEnabled as boolean;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:72:    const waApiUrl = settings.whatsappApiUrl as string;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:73:    const waToken = settings.whatsappAuthToken as string;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:74:    const waAdminPhone = settings.whatsappAdminPhone as string;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:78:        const phoneId = waApiUrl.match(/\/(\d+)\/messages/)?.[1];
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:79:        if (!phoneId) {
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:80:          results.whatsapp_admin = { ok: false, error: 'No se pudo extraer el Phone Number ID de la URL' };
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:82:          const baseUrl = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:97:                messaging_product: 'whatsapp',
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:104:          results.whatsapp_admin = { ok: true };
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:108:        results.whatsapp_admin = { ok: false, error: err.message };
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:113:    const waClientEnabled = settings.whatsappClientReminder as boolean;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:114:    const waClientMins = settings.whatsappClientMinutesBefore as number;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:118:        const phoneId = waApiUrl.match(/\/(\d+)\/messages/)?.[1];
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:119:        if (phoneId) {
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:120:          const baseUrl = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:125:              // Clean phone number - assume it already has country code
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:135:                    messaging_product: 'whatsapp',
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:143:                results.whatsapp_client = { ok: true };
+/home/z/my-project/src/app/api/notifications/dispatch/route.ts:150:        results.whatsapp_client = { ok: false, error: err.message };
+/home/z/my-project/tool-results/read_1784764280085_e554da807a6f.txt:95:    95→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1784764280085_e554da807a6f.txt:1112:  1112→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1784760097269_36073362babf.txt:5:   154→export type ClaimChannel = 'presencial' | 'escrito' | 'telefono' | 'correo' | 'web';
+/home/z/my-project/tool-results/read_1784760097269_36073362babf.txt:39:   188→  consumer_phone: string;
+/home/z/my-project/tool-results/read_1784760097269_36073362babf.txt:497:   646→  phone?: string;
+/home/z/my-project/tool-results/read_1784760097269_36073362babf.txt:505:   654→    phone: data.phone || null,
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:24:    24→    24→  phone: string | null
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:59:    59→    59→  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', phone: '', role: 'user' })
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:108:   108→   108→    const { name, email, password, phone, role } = createForm
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:121:   121→   121→        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, phone: phone.trim() || null, role }),
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:129:   129→   129→      setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' })
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:205:   205→   205→            onClick={() => { setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' }); setShowCreateForm(true) }}
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:300:   300→   300→                      {user.phone && (
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:302:   302→   302→                          <span className="material-symbols-outlined text-[14px]">phone</span>
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:303:   303→   303→                          {user.phone}
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:440:   440→   440→                    value={createForm.phone}
+/home/z/my-project/tool-results/read_1781736818269_fd53a66c54a1.txt:441:   441→   441→                    onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))}
+/home/z/my-project/tool-results/read_1781732404034_efb894ff6f75.txt:60:    60→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1781736799611_e0908419ec85.txt:92:    92→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781736799611_e0908419ec85.txt:1106:  1106→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783133456719_c34623cdcb95.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1781740874482_79c4e427f3bf.txt:152:   152→  const [clientPhone, setClientPhone] = useState(user?.phone || '')
+/home/z/my-project/tool-results/read_1781740874482_79c4e427f3bf.txt:234:   234→      setClientPhone(user.phone || '')
+/home/z/my-project/tool-results/read_1781740874482_79c4e427f3bf.txt:694:   694→                    phone
+/home/z/my-project/tool-results/read_1781740874482_79c4e427f3bf.txt:817:   817→                      ? 'phone_iphone'
+/home/z/my-project/tool-results/read_1783133547630_5121cb31a324.txt:89:    89→  3288→      u.name.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1783133547630_5121cb31a324.txt:277:   277→  3476→  const userStats = bookings.reduce<Record<string, { name: string; email: string; phone?: string; bookingCount: number; totalSpent: number }>>((acc, b) => {
+/home/z/my-project/tool-results/read_1783133547630_5121cb31a324.txt:280:   280→  3479→      acc[b.user.id] = { name: b.user.name || 'Sin nombre', email: b.user.email || '', phone: b.user.phone, bookingCount: 0, totalSpent: 0 }
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:213:  2612→    setNewClientForm({ name: prefillName?.trim() || '', email: '', phone: '' })
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:224:  2623→    if (!newClientForm.phone.trim() || newClientForm.phone.trim().length < 6) {
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:225:  2624→      errors.phone = 'Telefono requerido (min. 6 digitos)'
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:238:  2637→      console.log('[quickCreateClient] Creating client:', newClientForm.name, newClientForm.phone)
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:244:  2643→          phone: newClientForm.phone.trim(),
+/home/z/my-project/tool-results/read_1782517746521_a572589cadac.txt:264:  2663→          return [...prev, { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone }]
+/home/z/my-project/tool-results/read_1782515859543_6645d976c2a2.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1782519367907_c34623cdcb95.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:19:    19→  phone: string | null;
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:52:    52→  phone: string | null;
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:154:   154→export type ClaimChannel = 'presencial' | 'escrito' | 'telefono' | 'correo' | 'web';
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:188:   188→  consumer_phone: string;
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:646:   646→  phone?: string;
+/home/z/my-project/tool-results/read_1784765674446_937515eda9ba.txt:654:   654→    phone: data.phone || null,
+/home/z/my-project/tool-results/read_1782519179681_ca9ee9ca15e9.txt:310:  5009→                            return selected ? `${selected.name}${selected.phone ? ` · ${selected.phone}` : ''}${selected.email ? ` (${selected.email})` : ''}` : 'Buscar o seleccionar cliente...'
+/home/z/my-project/tool-results/read_1782519179681_ca9ee9ca15e9.txt:326:  5025→                            placeholder="Buscar por nombre, telefono o email..."
+/home/z/my-project/tool-results/read_1782519179681_ca9ee9ca15e9.txt:352:  5051→                                  || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1782519179681_ca9ee9ca15e9.txt:379:  5078→                                        {[u.phone, u.email].filter(Boolean).join(' · ') || 'Sin contacto'}
+/home/z/my-project/src/app/api/usuarios/route.ts:19:    const { name, email, phone, role } = body;
+/home/z/my-project/src/app/api/usuarios/route.ts:50:    if (!phone || phone.trim().length < 6) {
+/home/z/my-project/src/app/api/usuarios/route.ts:52:        { error: 'El telefono es requerido (minimo 6 digitos)' },
+/home/z/my-project/src/app/api/usuarios/route.ts:69:      // Check uniqueness by phone first, then email
+/home/z/my-project/src/app/api/usuarios/route.ts:71:        if (u.phone && u.phone === phone.trim()) return true;
+/home/z/my-project/src/app/api/usuarios/route.ts:77:          { error: 'Ya existe un cliente con este telefono o correo' },
+/home/z/my-project/src/app/api/usuarios/route.ts:87:        phone: phone.trim(),
+/home/z/my-project/src/app/api/usuarios/route.ts:102:            phone: phone.trim(),
+/home/z/my-project/src/app/api/usuarios/route.ts:116:    // Check uniqueness: phone first, then email
+/home/z/my-project/src/app/api/usuarios/route.ts:120:    const phoneDocs = await usersRef.where('phone', '==', phone.trim()).limit(1).get();
+/home/z/my-project/src/app/api/usuarios/route.ts:121:    if (!phoneDocs.empty) {
+/home/z/my-project/src/app/api/usuarios/route.ts:122:      existingId = phoneDocs.docs[0].id;
+/home/z/my-project/src/app/api/usuarios/route.ts:123:      existingData = phoneDocs.docs[0].data();
+/home/z/my-project/src/app/api/usuarios/route.ts:140:            name: (existingData.name as string) || phone.trim(),
+/home/z/my-project/src/app/api/usuarios/route.ts:142:            phone: (existingData.phone as string) || phone.trim(),
+/home/z/my-project/src/app/api/usuarios/route.ts:146:          message: 'Ya existe un cliente con este telefono o correo. Se selecciono automaticamente.',
+/home/z/my-project/src/app/api/usuarios/route.ts:160:      phone: phone.trim(),
+/home/z/my-project/src/app/api/usuarios/route.ts:181:          phone: clientData.phone,
+/home/z/my-project/tool-results/read_1783560893151_ea18e93ce8b6.txt:62:    62→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1781736799320_29753772ef5b.txt:61:    61→    phone: userRaw.phone,
+/home/z/my-project/tool-results/read_1784765679828_4d1e0bf88188.txt:76:    76→  phone: string
+/home/z/my-project/tool-results/read_1784765679828_4d1e0bf88188.txt:559:   559→                      <div><span className="text-[#dae6d2]/50">Tel\u00e9fono:</span> <span className="text-[#dae6d2]">{detailClaim.phone || '--'}</span></div>
+/home/z/my-project/tool-results/read_1781744975433_b14c308a80e3.txt:93:    93→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781744975433_b14c308a80e3.txt:1107:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783563622268_3d55ff3c8276.txt:479:   479→            {/* slot grid — 3 cols mobile, 4 sm, 6 md+ */}
+/home/z/my-project/tool-results/read_1781732403701_d2c581b23d95.txt:92:    92→  user: { id: string; name: string; email: string; phone?: string } | null
+/home/z/my-project/tool-results/read_1781732403701_d2c581b23d95.txt:1089:  1089→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/tool-results/read_1783133497065_7889cf6f0339.txt:108:  1107→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+/home/z/my-project/src/app/api/setup/create-admin/route.ts:91:      phone: null,
+/home/z/my-project/tool-results/read_1781732404321_79c4e427f3bf.txt:152:   152→  const [clientPhone, setClientPhone] = useState(user?.phone || '')
+/home/z/my-project/tool-results/read_1781732404321_79c4e427f3bf.txt:234:   234→      setClientPhone(user.phone || '')
+/home/z/my-project/tool-results/read_1781732404321_79c4e427f3bf.txt:694:   694→                    phone
+/home/z/my-project/tool-results/read_1781732404321_79c4e427f3bf.txt:817:   817→                      ? 'phone_iphone'
+/home/z/my-project/tool-results/read_1782700418383_d1971646d8aa.txt:1463:  5002→                            return selected ? `${selected.name}${selected.phone ? ` · ${selected.phone}` : ''}${selected.email ? ` (${selected.email})` : ''}` : 'Buscar o seleccionar cliente...'
+/home/z/my-project/tool-results/read_1782700418383_d1971646d8aa.txt:1479:  5018→                            placeholder="Buscar por nombre, telefono o email..."
+/home/z/my-project/tool-results/read_1782700418383_d1971646d8aa.txt:1505:  5044→                                  || (u.phone && u.phone.includes(q))
+/home/z/my-project/tool-results/read_1782700418383_d1971646d8aa.txt:1532:  5071→                                        {[u.phone, u.email].filter(Boolean).join(' · ') || 'Sin contacto'}
+/home/z/my-project/tool-results/read_1782700418383_d1971646d8aa.txt:1991:  5530→                  onKeyDown={(e) => { if (e.key === 'Enter') document.getElementById('new-client-phone')?.focus() }}
+
+[Showing results with pagination = limit: 250]
