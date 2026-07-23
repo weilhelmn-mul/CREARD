@@ -129,6 +129,11 @@ export interface LegalSection {
   content: string // HTML content
 }
 
+export interface ContactPhone {
+  label: string   // ej: "Reservas", "Administración"
+  number: string  // ej: "+51 984 000 000"
+}
+
 export interface SiteSettings {
   hero: {
     location: string
@@ -166,7 +171,7 @@ export interface SiteSettings {
     steps: StepItem[]
   }
   // Contact & Social (admin editable)
-  contact_phone: string
+  contact_phones: ContactPhone[]
   contact_whatsapp: string
   contact_email: string
   contact_address: string

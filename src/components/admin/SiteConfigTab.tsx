@@ -7,16 +7,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSiteSettings, type LegalSection } from '@/context/SiteSettingsContext'
+import { useSiteSettings, type LegalSection, type ContactPhone } from '@/context/SiteSettingsContext'
 import { toast } from '@/hooks/use-toast'
-
-const CONTACT_FIELDS = [
-  { key: 'contact_phone', label: 'Teléfono', placeholder: '+51 984 000 000', icon: 'call' },
-  { key: 'contact_whatsapp', label: 'WhatsApp (número)', placeholder: '51984000000', icon: 'chat' },
-  { key: 'contact_email', label: 'Correo electrónico', placeholder: 'contacto@creard.com', icon: 'mail' },
-  { key: 'contact_address', label: 'Dirección física', placeholder: 'San Sebastián, Cusco, Perú', icon: 'location_on' },
-  { key: 'business_hours', label: 'Horario de atención', placeholder: 'Lun-Dom 7:00 AM - 11:00 PM', icon: 'schedule' },
-] as const
 
 const SOCIAL_FIELDS = [
   { key: 'social_facebook', label: 'Facebook', placeholder: 'https://facebook.com/creard.cusco', icon: 'public' },
@@ -38,8 +30,15 @@ export default function SiteConfigTab() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('contacto')
   const [saving, setSaving] = useState(false)
 
-  // ── Contact & Social form state ──
-  const [contactForm, setContactForm] = useState<Record<string, string>>({})
+  // ── Contact phones (array) ──
+  const [phones, setPhones] = useState<ContactPhone[]>([])
+  const [whatsapp, setWhatsapp] = useState('')
+  const [email, setEmail] = useState('')
+  const [address, setAddress] = useState('')
+  const [businessHours, setBusinessHours] = useState('')
+
+  // ── Social form state ──
+  const [socialForm, setSocialForm] = useState<Record<string, string>>({})
 
   // ── Legal form state ──
   const [termsSections, setTermsSections] = useState<LegalSection[]>([])
@@ -51,16 +50,26 @@ export default function SiteConfigTab() {
   useEffect(() => {
     if (!settings) return
     const s = settings as Record<string, unknown>
-    setContactForm({
-      contact_phone: (s.contact_phone as string) || '',
-      contact_whatsapp: (s.contact_whatsapp as string) || '',
-      contact_email: (s.contact_email as string) || '',
-      contact_address: (s.contact_address as string) || '',
-      business_hours: (s.business_hours as string) || '',
+    // Phones array (backward compat with old contact_phone string)
+    const rawPhones = s.contact_phones
+    if (Array.isArray(rawPhones) && rawPhones.length > 0) {
+      setPhones(rawPhones as ContactPhone[])
+    } else if (s.contact_phone && typeof s.contact_phone === 'string') {
+      setPhones([{ label: '', number: s.contact_phone }])
+    } else {
+      setPhones([{ label: '', number: '' }])
+    }
+    setWhatsapp((s.contact_whatsapp as string) || '')
+    setEmail((s.contact_email as string) || '')
+    setAddress((s.contact_address as string) || '')
+    setBusinessHours((s.business_hours as string) || '')
+    // Social
+    setSocialForm({
       social_facebook: (s.social_facebook as string) || '',
       social_instagram: (s.social_instagram as string) || '',
       social_tiktok: (s.social_tiktok as string) || '',
     })
+    // Legal
     if (settings.legal_terms?.length) setTermsSections([...settings.legal_terms])
     if (settings.legal_refund?.length) setRefundSections([...settings.legal_refund])
   }, [settings])
@@ -68,22 +77,38 @@ export default function SiteConfigTab() {
   const handleSaveContact = useCallback(async () => {
     if (!settings) return
     setSaving(true)
-    const updated = { ...settings, ...contactForm }
+    const updated = {
+      ...settings,
+      contact_phones: phones,
+      contact_whatsapp: whatsapp,
+      contact_email: email,
+      contact_address: address,
+      business_hours: businessHours,
+    }
     const ok = await saveFullSettings(updated)
     setSaving(false)
     if (ok) toast({ title: 'Datos de contacto guardados' })
     else toast({ title: 'Error al guardar', variant: 'destructive' })
-  }, [settings, contactForm, saveFullSettings])
+  }, [settings, phones, whatsapp, email, address, businessHours, saveFullSettings])
 
   const handleSaveSocial = useCallback(async () => {
     if (!settings) return
     setSaving(true)
-    const updated = { ...settings, ...contactForm }
+    const updated = { ...settings, ...socialForm }
     const ok = await saveFullSettings(updated)
     setSaving(false)
     if (ok) toast({ title: 'Redes sociales guardadas' })
     else toast({ title: 'Error al guardar', variant: 'destructive' })
-  }, [settings, contactForm, saveFullSettings])
+  }, [settings, socialForm, saveFullSettings])
+
+  // Phone management
+  const addPhone = () => setPhones([...phones, { label: '', number: '' }])
+  const removePhone = (idx: number) => setPhones(phones.filter((_, i) => i !== idx))
+  const updatePhone = (idx: number, field: 'label' | 'number', value: string) => {
+    const updated = [...phones]
+    updated[idx] = { ...updated[idx], [field]: value }
+    setPhones(updated)
+  }
 
   const handleSaveLegal = useCallback(async (key: 'legal_terms' | 'legal_refund', sections: LegalSection[]) => {
     if (!settings) return
@@ -164,23 +189,113 @@ export default function SiteConfigTab() {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CONTACT_FIELDS.map((field) => (
-              <div key={field.key}>
-                <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
-                  <span className="material-symbols-outlined text-[14px]">{field.icon}</span>
-                  {field.label}
-                </label>
-                <input
-                  type="text"
-                  value={contactForm[field.key] || ''}
-                  onChange={(e) => setContactForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
-                />
+
+          {/* ── Múltiples Teléfonos ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant">
+                <span className="material-symbols-outlined text-[14px]">call</span>
+                Teléfonos
+              </label>
+              <button
+                onClick={addPhone}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-cm-primary hover:bg-cm-primary/10 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                Agregar teléfono
+              </button>
+            </div>
+            {phones.map((phone, idx) => (
+              <div key={idx} className="flex gap-2 items-start">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={phone.label}
+                    onChange={(e) => updatePhone(idx, 'label', e.target.value)}
+                    placeholder="Etiqueta (ej: Reservas, Admin)"
+                    className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+                  />
+                  <input
+                    type="text"
+                    value={phone.number}
+                    onChange={(e) => updatePhone(idx, 'number', e.target.value)}
+                    placeholder="+51 984 000 000"
+                    className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+                  />
+                </div>
+                {phones.length > 1 && (
+                  <button
+                    onClick={() => removePhone(idx)}
+                    className="mt-2 w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition-all shrink-0"
+                    title="Eliminar teléfono"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
+
+          {/* ── WhatsApp ── */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+              <span className="material-symbols-outlined text-[14px]">chat</span>
+              WhatsApp (número sin +)
+            </label>
+            <input
+              type="text"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="51984000000"
+              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+            />
+          </div>
+
+          {/* ── Email ── */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+              <span className="material-symbols-outlined text-[14px]">mail</span>
+              Correo electrónico
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="contacto@creard.com"
+              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+            />
+          </div>
+
+          {/* ── Dirección ── */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+              <span className="material-symbols-outlined text-[14px]">location_on</span>
+              Dirección física
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="San Sebastián, Cusco, Perú"
+              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+            />
+          </div>
+
+          {/* ── Horario ── */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+              <span className="material-symbols-outlined text-[14px]">schedule</span>
+              Horario de atención
+            </label>
+            <input
+              type="text"
+              value={businessHours}
+              onChange={(e) => setBusinessHours(e.target.value)}
+              placeholder="Lun-Dom 7:00 AM - 11:00 PM"
+              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+            />
+          </div>
+
           <div className="flex justify-end">
             <button
               onClick={handleSaveContact}
@@ -220,8 +335,8 @@ export default function SiteConfigTab() {
                 </label>
                 <input
                   type="url"
-                  value={contactForm[field.key] || ''}
-                  onChange={(e) => setContactForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                  value={socialForm[field.key] || ''}
+                  onChange={(e) => setSocialForm((f) => ({ ...f, [field.key]: e.target.value }))}
                   placeholder={field.placeholder}
                   className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
                 />
@@ -348,14 +463,9 @@ function LegalEditor({
         </button>
       </div>
 
-      {/* Sections list */}
       <div className="space-y-3">
         {sections.map((section, idx) => (
-          <div
-            key={idx}
-            className="rounded-xl border border-cm-border/50 bg-cm-surface-container overflow-hidden"
-          >
-            {/* Section header */}
+          <div key={idx} className="rounded-xl border border-cm-border/50 bg-cm-surface-container overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-mono text-cm-on-surface-variant/60 shrink-0">{String(idx + 1).padStart(2, '0')}</span>
@@ -373,61 +483,33 @@ function LegalEditor({
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => onMove(idx, -1)}
-                  disabled={idx === 0}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all"
-                  title="Mover arriba"
-                >
+                <button onClick={() => onMove(idx, -1)} disabled={idx === 0} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all" title="Mover arriba">
                   <span className="material-symbols-outlined text-[16px]">expand_less</span>
                 </button>
-                <button
-                  onClick={() => onMove(idx, 1)}
-                  disabled={idx === sections.length - 1}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all"
-                  title="Mover abajo"
-                >
+                <button onClick={() => onMove(idx, 1)} disabled={idx === sections.length - 1} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all" title="Mover abajo">
                   <span className="material-symbols-outlined text-[16px]">expand_more</span>
                 </button>
                 {editingIdx === idx ? (
                   <>
-                    <button
-                      onClick={onSaveSection}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-green-400 hover:bg-green-400/10 transition-all"
-                      title="Guardar sección"
-                    >
+                    <button onClick={onSaveSection} className="w-7 h-7 rounded-lg flex items-center justify-center text-green-400 hover:bg-green-400/10 transition-all" title="Guardar sección">
                       <span className="material-symbols-outlined text-[16px]">check</span>
                     </button>
-                    <button
-                      onClick={onCancelEdit}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition-all"
-                      title="Cancelar"
-                    >
+                    <button onClick={onCancelEdit} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition-all" title="Cancelar">
                       <span className="material-symbols-outlined text-[16px]">close</span>
                     </button>
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={() => onEdit(idx)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-all"
-                      title="Editar sección"
-                    >
+                    <button onClick={() => onEdit(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-all" title="Editar sección">
                       <span className="material-symbols-outlined text-[16px]">edit</span>
                     </button>
-                    <button
-                      onClick={() => onDelete(idx)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-red-400 hover:bg-red-400/10 transition-all"
-                      title="Eliminar sección"
-                    >
+                    <button onClick={() => onDelete(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-red-400 hover:bg-red-400/10 transition-all" title="Eliminar sección">
                       <span className="material-symbols-outlined text-[16px]">delete</span>
                     </button>
                   </>
                 )}
               </div>
             </div>
-
-            {/* Section content editor */}
             {editingIdx === idx && (
               <div className="px-4 pb-4">
                 <textarea
@@ -442,27 +524,17 @@ function LegalEditor({
                 </p>
               </div>
             )}
-
-            {/* Section preview (when not editing) */}
             {editingIdx !== idx && section.content && (
               <div className="px-4 pb-3">
-                <div
-                  className="text-xs text-cm-on-surface-variant/80 line-clamp-3 leading-relaxed [&_strong]:text-cm-on-surface/80"
-                  dangerouslySetInnerHTML={{ __html: section.content }}
-                />
+                <div className="text-xs text-cm-on-surface-variant/80 line-clamp-3 leading-relaxed [&_strong]:text-cm-on-surface/80" dangerouslySetInnerHTML={{ __html: section.content }} />
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Save button */}
       <div className="flex justify-end">
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cm-primary text-cm-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
+        <button onClick={onSave} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cm-primary text-cm-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
           {saving ? (
             <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
           ) : (

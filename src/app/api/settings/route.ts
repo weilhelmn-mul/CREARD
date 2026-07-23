@@ -146,7 +146,7 @@ function getDefaults() {
       ctaText: 'Ver Todas',
     },
     // REQUISITO 1 (AUDITORÍA): Datos de contacto y redes sociales (admin editable)
-    contact_phone: '',
+    contact_phones: [{ label: '', number: '+51 984 000 000' }],
     contact_whatsapp: '51984000000',
     contact_email: 'contacto@creard.com',
     contact_address: 'San Sebastian, Cusco, Peru',
@@ -231,6 +231,11 @@ export async function GET() {
       if (!data.news) data.news = defaults.news
       if (!data.legal_terms) data.legal_terms = defaults.legal_terms
       if (!data.legal_refund) data.legal_refund = defaults.legal_refund
+      // Backward compat: migrate old contact_phone to contact_phones array
+      if (!data.contact_phones && data.contact_phone) {
+        data.contact_phones = [{ label: '', number: String(data.contact_phone) }]
+      }
+      if (!data.contact_phones) data.contact_phones = defaults.contact_phones
       if (!data.featuredCourts) data.featuredCourts = defaults.featuredCourts
       // Remove todaysSchedule from persisted order/visibility if present
       if (data.sectionOrder) data.sectionOrder = data.sectionOrder.filter((k: string) => k !== 'todaysSchedule')
