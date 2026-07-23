@@ -9,6 +9,7 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 import { cachedFetch, cachedFetchFresh, invalidateCache, invalidateAllCaches } from '@/lib/cache'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
+import ClaimsAdminTab from '@/components/claims/ClaimsAdminTab'
 import EquipmentManager from '@/components/admin/EquipmentManager'
 import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
 import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
@@ -137,7 +138,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'usuarios' | 'canchas' | 'contenido'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -167,6 +168,7 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
   { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
   { key: 'alarmas',   label: 'Alarmas',   icon: 'notifications_active' },
+  { key: 'reclamaciones', label: 'Reclamaciones', icon: 'gavel' },
   { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
@@ -5045,6 +5047,13 @@ export default function AdminDashboard() {
           {/* ─── CONTENIDO (Edit Home Page) ─── */}
           {activeTab === 'contenido' && (
             <ContentTab />
+          )}
+
+          {/* ─── RECLAMACIONES ─── */}
+          {activeTab === 'reclamaciones' && (
+            <motion.div key='reclamaciones' initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+              <ClaimsAdminTab />
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

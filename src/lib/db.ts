@@ -149,6 +149,80 @@ export interface Equipment {
   updated_at: Date;
 }
 
+export type ClaimType = 'queja' | 'reclamo';
+export type ClaimStatus = 'received' | 'in_process' | 'responded' | 'closed' | 'archived';
+export type ClaimChannel = 'presencial' | 'escrito' | 'telefono' | 'correo' | 'web';
+
+export interface ClaimAttachment {
+  id: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  storage_path: string;
+  url: string;
+}
+
+export interface ClaimAuditEntry {
+  id: string;
+  action: string;
+  performed_by: string;
+  performed_by_name: string;
+  performed_by_role: string;
+ details: string;
+  created_at: Date;
+}
+
+export interface Claim {
+  id: string;
+  // Correlative number (auto-generated, format: LR-YYYY-NNNNN)
+  claim_number: string;
+  // Claim type
+  claim_type: ClaimType;
+  status: ClaimStatus;
+  // Consumer info
+  consumer_id: string | null;
+  consumer_name: string;
+  consumer_document_type: 'DNI' | 'CE' | 'PTE' | 'RUC' | 'Pasaporte';
+  consumer_document_number: string;
+  consumer_address: string;
+  consumer_phone: string;
+  consumer_email: string;
+  // Product/Service info
+  service_type: string; // e.g. 'Reserva de cancha deportiva'
+  related_booking_id: string | null;
+  related_court_name: string | null;
+  related_booking_date: string | null;
+  related_booking_time: string | null;
+  related_booking_amount: number | null;
+  related_payment_method: string | null;
+  related_payment_ref: string | null;
+  // Claim details
+  description: string;
+  consumer_request: string;
+  // Channel
+  channel: ClaimChannel;
+  // Provider response
+  provider_response: string | null;
+  provider_response_date: Date | null;
+  // Dates
+  received_date: Date;
+  deadline_date: Date; // 15 business days
+  closed_date: Date | null;
+  // Attachments
+  attachments: ClaimAttachment[];
+  // QR code data URL (base64)
+  qr_code_url: string | null;
+  // PDF hoja URL
+  claim_sheet_url: string | null;
+  // Archival
+  archived: boolean;
+  archived_at: Date | null;
+  archived_by: string | null;
+  // Timestamps
+  created_at: Date;
+  updated_at: Date;
+}
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -750,4 +824,115 @@ export async function updateEquipment(id: string, data: Record<string, unknown>)
 
 export async function deleteEquipment(id: string): Promise<void> {
   await deleteDocById('equipment', id);
+}
+
+// ============================================================
+// Claims (Libro de Reclamaciones) CRUD
+// ============================================================
+
+/** Get total count of claims (for correlative number generation) */
+export async function getClaimsCount(): Promise<number> {
+  try {
+    return await getCollectionSize('claims');
+  } catch {
+    return 0;
+  }
+}
+
+/** Generate next correlative number: LR-YYYY-NNNNN */
+export async function generateClaimNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const count = await getClaimsCount();
+  const sequential = String(count + 1).padStart(5, '0');
+  return `LR-${year}-${sequential}`;
+}
+
+/** Get all claims with optional filters */
+export async function getClaims(filters?: {
+  status?: ClaimStatus;
+  claim_type?: ClaimType;
+  consumer_id?: string;
+  archived?: boolean;
+}): Promise<Partial<Claim>[]> {
+  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
+  if (filters?.claim_type) constraints.push({ field: 'claim_type', op: '==', value: filters.claim_type });
+  if (filters?.consumer_id) constraints.push({ field: 'consumer_id', op: '==', value: filters.consumer_id });
+  if (filters?.archived !== undefined) constraints.push({ field: 'archived', op: '==', value: filters.archived });
+  return queryDocs('claims', constraints, 'created_at', 'desc');
+}
+
+/** Get a single claim by ID */
+export async function getClaimById(id: string): Promise<Partial<Claim> | null> {
+  return getDocById('claims', id);
+}
+
+/** Create a new claim */
+export async function createClaim(data: Record<string, unknown>): Promise<string> {
+  return addDoc('claims', data);
+}
+
+/** Update a claim */
+export async function updateClaim(id: string, data: Record<string, unknown>): Promise<void> {
+  await updateDocById('claims', id, data);
+}
+
+/** Archive a claim (soft delete) */
+export async function archiveClaim(id: string, archivedBy: string): Promise<void> {
+  await updateDocById('claims', id, {
+    archived: true,
+    archived_at: Timestamp.now(),
+    archived_by: archivedBy,
+    status: 'archived',
+  });
+}
+
+/** Unarchive a claim */
+export async function unarchiveClaim(id: string): Promise<void> {
+  await updateDocById('claims', id, {
+    archived: false,
+    archived_at: null,
+    archived_by: null,
+    status: 'received',
+  });
+}
+
+/** Get claims that are approaching or past deadline */
+export async function getClaimsNearDeadline(daysThreshold: number = 2): Promise<Partial<Claim>[]> {
+  const allClaims = await getClaims();
+  const now = new Date();
+  const threshold = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
+  return allClaims.filter((c) => {
+    if (c.status === 'closed' || c.status === 'archived' || !c.deadline_date) return false;
+    const deadline = c.deadline_date instanceof Date ? c.deadline_date : new Date(c.deadline_date);
+    return deadline <= threshold;
+  });
+}
+
+/** Add audit entry to a claim */
+export async function addClaimAuditEntry(
+  claimId: string,
+  action: string,
+  performedBy: string,
+  performedByName: string,
+  performedByRole: string,
+  details: string
+): Promise<void> {
+  const entry = {
+    id: claimId + '_' + Date.now(),
+    action,
+    performed_by: performedBy,
+    performed_by_name: performedByName,
+    performed_by_role: performedByRole,
+    details,
+    created_at: Timestamp.now(),
+  };
+  // Store audit entries as a sub-collection
+  await getAdminDb().collection('claims').doc(claimId).collection('audit_log').add(entry);
+}
+
+/** Get audit log for a claim */
+export async function getClaimAuditLog(claimId: string): Promise<Partial<ClaimAuditEntry>[]> {
+  const snapshot = await getAdminDb().collection('claims').doc(claimId).collection('audit_log').orderBy('created_at', 'asc').get();
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }

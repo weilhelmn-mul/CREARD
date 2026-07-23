@@ -245,6 +245,19 @@ export default function ProfileView() {
             Configuración
           </h2>
           <div className="glass-card rounded-2xl overflow-hidden">
+            <button type="button"
+              onClick={() => setView('claims')}
+              className="w-full flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-yellow-400 text-[20px]">gavel</span>
+                <div className="text-left">
+                  <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)] block">Libro de Reclamaciones</span>
+                  <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Presenta quejas o reclamos</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-cm-on-surface-variant text-[18px]">chevron_right</span>
+            </button>
             <div className="flex items-center justify-between p-4 border-b border-white/5">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-cm-on-surface-variant text-[20px]">notifications</span>

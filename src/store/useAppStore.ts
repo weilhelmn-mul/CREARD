@@ -43,6 +43,7 @@ export type ViewType =
   | 'admin'
   | 'login'
   | 'register'
+  | 'claims'
 
 export interface Notification {
   id: string

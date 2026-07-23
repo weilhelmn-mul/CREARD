@@ -20,6 +20,7 @@ import ProfileView from '@/components/profile/ProfileView'
 import AdminDashboard from '@/components/admin/AdminDashboard'
 import AuthView from '@/components/auth/AuthView'
 import AuthInitializer from '@/components/auth/AuthInitializer'
+import ClaimsUserView from '@/components/claims/ClaimsUserView'
 
 function HomeView() {
   const { settings } = useSiteSettings()
@@ -96,6 +97,11 @@ function ViewRouter() {
       {currentView === 'admin' && (
         <motion.div key="admin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
           <AdminDashboard />
+        </motion.div>
+      )}
+      {currentView === 'claims' && (
+        <motion.div key="claims" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+          <ClaimsUserView />
         </motion.div>
       )}
       {(currentView === 'login' || currentView === 'register') && (
