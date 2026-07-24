@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         is_active: true,
       });
 
-      console.log(`[USERS POST] Demo user created: ${email} (${userRole})`);
+      // Demo user created
       return NextResponse.json({
         success: true,
         uid: demoId,
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       console.warn(`[USERS POST] Could not set custom claims for ${userRecord.uid}:`, err);
     }
 
-    console.log(`[USERS POST] User created: ${email} (${userRole}) by ${authResult.user.email}`);
+    // User created successfully
     return NextResponse.json({
       success: true,
       uid: userRecord.uid,

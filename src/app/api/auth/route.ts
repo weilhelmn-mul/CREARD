@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
 
       // Auto-fix: si es admin/super_admin con status 'pending', aprobar automáticamente
       if (userStatus === 'pending' && (userRole === 'admin' || userRole === 'super_admin')) {
-        console.log(`[AUTH] Auto-fixing admin user ${email}: status pending -> approved`);
+        // Auto-fixing admin user status
         try {
           const { updateUser } = await import('@/lib/db');
           await updateUser(userRecord.uid, { status: 'approved', is_active: true });
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       // Auto-fix: si el rol en Firestore es solo 'admin' pero es el super admin configurado, promover
       const ADMIN_EMAIL = 'weilhelmn@gmail.com';
       if (email === ADMIN_EMAIL && userRole !== 'super_admin') {
-        console.log(`[AUTH] Auto-upgrading super admin ${email}: role ${userRole} -> super_admin`);
+        // Auto-upgrading super admin role
         try {
           const { updateUser } = await import('@/lib/db');
           await updateUser(userRecord.uid, { role: 'super_admin', status: 'approved', is_active: true });

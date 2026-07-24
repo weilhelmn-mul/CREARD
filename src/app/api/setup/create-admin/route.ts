@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     // Set Firebase custom claims
     await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
 
-    console.log(`[SETUP] Admin creado: ${ADMIN_EMAIL} (UID: ${userRecord.uid})`);
+    // Admin created successfully
 
     return NextResponse.json({
       success: true,

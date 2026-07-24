@@ -142,9 +142,8 @@ async function safeEnrichBooking(b: Record<string, unknown>): Promise<Record<str
       const c = await getCourtById(allCourtIds[0]);
       if (c) court = c as Record<string, unknown>;
     }
-  } catch (e) {
-    console.warn('[BOOKINGS] Failed to load primary court for booking:', b.id, e);
-  }
+  } catch { /* court enrichment failed */ }
+
 
   // Enrich all courts for multi-court bookings
   if (allCourtIds.length > 1) {
@@ -163,9 +162,8 @@ async function safeEnrichBooking(b: Record<string, unknown>): Promise<Record<str
       const u = await getUserById(b.user_id as string);
       if (u) user = u as Record<string, unknown>;
     }
-  } catch (e) {
-    console.warn('[BOOKINGS] Failed to load user for booking:', b.id, e);
-  }
+  } catch { /* user enrichment failed */ }
+
 
   return { ...b, _court: court, _courts: courts, _user: user };
 }
@@ -264,7 +262,16 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Firebase no configurado', code: 'NO_FIREBASE' }, { status: 503 });
       }
       const bookings = await getBookings({ courtId, date });
-      return NextResponse.json(bookings.map(toCamelBooking));
+      // FIX P0-4: Filter out expired reserved bookings (ghost reservations)
+      const now = Date.now();
+      const active = bookings.filter((b: any) => {
+        if (migrateStatus(b.status || 'reserved') !== 'reserved') return true;
+        const exp = b.expires_at;
+        if (!exp) return true;
+        const expMs = exp.toMillis?.()?.() || new Date(exp).getTime();
+        return expMs > now;
+      });
+      return NextResponse.json(active.map(toCamelBooking));
     }
 
     // All other queries require authentication
@@ -295,10 +302,7 @@ export async function GET(request: NextRequest) {
         dateTo: dateTo || undefined,
         status: status || undefined,
       })) as Record<string, unknown>[];
-      console.log(`[BOOKINGS] Firestore returned ${bookings.length} raw docs (dateFrom=${dateFrom}, dateTo=${dateTo})`);
-      if (bookings.length > 0) {
-        console.log(`[BOOKINGS] Sample raw date field: id=${bookings[0].id}, date=${JSON.stringify(bookings[0].date)}, type=${typeof bookings[0].date}`);
-      }
+      // DEBUG removed (P3-16): raw booking data no longer logged
     }
 
     // Enrich each booking with cached court/user lookups (avoid N+1 Firestore reads)
@@ -321,7 +325,7 @@ export async function GET(request: NextRequest) {
       } catch { userCache.set(uid, null); return null; }
     };
 
-    const enriched: Record<string, unknown>[] = [];
+    let enriched: Record<string, unknown>[] = [];
     // Process in batches of 10 to avoid overwhelming Firestore
     const BATCH_SIZE = 10;
     for (let i = 0; i < bookings.length; i += BATCH_SIZE) {
@@ -386,7 +390,31 @@ export async function GET(request: NextRequest) {
       return String(a.startTime || '').localeCompare(String(b.startTime || ''));
     });
 
-    console.log(`[BOOKINGS] GET: ${enriched.length} bookings returned in ${Date.now() - startTime}ms (auth=${authUser.role}, filters: courtId=${courtId||'all'}, date=${date||'all'}, status=${status||'all'})`);
+    // FIX P0-4: Lazy-expire reserved bookings past their TTL
+    try {
+      const db = await getAdminDb();
+      const nowMs = Date.now();
+      const expiredIds: string[] = [];
+      for (const b of bookings) {
+        if (migrateStatus(b.status || 'reserved') !== 'reserved') continue;
+        const exp = b.expires_at;
+        if (!exp) continue;
+        const expMs = exp.toMillis?.()?.() || new Date(exp).getTime();
+        if (expMs <= nowMs) expiredIds.push(b.id as string);
+      }
+      if (expiredIds.length > 0) {
+        await Promise.all(expiredIds.map((id) =>
+          db.collection('bookings').doc(id).update({
+            status: 'cancelled',
+            slot_status: 'available',
+            updated_at: Timestamp.now(),
+          })
+        ));
+        // Remove expired from enriched results
+        const expiredSet = new Set(expiredIds);
+        enriched = enriched.filter((b) => !expiredSet.has(b.id as string));
+      }
+    } catch { /* non-critical: best-effort cleanup */ }
 
     return NextResponse.json(enriched);
   } catch (error) {

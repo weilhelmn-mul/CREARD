@@ -64,7 +64,7 @@ export async function restoreSession(): Promise<boolean> {
       store.setAuthChecked(true);
       return false;
     }
-    console.log('[CREARD] Sesion restaurada (sin Firebase token):', persistedUser.email);
+    // Session restored without Firebase token
     store.setAuthChecked(true);
     return true;
   }

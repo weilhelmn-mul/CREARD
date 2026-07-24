@@ -123,13 +123,12 @@ export default function BookingsView() {
       if (res.ok) {
         const data: Booking[] = await res.json()
         setBookings(data)
-        console.log('[CREARD] Bookings loaded:', data.length)
       } else {
         const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
-        console.error('[CREARD] Error loading bookings:', res.status, err)
+        // Error loading bookings (suppressed in production)
       }
     } catch (err) {
-      console.error('[CREARD] Fetch bookings error:', err)
+      // Fetch bookings error (suppressed in production)
       toast({ title: 'Error', description: 'No se pudieron cargar las reservas', variant: 'destructive' })
     } finally {
       setLoading(false)
