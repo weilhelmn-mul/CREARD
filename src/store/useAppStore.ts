@@ -40,6 +40,7 @@ export type ViewType =
   | 'profile'
   | 'court-detail'
   | 'booking-form'
+  | 'booking'
   | 'admin'
   | 'login'
   | 'register'

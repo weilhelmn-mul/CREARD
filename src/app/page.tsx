@@ -15,6 +15,7 @@ import { useSiteSettings } from '@/context/SiteSettingsContext'
 import SearchView from '@/components/search/SearchView'
 import CourtDetail from '@/components/courts/CourtDetail'
 import BookingForm from '@/components/bookings/BookingForm'
+import UnifiedBookingView from '@/components/bookings/UnifiedBookingView'
 import BookingsView from '@/components/bookings/BookingsView'
 import ProfileView from '@/components/profile/ProfileView'
 import AdminDashboard from '@/components/admin/AdminDashboard'
@@ -65,6 +66,21 @@ function HomeView() {
       {sectionOrder.map((key) => renderSection(key))}
       {/* News section rendered after all ordered sections if there are active news */}
       <NewsSection />
+      {/* CTA: Unified Booking */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <button
+          type="button"
+          onClick={() => useAppStore.getState().setView('booking')}
+          className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-[#00ff41]/20 to-emerald-500/10 border border-[#00ff41]/30 hover:border-[#00ff41]/60 hover:shadow-[0_0_30px_rgba(0,255,65,0.15)] transition-all duration-300 group"
+        >
+          <span className="material-symbols-outlined text-[#00ff41] text-[28px] group-hover:scale-110 transition-transform" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+          <div className="text-left">
+            <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">Reservar Cancha</p>
+            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">Selecciona canchas y horarios en un solo lugar</p>
+          </div>
+          <span className="material-symbols-outlined text-[#00ff41]/60 text-[20px] ml-auto">arrow_forward</span>
+        </button>
+      </div>
       {/* Libro de Reclamaciones - always at the end */}
       <ClaimsFooterBanner />
     </motion.div>
@@ -90,6 +106,11 @@ function ViewRouter() {
       {currentView === 'booking-form' && (
         <motion.div key="booking-form" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 100 }} transition={{ type: 'tween', duration: 0.25 }}>
           <BookingForm />
+        </motion.div>
+      )}
+      {currentView === 'booking' && (
+        <motion.div key="booking" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 100 }} transition={{ type: 'tween', duration: 0.25 }}>
+          <UnifiedBookingView />
         </motion.div>
       )}
       {currentView === 'bookings' && (

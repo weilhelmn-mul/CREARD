@@ -18,17 +18,29 @@ interface Court {
 const sportLabels: Record<string, string> = {
   futbol: 'Fútbol',
   voley: 'Vóley',
+  basket: 'Básquet',
+  tenis: 'Tenis',
+  padel: 'Pádel',
+  eventos: 'Eventos',
 }
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer',
   voley: 'sports_volleyball',
+  basket: 'sports_basketball',
+  tenis: 'sports_tennis',
+  padel: 'sports_tennis',
+  eventos: 'celebration',
 }
 
 const sportTabs = [
   { value: 'todos', label: 'Todos' },
   { value: 'futbol', label: 'Fútbol' },
   { value: 'voley', label: 'Vóley' },
+  { value: 'basket', label: 'Básquet' },
+  { value: 'tenis', label: 'Tenis' },
+  { value: 'padel', label: 'Pádel' },
+  { value: 'eventos', label: 'Eventos' },
 ]
 
 type SortType = 'price-asc' | 'price-desc' | 'name'
@@ -108,6 +120,20 @@ export default function SearchView() {
       </div>
 
       <div className="max-w-7xl mx-auto">
+        {/* New unified booking CTA */}
+        <button
+          type="button"
+          onClick={() => setView('booking')}
+          className="w-full mb-6 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-[#00ff41]/20 to-emerald-500/10 border border-[#00ff41]/30 hover:border-[#00ff41]/60 transition-all duration-300 group"
+        >
+          <span className="material-symbols-outlined text-[#00ff41] text-[24px] group-hover:scale-110 transition-transform">add_circle</span>
+          <div className="text-left">
+            <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-base">Reservar Cancha</p>
+            <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">Selecciona canchas y horarios en un solo lugar</p>
+          </div>
+          <span className="material-symbols-outlined text-[#00ff41]/60 text-[20px] ml-auto">arrow_forward</span>
+        </button>
+
         {/* Sport Tabs */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 mb-4">
           {sportTabs.map((tab) => (
