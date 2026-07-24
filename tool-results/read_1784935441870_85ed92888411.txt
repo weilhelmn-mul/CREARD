@@ -1,0 +1,1168 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useState, useMemo, useCallback } from 'react'
+     4→     4→import Image from 'next/image'
+     5→     5→import { useAppStore, type User } from '@/store/useAppStore'
+     6→     6→import { motion, AnimatePresence } from 'framer-motion'
+     7→     7→import { getAuthHeaders } from '@/lib/auth-helpers'
+     8→     8→
+     9→     9→/* ───────────── Interfaces ───────────── */
+    10→    10→
+    11→    11→interface PricingScheduleItem {
+    12→    12→  label: string
+    13→    13→  startHour: number
+    14→    14→  endHour: number
+    15→    15→  pricePerHour: number
+    16→    16→}
+    17→    17→
+    18→    18→interface PricingSchedule {
+    19→    19→  morning: { startHour: number; endHour: number; price: number }
+    20→    20→  night: { startHour: number; endHour: number; price: number }
+    21→    21→}
+    22→    22→
+    23→    23→interface Court {
+    24→    24→  id: string
+    25→    25→  name: string
+    26→    26→  sport: string
+    27→    27→  description?: string
+    28→    28→  pricePerHour: number
+    29→    29→  pricingSchedule?: PricingSchedule | PricingScheduleItem[]
+    30→    30→  images: string[]
+    31→    31→  amenities: string[]
+    32→    32→  branch: { name: string; city: string; address: string }
+    33→    33→}
+    34→    34→
+    35→    35→interface BookingInfo {
+    36→    36→  id: string
+    37→    37→  courtId: string
+    38→    38→  userId: string
+    39→    39→  date: string
+    40→    40→  startTime: string
+    41→    41→  endTime: string
+    42→    42→  totalPrice: number
+    43→    43→  advanceAmount: number
+    44→    44→  remainingAmount: number
+    45→    45→  status: string
+    46→    46→  paymentMethod: string | null
+    47→    47→  notes: string | null
+    48→    48→  user?: { id: string; name: string; email: string; phone?: string } | null
+    49→    49→}
+    50→    50→
+    51→    51→type AdminSlotStatus =
+    52→    52→  | 'available'
+    53→    53→  | 'reserved'
+    54→    54→  | 'in_play'
+    55→    55→  | 'completed'
+    56→    56→  | 'blocked'
+    57→    57→  | 'expired'
+    58→    58→  | 'past'
+    59→    59→
+    60→    60→interface SlotInfo {
+    61→    61→  status: AdminSlotStatus
+    62→    62→  booking: BookingInfo | null
+    63→    63→}
+    64→    64→
+    65→    65→/* ───────────── Constants ───────────── */
+    66→    66→
+    67→    67→const sportLabels: Record<string, string> = {
+    68→    68→  futbol: 'Fútbol',
+    69→    69→  voley: 'Vóley',
+    70→    70→  basket: 'Básquet',
+    71→    71→  tenis: 'Tenis',
+    72→    72→  eventos: 'Eventos',
+    73→    73→  padel: 'Pádel',
+    74→    74→}
+    75→    75→
+    76→    76→const sportIcons: Record<string, string> = {
+    77→    77→  futbol: 'sports_soccer',
+    78→    78→  voley: 'sports_volleyball',
+    79→    79→  basket: 'sports_basketball',
+    80→    80→  tenis: 'sports_tennis',
+    81→    81→  eventos: 'celebration',
+    82→    82→  padel: 'sports_tennis',
+    83→    83→}
+    84→    84→
+    85→    85→const amenityIcons: Record<string, string> = {
+    86→    86→  'Estacionamiento': 'local_parking',
+    87→    87→  'Vestuarios': 'wc',
+    88→    88→  'Duchas': 'shower',
+    89→    89→  'Iluminación': 'light_mode',
+    90→    90→  'Césped Sintético': 'grass',
+    91→    91→  'Tribunas': 'stadium',
+    92→    92→  'Wi-Fi': 'wifi',
+    93→    93→  'Cafetería': 'local_cafe',
+    94→    94→  'Parqueo': 'local_parking',
+    95→    95→  'Bebedero': 'water_drop',
+    96→    96→}
+    97→    97→
+    98→    98→const SLOT_START = 8
+    99→    99→const SLOT_END = 22
+   100→   100→
+   101→   101→/* ───────────── Helpers ───────────── */
+   102→   102→
+   103→   103→function generateTimeSlots(): string[] {
+   104→   104→  const slots: string[] = []
+   105→   105→  for (let h = SLOT_START; h <= SLOT_END; h++) {
+   106→   106→    slots.push(`${String(h).padStart(2, '0')}:00`)
+   107→   107→  }
+   108→   108→  return slots
+   109→   109→}
+   110→   110→
+   111→   111→function formatDateISO(date: Date): string {
+   112→   112→  const y = date.getFullYear()
+   113→   113→  const m = String(date.getMonth() + 1).padStart(2, '0')
+   114→   114→  const d = String(date.getDate()).padStart(2, '0')
+   115→   115→  return `${y}-${m}-${d}`
+   116→   116→}
+   117→   117→
+   118→   118→function getDayName(date: Date): string {
+   119→   119→  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+   120→   120→  return days[date.getDay()]
+   121→   121→}
+   122→   122→
+   123→   123→function getMonthShort(date: Date): string {
+   124→   124→  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+   125→   125→  return months[date.getMonth()]
+   126→   126→}
+   127→   127→
+   128→   128→function getNext7Days(): Date[] {
+   129→   129→  const days: Date[] = []
+   130→   130→  const now = new Date()
+   131→   131→  for (let i = 0; i < 7; i++) {
+   132→   132→    days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() + i))
+   133→   133→  }
+   134→   134→  return days
+   135→   135→}
+   136→   136→
+   137→   137→function isToday(date: Date): boolean {
+   138→   138→  const today = new Date()
+   139→   139→  return date.getFullYear() === today.getFullYear() &&
+   140→   140→    date.getMonth() === today.getMonth() &&
+   141→   141→    date.getDate() === today.getDate()
+   142→   142→}
+   143→   143→
+   144→   144→function getCurrentHour(): number {
+   145→   145→  return new Date().getHours()
+   146→   146→}
+   147→   147→
+   148→   148→/** Minimum minutes of advance required to book a slot */
+   149→   149→const MIN_ADVANCE_MINUTES = 30
+   150→   150→
+   151→   151→/** Returns the latest hour that is still within the 30-min restriction.
+   152→   152→ *  For example, if it's 14:35, hours 14 and earlier are too soon.
+   153→   153→ *  Returns -1 if no hours are restricted (i.e. more than 30 min until SLOT_START). */
+   154→   154→function getRestrictedHour(): number {
+   155→   155→  const now = new Date()
+   156→   156→  const curH = now.getHours()
+   157→   157→  const curM = now.getMinutes()
+   158→   158→  // If current minute >= 30, then the current hour + 1 is still within 30 min
+   159→   159→  // e.g. 14:45 → 15:00 is in 15 min → 15 is restricted too
+   160→   160→  // e.g. 14:20 → 15:00 is in 40 min → 15 is NOT restricted, but 14 IS restricted
+   161→   161→  if (curM >= 30) {
+   162→   162→    return curH + 1
+   163→   163→  }
+   164→   164→  return curH
+   165→   165→}
+   166→   166→
+   167→   167→function getAdminSlotInfo(
+   168→   168→  hour: number,
+   169→   169→  bookings: BookingInfo[],
+   170→   170→  isTodayDate: boolean,
+   171→   171→  currentHour: number
+   172→   172→): SlotInfo {
+   173→   173→  const booking = bookings.find((b) => {
+   174→   174→    const sh = parseInt(b.startTime.split(':')[0], 10)
+   175→   175→    const eh = parseInt(b.endTime.split(':')[0], 10)
+   176→   176→    return hour >= sh && hour < eh
+   177→   177→  })
+   178→   178→
+   179→   179→  if (!booking) {
+   180→   180→    // Admin: NO time restrictions — all unbooked slots are available (including past hours)
+   181→   181→    // This allows admin to register walk-in bookings for in-progress or past slots
+   182→   182→    return { status: 'available', booking: null }
+   183→   183→  }
+   184→   184→
+   185→   185→  if (booking.status === 'cancelled') return { status: 'blocked', booking }
+   186→   186→  if (booking.status === 'completed') return { status: 'completed', booking }
+   187→   187→
+   188→   188→  // Active: reserved
+   189→   189→  if (isTodayDate && hour === currentHour) return { status: 'in_play', booking }
+   190→   190→  return { status: 'reserved', booking }
+   191→   191→}
+   192→   192→
+   193→   193→const adminStatusConfig: Record<
+   194→   194→  AdminSlotStatus,
+   195→   195→  { label: string; bgClass: string; textClass: string; borderClass: string; icon?: string }
+   196→   196→> = {
+   197→   197→  available: {
+   198→   198→    label: 'Disponible',
+   199→   199→    bgClass: 'bg-emerald-500/10',
+   200→   200→    textClass: 'text-emerald-400',
+   201→   201→    borderClass: 'border-emerald-500/30',
+   202→   202→    icon: 'check_circle',
+   203→   203→  },
+   204→   204→  reserved: {
+   205→   205→    label: 'Reservado',
+   206→   206→    bgClass: 'bg-amber-500/10',
+   207→   207→    textClass: 'text-amber-400',
+   208→   208→    borderClass: 'border-amber-500/30',
+   209→   209→    icon: 'bookmark',
+   210→   210→  },
+   211→   211→  in_play: {
+   212→   212→    label: 'En juego',
+   213→   213→    bgClass: 'bg-blue-500/10',
+   214→   214→    textClass: 'text-blue-400',
+   215→   215→    borderClass: 'border-blue-500/30',
+   216→   216→    icon: 'sports',
+   217→   217→  },
+   218→   218→  completed: {
+   219→   219→    label: 'Finalizado',
+   220→   220→    bgClass: 'bg-zinc-500/10',
+   221→   221→    textClass: 'text-zinc-400',
+   222→   222→    borderClass: 'border-zinc-500/30',
+   223→   223→    icon: 'task_alt',
+   224→   224→  },
+   225→   225→  blocked: {
+   226→   226→    label: 'Bloqueado',
+   227→   227→    bgClass: 'bg-red-500/10',
+   228→   228→    textClass: 'text-red-400',
+   229→   229→    borderClass: 'border-red-500/30',
+   230→   230→    icon: 'block',
+   231→   231→  },
+   232→   232→  expired: {
+   233→   233→    label: 'Vencido',
+   234→   234→    bgClass: 'bg-zinc-700/20',
+   235→   235→    textClass: 'text-zinc-500',
+   236→   236→    borderClass: 'border-zinc-600/30',
+   237→   237→    icon: 'schedule',
+   238→   238→  },
+   239→   239→  past: {
+   240→   240→    label: 'Pasado',
+   241→   241→    bgClass: 'bg-cm-surface-container-highest/20',
+   242→   242→    textClass: 'text-cm-on-surface-variant/30',
+   243→   243→    borderClass: 'border-transparent',
+   244→   244→  },
+   245→   245→}
+   246→   246→
+   247→   247→function normalizeSchedule(schedule: Court['pricingSchedule']): PricingScheduleItem[] {
+   248→   248→  if (!schedule) return []
+   249→   249→  if (Array.isArray(schedule)) return schedule
+   250→   250→  // Legacy { morning, night } object format
+   251→   251→  const { morning, night } = schedule as PricingSchedule
+   252→   252→  return [
+   253→   253→    { label: 'Mañana', startHour: morning.startHour, endHour: morning.endHour, pricePerHour: morning.price },
+   254→   254→    { label: 'Noche', startHour: night.startHour, endHour: night.endHour, pricePerHour: night.price },
+   255→   255→  ]
+   256→   256→}
+   257→   257→
+   258→   258→function getMinPrice(court: Court): number {
+   259→   259→  const items = normalizeSchedule(court.pricingSchedule)
+   260→   260→  if (items.length > 0) {
+   261→   261→    return Math.min(...items.map(s => s.pricePerHour))
+   262→   262→  }
+   263→   263→  return court.pricePerHour
+   264→   264→}
+   265→   265→
+   266→   266→function getPriceForHour(court: Court, hour: number): number {
+   267→   267→  const items = normalizeSchedule(court.pricingSchedule)
+   268→   268→  for (const slot of items) {
+   269→   269→    if (hour >= slot.startHour && hour < slot.endHour) return slot.pricePerHour
+   270→   270→  }
+   271→   271→  return court.pricePerHour
+   272→   272→}
+   273→   273→
+   274→   274→/* ───────────── Component ───────────── */
+   275→   275→
+   276→   276→export default function CourtDetail() {
+   277→   277→  const {
+   278→   278→    selectedCourtId,
+   279→   279→    selectedCourtIds,
+   280→   280→    user,
+   281→   281→    setView,
+   282→   282→    setSelectedCourt,
+   283→   283→    setSelectedCourtIds,
+   284→   284→    addSelectedCourtId,
+   285→   285→    removeSelectedCourtId,
+   286→   286→    setSelectedDate,
+   287→   287→    setSelectedTimeSlot,
+   288→   288→  } = useAppStore()
+   289→   289→
+   290→   290→  const [court, setCourt] = useState<Court | null>(null)
+   291→   291→  const [loading, setLoading] = useState(true)
+   292→   292→  const [selectedDate, setSelectedDateState] = useState<Date>(new Date())
+   293→   293→  const [selectedTime, setSelectedTime] = useState<string | null>(null)
+   294→   294→  const [bookings, setBookings] = useState<BookingInfo[]>([])
+   295→   295→  const [activeImageIdx, setActiveImageIdx] = useState(0)
+   296→   296→  const [courtNamesMap, setCourtNamesMap] = useState<Record<string, string>>({})
+   297→   297→
+   298→   298→  // Admin booking popup
+   299→   299→  const [popupBooking, setPopupBooking] = useState<BookingInfo | null>(null)
+   300→   300→
+   301→   301→  const timeSlots = useMemo(() => generateTimeSlots(), [])
+   302→   302→  const next7Days = useMemo(() => getNext7Days(), [])
+   303→   303→
+   304→   304→  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
+   305→   305→  const isUser = !!user && !isAdmin
+   306→   306→  const isGuest = !user
+   307→   307→
+   308→   308→  /* ──── Fetch court ──── */
+   309→   309→  useEffect(() => {
+   310→   310→    if (!selectedCourtId) {
+   311→   311→      setView('search')
+   312→   312→      return
+   313→   313→    }
+   314→   314→    let cancelled = false
+   315→   315→    fetch(`/api/courts?id=${selectedCourtId}`)
+   316→   316→      .then((res) => res.json())
+   317→   317→      .then((data) => {
+   318→   318→        if (!cancelled) {
+   319→   319→          if (data.error) {
+   320→   320→            setView('search')
+   321→   321→            return
+   322→   322→          }
+   323→   323→          setCourt(data)
+   324→   324→          setLoading(false)
+   325→   325→        }
+   326→   326→      })
+   327→   327→      .catch(() => {
+   328→   328→        if (!cancelled) {
+   329→   329→          setLoading(false)
+   330→   330→          setView('search')
+   331→   331→        }
+   332→   332→      })
+   333→   333→    return () => {
+   334→   334→      cancelled = true
+   335→   335→    }
+   336→   336→  }, [selectedCourtId, setView])
+   337→   337→
+   338→   338→  /* ──── Fetch bookings for selected date ──── */
+   339→   339→  useEffect(() => {
+   340→   340→    if (!selectedCourtId) return
+   341→   341→    // Non-admin users cannot see today's reservations
+   342→   342→    const todayFlag = isToday(selectedDate)
+   343→   343→    if (todayFlag && !isAdmin) {
+   344→   344→      setBookings([])
+   345→   345→      return
+   346→   346→    }
+   347→   347→    const dateStr = formatDateISO(selectedDate)
+   348→   348→    let cancelled = false
+   349→   349→    fetch(`/api/bookings?courtId=${selectedCourtId}&date=${dateStr}`, {
+   350→   350→      headers: getAuthHeaders(),
+   351→   351→    })
+   352→   352→      .then((res) => res.json())
+   353→   353→      .then((data) => {
+   354→   354→        if (!cancelled) {
+   355→   355→          setBookings(Array.isArray(data) ? data : [])
+   356→   356→        }
+   357→   357→      })
+   358→   358→      .catch(() => {
+   359→   359→        if (!cancelled) setBookings([])
+   360→   360→      })
+   361→   361→    return () => {
+   362→   362→      cancelled = true
+   363→   363→    }
+   364→   364→  }, [selectedCourtId, selectedDate, isAdmin])
+   365→   365→
+   366→   366→  /* ──── Build slot map for admin ──── */
+   367→   367→  const adminSlotMap = useMemo(() => {
+   368→   368→    if (!isAdmin) return new Map<number, SlotInfo>()
+   369→   369→    const map = new Map<number, SlotInfo>()
+   370→   370→    const todayFlag = isToday(selectedDate)
+   371→   371→    const curHour = getCurrentHour()
+   372→   372→    for (let h = SLOT_START; h <= SLOT_END; h++) {
+   373→   373→      map.set(h, getAdminSlotInfo(h, bookings, todayFlag, curHour))
+   374→   374→    }
+   375→   375→    return map
+   376→   376→  }, [isAdmin, bookings, selectedDate])
+   377→   377→
+   378→   378→  /* ──── Helpers for user role (plain functions — avoids Turbopack useMemo dependency array corruption) ──── */
+   379→   379→  const getBookedSlotHours = (): Set<number> => {
+   380→   380→    if (isAdmin) return new Set<number>() // admin uses adminSlotMap
+   381→   381→    const hours = new Set<number>()
+   382→   382→    bookings.forEach((b) => {
+   383→   383→      const sh = parseInt(b.startTime.split(':')[0], 10)
+   384→   384→      const eh = parseInt(b.endTime.split(':')[0], 10)
+   385→   385→      for (let h = sh; h < eh; h++) {
+   386→   386→        hours.add(h)
+   387→   387→      }
+   388→   388→    })
+   389→   389→    return hours
+   390→   390→  }
+   391→   391→
+   392→   392→  const getPastHours = (): Set<number> => {
+   393→   393→    const todayFlag = isToday(selectedDate)
+   394→   394→    if (!todayFlag) return new Set<number>()
+   395→   395→    // Admin/super_admin: NO time restrictions — no hours are blocked
+   396→   396→    if (isAdmin) return new Set<number>()
+   397→   397→    // Regular users: all today's slots are unavailable (users cannot book today last-minute)
+   398→   398→    const hours = new Set<number>()
+   399→   399→    for (let h = SLOT_START; h <= SLOT_END; h++) hours.add(h)
+   400→   400→    return hours
+   401→   401→  }
+   402→   402→
+   403→   403→  /* ──── Handlers ──── */
+   404→   404→  const handleSelectDate = useCallback((date: Date) => {
+   405→   405→    setSelectedDateState(date)
+   406→   406→    setSelectedTime(null)
+   407→   407→    setPopupBooking(null)
+   408→   408→  }, [])
+   409→   409→
+   410→   410→  const handleSelectSlot = useCallback(
+   411→   411→    (slot: string) => {
+   412→   412→      const hour = parseInt(slot.split(':')[0], 10)
+   413→   413→
+   414→   414→      if (isAdmin) {
+   415→   415→        const info = adminSlotMap.get(hour)
+   416→   416→        if (!info) return
+   417→   417→        if (info.status === 'available') {
+   418→   418→          setSelectedTime(slot)
+   419→   419→          setPopupBooking(null)
+   420→   420→        } else if (info.booking) {
+   421→   421→          setPopupBooking(info.booking)
+   422→   422→        }
+   423→   423→        return
+   424→   424→      }
+   425→   425→
+   426→   426→      // Guest or regular user
+   427→   427→      const bk = getBookedSlotHours()
+   428→   428→      const ph = getPastHours()
+   429→   429→      if (bk.has(hour) || ph.has(hour)) return
+   430→   430→
+   431→   431→      if (isGuest) {
+   432→   432→        setView('login')
+   433→   433→        return
+   434→   434→      }
+   435→   435→
+   436→   436→      setSelectedTime(slot)
+   437→   437→    },
+   438→   438→    [isAdmin, adminSlotMap, isGuest, setView, bookings, selectedDate]
+   439→   439→  )
+   440→   440→
+   441→   441→  const handleReservar = useCallback(() => {
+   442→   442→    if (!selectedTime || !selectedCourtId) return
+   443→   443→    // Store court name in the map for cart display
+   444→   444→    if (court) {
+   445→   445→      setCourtNamesMap((prev) => ({ ...prev, [court.id]: court.name }))
+   446→   446→    }
+   447→   447→    // Add this court to the multi-court selection cart
+   448→   448→    const endHour = parseInt(selectedTime.split(':')[0], 10) + 1
+   449→   449→    const endTime = `${String(endHour).padStart(2, '0')}:00`
+   450→   450→    setSelectedDate(formatDateISO(selectedDate))
+   451→   451→    setSelectedTimeSlot(`${selectedTime} - ${endTime}`)
+   452→   452→    addSelectedCourtId(selectedCourtId)
+   453→   453→  }, [selectedTime, selectedCourtId, selectedDate, court, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
+   454→   454→
+   455→   455→  // Navigate to booking form with all selected courts
+   456→   456→  const handleGoToBooking = useCallback(() => {
+   457→   457→    if (selectedCourtIds.length === 0) return
+   458→   458→    setSelectedCourtIds(selectedCourtIds)
+   459→   459→    setView('booking-form')
+   460→   460→  }, [selectedCourtIds, setSelectedCourtIds, setView])
+   461→   461→
+   462→   462→  const handleClosePopup = useCallback(() => setPopupBooking(null), [])
+   463→   463→
+   464→   464→  /* ──── Render helpers ──── */
+   465→   465→  const getSlotClasses = (slot: string): string => {
+   466→   466→    const hour = parseInt(slot.split(':')[0], 10)
+   467→   467→
+   468→   468→    if (isAdmin) {
+   469→   469→      const info = adminSlotMap.get(hour)
+   470→   470→      if (!info) return ''
+   471→   471→      const cfg = adminStatusConfig[info.status]
+   472→   472→
+   473→   473→      if (selectedTime === slot && info.status === 'available') {
+   474→   474→        return 'bg-[#00ff41] text-[#003907] font-bold glow-accent border border-[#00ff41]'
+   475→   475→      }
+   476→   476→
+   477→   477→      switch (info.status) {
+   478→   478→        case 'available':
+   479→   479→          return `${cfg.bgClass} ${cfg.textClass} border ${cfg.borderClass} hover:border-[#00ff41]/50 cursor-pointer`
+   480→   480→        case 'reserved':
+   481→   481→        case 'in_play':
+   482→   482→        case 'completed':
+   483→   483→        case 'blocked':
+   484→   484→        case 'expired':
+   485→   485→          return `${cfg.bgClass} ${cfg.textClass} border ${cfg.borderClass} cursor-pointer`
+   486→   486→        case 'past':
+   487→   487→        default:
+   488→   488→          return `${cfg.bgClass} ${cfg.textClass} border ${cfg.borderClass} cursor-not-allowed`
+   489→   489→      }
+   490→   490→    }
+   491→   491→
+   492→   492→    // Guest / User role
+   493→   493→    const isBooked = getBookedSlotHours().has(hour)
+   494→   494→    const isPast = getPastHours().has(hour)
+   495→   495→    const isSelected = selectedTime === slot
+   496→   496→
+   497→   497→    // For today's past/soon slots, show "30 min" label
+   498→   498→    const todayFlag = isToday(selectedDate)
+   499→   499→    const restrictedH = getRestrictedHour()
+   500→   500→    const isTooSoon = todayFlag && hour > getCurrentHour() && hour <= restrictedH
+   501→   501→
+   502→   502→    if (isSelected) {
+   503→   503→      return 'bg-[#00ff41] text-[#003907] font-bold glow-accent border border-[#00ff41]'
+   504→   504→    }
+   505→   505→    if (isBooked) {
+   506→   506→      return 'bg-cm-surface-container-highest/30 text-cm-on-surface-variant/40 cursor-not-allowed border border-transparent'
+   507→   507→    }
+   508→   508→    if (isPast) {
+   509→   509→      return 'bg-cm-surface-container-highest/20 text-cm-on-surface-variant/25 cursor-not-allowed border border-transparent'
+   510→   510→    }
+   511→   511→    return 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant border border-cm-outline-variant/50 hover:border-[#00ff41]/50 hover:text-[#00ff41] cursor-pointer transition-all duration-200'
+   512→   512→  }
+   513→   513→
+   514→   514→  const getSlotLabel = (slot: string): string | null => {
+   515→   515→    if (!isAdmin) return null
+   516→   516→    const hour = parseInt(slot.split(':')[0], 10)
+   517→   517→    const info = adminSlotMap.get(hour)
+   518→   518→    if (!info || info.status === 'available' || info.status === 'past') return null
+   519→   519→    return adminStatusConfig[info.status].label
+   520→   520→  }
+   521→   521→
+   522→   522→  /* ───────────── Render ───────────── */
+   523→   523→
+   524→   524→  if (loading) {
+   525→   525→    return (
+   526→   526→      <div className="px-4 py-6">
+   527→   527→        <div className="animate-pulse space-y-4 max-w-4xl mx-auto">
+   528→   528→          <div className="h-64 md:h-80 bg-cm-surface-container-highest rounded-2xl" />
+   529→   529→          <div className="h-6 bg-cm-surface-container-highest rounded w-1/2" />
+   530→   530→          <div className="h-4 bg-cm-surface-container-highest rounded w-3/4" />
+   531→   531→          <div className="grid grid-cols-3 gap-3">
+   532→   532→            <div className="h-20 bg-cm-surface-container-highest rounded-xl" />
+   533→   533→            <div className="h-20 bg-cm-surface-container-highest rounded-xl" />
+   534→   534→            <div className="h-20 bg-cm-surface-container-highest rounded-xl" />
+   535→   535→          </div>
+   536→   536→          <div className="h-32 bg-cm-surface-container-highest rounded-xl" />
+   537→   537→        </div>
+   538→   538→      </div>
+   539→   539→    )
+   540→   540→  }
+   541→   541→
+   542→   542→  if (!court) return null
+   543→   543→
+   544→   544→  const images = court.images && court.images.length > 0 ? court.images : ['/placeholder-court.jpg']
+   545→   545→  const mainImage = images[activeImageIdx] || images[0]
+   546→   546→  const endHour = selectedTime ? parseInt(selectedTime.split(':')[0], 10) + 1 : 0
+   547→   547→  const endTimeStr = selectedTime ? `${String(endHour).padStart(2, '0')}:00` : ''
+   548→   548→
+   549→   549→  return (
+   550→   550→    <div className="pb-28">
+   551→   551→      {/* ─── Image Gallery ─── */}
+   552→   552→      <div className="relative">
+   553→   553→        <div className="relative h-64 md:h-80 overflow-hidden">
+   554→   554→          <Image
+   555→   555→            src={mainImage}
+   556→   556→            alt={court.name}
+   557→   557→            fill
+   558→   558→            className="object-cover transition-all duration-500"
+   559→   559→            unoptimized
+   560→   560→          />
+   561→   561→          <div className="absolute inset-0 bg-gradient-to-t from-cm-background via-cm-background/30 to-transparent" />
+   562→   562→
+   563→   563→          {/* Back Button */}
+   564→   564→          <button type="button"
+   565→   565→            onClick={() => setView('search')}
+   566→   566→            className="absolute top-4 left-4 z-10 p-2 rounded-full bg-cm-surface/80 backdrop-blur-sm border border-white/10 text-cm-on-surface hover:bg-cm-surface-container transition-colors"
+   567→   567→          >
+   568→   568→            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+   569→   569→          </button>
+   570→   570→
+   571→   571→          {/* Price Badge */}
+   572→   572→          <div className="absolute top-4 right-4 z-10 px-3 py-1.5 rounded-full bg-cm-surface/80 backdrop-blur-sm border border-white/10">
+   573→   573→            <span className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Desde </span>
+   574→   574→            <span className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">
+   575→   575→              S/ {getMinPrice(court)}
+   576→   576→            </span>
+   577→   577→            <span className="text-cm-on-surface-variant text-xs ml-1 font-[family-name:var(--font-inter)]">/hr</span>
+   578→   578→          </div>
+   579→   579→
+   580→   580→          {/* Court Name Overlay */}
+   581→   581→          <div className="absolute bottom-0 left-0 right-0 p-4">
+   582→   582→            <div className="flex items-center gap-2 mb-2">
+   583→   583→              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#00ff41]/15 backdrop-blur-sm border border-[#00ff41]/20">
+   584→   584→                <span
+   585→   585→                  className="material-symbols-outlined text-[#00ff41] text-[14px]"
+   586→   586→                  style={{ fontVariationSettings: '"FILL" 1' }}
+   587→   587→                >
+   588→   588→                  {sportIcons[court.sport] || 'sports'}
+   589→   589→                </span>
+   590→   590→                <span className="text-xs font-semibold text-[#00ff41] font-[family-name:var(--font-inter)]">
+   591→   591→                  {sportLabels[court.sport] || court.sport}
+   592→   592→                </span>
+   593→   593→              </span>
+   594→   594→            </div>
+   595→   595→            <h1 className="font-[family-name:var(--font-sora)] text-2xl md:text-3xl font-bold text-white drop-shadow-lg">
+   596→   596→              {court.name}
+   597→   597→            </h1>
+   598→   598→            <p className="text-white/70 text-sm mt-1 font-[family-name:var(--font-inter)] flex items-center gap-1">
+   599→   599→              <span className="material-symbols-outlined text-[16px]">location_on</span>
+   600→   600→              {court.branch.name}, {court.branch.city}
+   601→   601→            </p>
+   602→   602→          </div>
+   603→   603→        </div>
+   604→   604→
+   605→   605→        {/* Thumbnails */}
+   606→   606→        {images.length > 1 && (
+   607→   607→          <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar">
+   608→   608→            {images.map((img, idx) => (
+   609→   609→              <button type="button"
+   610→   610→                key={idx}
+   611→   611→                onClick={() => setActiveImageIdx(idx)}
+   612→   612→                className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all duration-200 ${
+   613→   613→                  idx === activeImageIdx
+   614→   614→                    ? 'ring-2 ring-[#00ff41] ring-offset-2 ring-offset-cm-background'
+   615→   615→                    : 'opacity-60 hover:opacity-100'
+   616→   616→                }`}
+   617→   617→              >
+   618→   618→                <Image src={img} alt={`${court.name} ${idx + 1}`} fill className="object-cover" unoptimized />
+   619→   619→              </button>
+   620→   620→            ))}
+   621→   621→          </div>
+   622→   622→        )}
+   623→   623→      </div>
+   624→   624→
+   625→   625→      <div className="px-4 max-w-4xl mx-auto">
+   626→   626→        {/* ─── Info Cards ─── */}
+   627→   627→        <motion.div
+   628→   628→          initial={{ opacity: 0, y: 20 }}
+   629→   629→          animate={{ opacity: 1, y: 0 }}
+   630→   630→          className="grid grid-cols-2 md:grid-cols-3 gap-3 -mt-2 relative z-10 mb-6"
+   631→   631→        >
+   632→   632→          <div className="glass-card rounded-xl p-3 flex items-center gap-3">
+   633→   633→            <span
+   634→   634→              className="material-symbols-outlined text-[#00ff41]"
+   635→   635→              style={{ fontVariationSettings: '"FILL" 1' }}
+   636→   636→            >
+   637→   637→              location_on
+   638→   638→            </span>
+   639→   639→            <div>
+   640→   640→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Sede</p>
+   641→   641→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   642→   642→                {court.branch.name}
+   643→   643→              </p>
+   644→   644→            </div>
+   645→   645→          </div>
+   646→   646→          <div className="glass-card rounded-xl p-3 flex items-center gap-3">
+   647→   647→            <span
+   648→   648→              className="material-symbols-outlined text-[#00ff41]"
+   649→   649→              style={{ fontVariationSettings: '"FILL" 1' }}
+   650→   650→            >
+   651→   651→              payments
+   652→   652→            </span>
+   653→   653→            <div>
+   654→   654→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Precio</p>
+   655→   655→              {(() => {
+   656→   656→                const items = normalizeSchedule(court.pricingSchedule)
+   657→   657→                return items.length > 0 ? (
+   658→   658→                  <div className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] space-y-0.5">
+   659→   659→                    {items.map((s, i) => (
+   660→   660→                      <p key={i}>{s.label}: S/ {s.pricePerHour}/hr</p>
+   661→   661→                    ))}
+   662→   662→                  </div>
+   663→   663→                ) : (
+   664→   664→                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   665→   665→                    S/ {court.pricePerHour}/hr
+   666→   666→                  </p>
+   667→   667→                )
+   668→   668→              })()}
+   669→   669→            </div>
+   670→   670→          </div>
+   671→   671→          <div className="glass-card rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
+   672→   672→            <span
+   673→   673→              className="material-symbols-outlined text-[#00ff41]"
+   674→   674→              style={{ fontVariationSettings: '"FILL" 1' }}
+   675→   675→            >
+   676→   676→              map
+   677→   677→            </span>
+   678→   678→            <div>
+   679→   679→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Dirección</p>
+   680→   680→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] truncate">
+   681→   681→                {court.branch.address}
+   682→   682→              </p>
+   683→   683→            </div>
+   684→   684→          </div>
+   685→   685→        </motion.div>
+   686→   686→
+   687→   687→        {/* ─── Amenities ─── */}
+   688→   688→        {court.amenities && court.amenities.length > 0 && (
+   689→   689→          <motion.div
+   690→   690→            initial={{ opacity: 0, y: 20 }}
+   691→   691→            animate={{ opacity: 1, y: 0 }}
+   692→   692→            transition={{ delay: 0.1 }}
+   693→   693→            className="mb-6"
+   694→   694→          >
+   695→   695→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg mb-3 flex items-center gap-2">
+   696→   696→              <span
+   697→   697→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   698→   698→                style={{ fontVariationSettings: '"FILL" 1' }}
+   699→   699→              >
+   700→   700→                star
+   701→   701→              </span>
+   702→   702→              Servicios
+   703→   703→            </h2>
+   704→   704→            <div className="flex flex-wrap gap-2">
+   705→   705→              {court.amenities.map((amenity) => (
+   706→   706→                <span
+   707→   707→                  key={amenity}
+   708→   708→                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant text-xs font-medium border border-cm-outline-variant/50 font-[family-name:var(--font-inter)]"
+   709→   709→                >
+   710→   710→                  <span className="material-symbols-outlined text-[14px] text-[#00ff41]">
+   711→   711→                    {amenityIcons[amenity] || 'checkroom'}
+   712→   712→                  </span>
+   713→   713→                  {amenity}
+   714→   714→                </span>
+   715→   715→              ))}
+   716→   716→            </div>
+   717→   717→          </motion.div>
+   718→   718→        )}
+   719→   719→
+   720→   720→        {/* ─── Description ─── */}
+   721→   721→        {court.description && (
+   722→   722→          <motion.div
+   723→   723→            initial={{ opacity: 0, y: 20 }}
+   724→   724→            animate={{ opacity: 1, y: 0 }}
+   725→   725→            transition={{ delay: 0.15 }}
+   726→   726→            className="mb-6"
+   727→   727→          >
+   728→   728→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg mb-3 flex items-center gap-2">
+   729→   729→              <span
+   730→   730→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   731→   731→                style={{ fontVariationSettings: '"FILL" 1' }}
+   732→   732→              >
+   733→   733→                info
+   734→   734→              </span>
+   735→   735→              Descripción
+   736→   736→            </h2>
+   737→   737→            <p className="text-cm-on-surface-variant text-sm leading-relaxed font-[family-name:var(--font-inter)]">
+   738→   738→              {court.description}
+   739→   739→            </p>
+   740→   740→          </motion.div>
+   741→   741→        )}
+   742→   742→
+   743→   743→        {/* ─── 7-Day Calendar ─── */}
+   744→   744→        <motion.div
+   745→   745→          initial={{ opacity: 0, y: 20 }}
+   746→   746→          animate={{ opacity: 1, y: 0 }}
+   747→   747→          transition={{ delay: 0.2 }}
+   748→   748→          className="mb-6"
+   749→   749→        >
+   750→   750→          <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg mb-3 flex items-center gap-2">
+   751→   751→            <span
+   752→   752→              className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   753→   753→              style={{ fontVariationSettings: '"FILL" 1' }}
+   754→   754→            >
+   755→   755→              calendar_month
+   756→   756→            </span>
+   757→   757→            Disponibilidad
+   758→   758→          </h2>
+   759→   759→          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+   760→   760→            {next7Days.map((date) => {
+   761→   761→              const dateStr = formatDateISO(date)
+   762→   762→              const isSelected = dateStr === formatDateISO(selectedDate)
+   763→   763→              const todayFlag = isToday(date)
+   764→   764→              return (
+   765→   765→                <button type="button"
+   766→   766→                  key={dateStr}
+   767→   767→                  onClick={() => handleSelectDate(date)}
+   768→   768→                  className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl min-w-[68px] transition-all duration-200 flex-shrink-0 ${
+   769→   769→                    isSelected
+   770→   770→                      ? 'bg-[#00ff41]/10 border border-[#00ff41]/30'
+   771→   771→                      : 'bg-cm-surface-container-highest/40 border border-transparent hover:border-white/10'
+   772→   772→                  }`}
+   773→   773→                >
+   774→   774→                  <span
+   775→   775→                    className={`text-[10px] font-semibold uppercase font-[family-name:var(--font-inter)] ${
+   776→   776→                      isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'
+   777→   777→                    }`}
+   778→   778→                  >
+   779→   779→                    {getDayName(date)}
+   780→   780→                  </span>
+   781→   781→                  <span
+   782→   782→                    className={`text-lg font-bold font-[family-name:var(--font-sora)] ${
+   783→   783→                      isSelected ? 'text-[#00ff41] text-glow' : 'text-cm-on-surface'
+   784→   784→                    }`}
+   785→   785→                  >
+   786→   786→                    {date.getDate()}
+   787→   787→                  </span>
+   788→   788→                  <span
+   789→   789→                    className={`text-[9px] font-[family-name:var(--font-inter)] ${
+   790→   790→                      isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'
+   791→   791→                    }`}
+   792→   792→                  >
+   793→   793→                    {todayFlag ? 'HOY' : getMonthShort(date)}
+   794→   794→                  </span>
+   795→   795→                </button>
+   796→   796→              )
+   797→   797→            })}
+   798→   798→          </div>
+   799→   799→        </motion.div>
+   800→   800→
+   801→   801→        {/* ─── Time Slots ─── */}
+   802→   802→        <motion.div
+   803→   803→          initial={{ opacity: 0, y: 20 }}
+   804→   804→          animate={{ opacity: 1, y: 0 }}
+   805→   805→          transition={{ delay: 0.25 }}
+   806→   806→          className="mb-6"
+   807→   807→        >
+   808→   808→          <div className="flex items-center justify-between mb-3">
+   809→   809→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg flex items-center gap-2">
+   810→   810→              <span
+   811→   811→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   812→   812→                style={{ fontVariationSettings: '"FILL" 1' }}
+   813→   813→              >
+   814→   814→                schedule
+   815→   815→              </span>
+   816→   816→              Horarios
+   817→   817→            </h2>
+   818→   818→            <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   819→   819→              {selectedDate.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}
+   820→   820→            </span>
+   821→   821→          </div>
+   822→   822→
+   823→   823→          {/* Admin Legend */}
+   824→   824→          {isAdmin && (
+   825→   825→            <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 px-1">
+   826→   826→              {(['available', 'reserved', 'in_play', 'completed', 'blocked', 'expired'] as AdminSlotStatus[]).map(
+   827→   827→                (s) => (
+   828→   828→                  <div key={s} className="flex items-center gap-1">
+   829→   829→                    <div
+   830→   830→                      className={`w-2.5 h-2.5 rounded-full ${
+   831→   831→                        s === 'available'
+   832→   832→                          ? 'bg-emerald-400'
+   833→   833→                          : s === 'reserved'
+   834→   834→                          ? 'bg-amber-400'
+   835→   835→                          : s === 'in_play'
+   836→   836→                          ? 'bg-blue-400'
+   837→   837→                          : s === 'completed'
+   838→   838→                          ? 'bg-zinc-400'
+   839→   839→                          : s === 'blocked'
+   840→   840→                          ? 'bg-red-400'
+   841→   841→                          : 'bg-zinc-600'
+   842→   842→                      }`}
+   843→   843→                    />
+   844→   844→                    <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   845→   845→                      {adminStatusConfig[s].label}
+   846→   846→                    </span>
+   847→   847→                  </div>
+   848→   848→                )
+   849→   849→              )}
+   850→   850→            </div>
+   851→   851→          )}
+   852→   852→
+   853→   853→          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+   854→   854→            {timeSlots.map((slot) => {
+   855→   855→              const hour = parseInt(slot.split(':')[0], 10)
+   856→   856→              const label = getSlotLabel(slot)
+   857→   857→              const todayFlag = isToday(selectedDate)
+   858→   858→              const restrictedH = getRestrictedHour()
+   859→   859→              const soonLabel = !isAdmin && todayFlag && hour > getCurrentHour() && hour <= restrictedH ? '30 min' : null
+   860→   860→              const disabled = (() => {
+   861→   861→                if (isAdmin) {
+   862→   862→                  const info = adminSlotMap.get(hour)
+   863→   863→                  return info?.status === 'past'
+   864→   864→                }
+   865→   865→                return getBookedSlotHours().has(hour) || getPastHours().has(hour)
+   866→   866→              })()
+   867→   867→
+   868→   868→              return (
+   869→   869→                <button type="button"
+   870→   870→                  key={slot}
+   871→   871→                  disabled={disabled}
+   872→   872→                  onClick={() => handleSelectSlot(slot)}
+   873→   873→                  className={`py-2.5 px-1 rounded-lg text-center transition-all duration-200 font-[family-name:var(--font-inter)] ${getSlotClasses(slot)}`}
+   874→   874→                  title={label || soonLabel || undefined}
+   875→   875→                >
+   876→   876→                  <span className="text-xs font-medium block">{slot}</span>
+   877→   877→                  {(label || soonLabel) && <span className="text-[8px] leading-tight block mt-0.5 opacity-80">{label || soonLabel}</span>}
+   878→   878→                </button>
+   879→   879→              )
+   880→   880→            })}
+   881→   881→          </div>
+   882→   882→        </motion.div>
+   883→   883→      </div>
+   884→   884→
+   885→   885→      {/* ─── Add to Cart Button (User: select slot) ─── */}
+   886→   886→      {selectedTime && !isAdmin && (
+   887→   887→        <motion.div
+   888→   888→          initial={{ opacity: 0, y: 30 }}
+   889→   889→          animate={{ opacity: 1, y: 0 }}
+   890→   890→          className="fixed bottom-0 left-0 right-0 z-30 bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
+   891→   891→        >
+   892→   892→          <div className="max-w-4xl mx-auto p-4">
+   893→   893→            <div className="glass-card rounded-2xl p-4 flex items-center justify-between">
+   894→   894→              <div>
+   895→   895→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   896→   896→                  {selectedTime} - {endTimeStr}
+   897→   897→                </p>
+   898→   898→                <p className="text-[#00ff41] font-bold font-[family-name:var(--font-sora)] text-glow">
+   899→   899→                  S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
+   900→   900→                </p>
+   901→   901→              </div>
+   902→   902→              <button type="button"
+   903→   903→                onClick={handleReservar}
+   904→   904→                className="px-6 py-3 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
+   905→   905→              >
+   906→   906→                <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
+   907→   907→                Agregar
+   908→   908→              </button>
+   909→   909→            </div>
+   910→   910→          </div>
+   911→   911→        </motion.div>
+   912→   912→      )}
+   913→   913→
+   914→   914→      {/* ─── Cart Bar: shows when courts are selected ─── */}
+   915→   915→      {selectedCourtIds.length > 0 && !isAdmin && (
+   916→   916→        <motion.div
+   917→   917→          initial={{ opacity: 0, y: 30 }}
+   918→   918→          animate={{ opacity: 1, y: 0 }}
+   919→   919→          className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-[#00ff41]/30"
+   920→   920→        >
+   921→   921→          <div className="max-w-4xl mx-auto p-4">
+   922→   922→            <div className="glass-card rounded-2xl p-4 border border-[#00ff41]/20">
+   923→   923→              <div className="flex items-center justify-between mb-2">
+   924→   924→                <div className="flex items-center gap-2">
+   925→   925→                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">shopping_cart</span>
+   926→   926→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   927→   927→                    {selectedCourtIds.length} cancha{selectedCourtIds.length > 1 ? 's' : ''} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+   928→   928→                  </span>
+   929→   929→                </div>
+   930→   930→                <button type="button"
+   931→   931→                  onClick={() => removeSelectedCourtId(selectedCourtId!)}
+   932→   932→                  className="text-xs text-cm-on-surface-variant hover:text-red-400 transition-colors font-[family-name:var(--font-inter)] flex items-center gap-1"
+   933→   933→                >
+   934→   934→                  <span className="material-symbols-outlined text-[14px]">close</span>
+   935→   935→                  Quitar última
+   936→   936→                </button>
+   937→   937→              </div>
+   938→   938→
+   939→   939→              {/* Court names list */}
+   940→   940→              <div className="flex flex-wrap gap-1.5 mb-3">
+   941→   941→                {selectedCourtIds.map((cid) => (
+   942→   942→                  <span key={cid} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#00ff41]/10 border border-[#00ff41]/20">
+   943→   943→                    <span className="material-symbols-outlined text-[12px] text-[#00ff41]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   944→   944→                      {courtNamesMap[cid] && courtNamesMap[cid].includes('Vóley') ? 'sports_volleyball' : 'sports_soccer'}
+   945→   945→                    </span>
+   946→   946→                    <span className="text-xs font-semibold text-[#00ff41] font-[family-name:var(--font-sora)]">
+   947→   947→                      {courtNamesMap[cid] || cid}
+   948→   948→                    </span>
+   949→   949→                  </span>
+   950→   950→                ))}
+   951→   951→              </div>
+   952→   952→
+   953→   953→              <div className="flex items-center justify-between">
+   954→   954→                <div className="flex items-center gap-2">
+   955→   955→                  <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   956→   956→                    {selectedTime} - {endTimeStr}
+   957→   957→                  </p>
+   958→   958→                </div>
+   959→   959→                <button type="button"
+   960→   960→                  onClick={handleGoToBooking}
+   961→   961→                  className="px-6 py-3 bg-[#00ff41] text-[#003907] font-bold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
+   962→   962→                >
+   963→   963→                  <span className="material-symbols-outlined text-[20px]">sports</span>
+   964→   964→                  Reservar {selectedCourtIds.length} cancha{selectedCourtIds.length > 1 ? 's' : ''}
+   965→   965→                </button>
+   966→   966→              </div>
+   967→   967→            </div>
+   968→   968→          </div>
+   969→   969→        </motion.div>
+   970→   970→      )}
+   971→   971→
+   972→   972→      {/* ─── Admin: Reservar available slot ─── */}
+   973→   973→      {selectedTime && isAdmin && (
+   974→   974→        <motion.div
+   975→   975→          initial={{ opacity: 0, y: 30 }}
+   976→   976→          animate={{ opacity: 1, y: 0 }}
+   977→   977→          className="fixed bottom-0 left-0 right-0 z-30 bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
+   978→   978→        >
+   979→   979→          <div className="max-w-4xl mx-auto p-4">
+   980→   980→            <div className="glass-card rounded-2xl p-4 flex items-center justify-between">
+   981→   981→              <div>
+   982→   982→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Slot disponible</p>
+   983→   983→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   984→   984→                  {selectedTime} - {endTimeStr} · S/ {getPriceForHour(court, parseInt(selectedTime.split(':')[0], 10))}
+   985→   985→                </p>
+   986→   986→              </div>
+   987→   987→              <button type="button"
+   988→   988→                onClick={handleReservar}
+   989→   989→                className="px-6 py-3 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center gap-2"
+   990→   990→              >
+   991→   991→                <span className="material-symbols-outlined text-[20px]">add_circle</span>
+   992→   992→                Crear Reserva
+   993→   993→              </button>
+   994→   994→            </div>
+   995→   995→          </div>
+   996→   996→        </motion.div>
+   997→   997→      )}
+   998→   998→
+   999→   999→      {/* ─── Admin Booking Details Popup ─── */}
+  1000→  1000→      <AnimatePresence>
+  1001→  1001→        {popupBooking && (
+  1002→  1002→          <motion.div
+  1003→  1003→            initial={{ opacity: 0 }}
+  1004→  1004→            animate={{ opacity: 1 }}
+  1005→  1005→            exit={{ opacity: 0 }}
+  1006→  1006→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+  1007→  1007→            onClick={handleClosePopup}
+  1008→  1008→          >
+  1009→  1009→            {/* Backdrop */}
+  1010→  1010→            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+  1011→  1011→
+  1012→  1012→            <motion.div
+  1013→  1013→              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+  1014→  1014→              animate={{ opacity: 1, y: 0, scale: 1 }}
+  1015→  1015→              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+  1016→  1016→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  1017→  1017→              className="relative w-full max-w-md glass-card rounded-2xl p-5 border border-white/15 shadow-2xl"
+  1018→  1018→              onClick={(e) => e.stopPropagation()}
+  1019→  1019→            >
+  1020→  1020→              {/* Close */}
+  1021→  1021→              <button type="button"
+  1022→  1022→                onClick={handleClosePopup}
+  1023→  1023→                className="absolute top-3 right-3 p-1.5 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+  1024→  1024→              >
+  1025→  1025→                <span className="material-symbols-outlined text-[18px]">close</span>
+  1026→  1026→              </button>
+  1027→  1027→
+  1028→  1028→              <h3 className="font-[family-name:var(--font-sora)] font-bold text-cm-on-surface text-base mb-4 pr-8">
+  1029→  1029→                Detalle de Reserva
+  1030→  1030→              </h3>
+  1031→  1031→
+  1032→  1032→              <div className="space-y-3">
+  1033→  1033→                {/* Status Badge */}
+  1034→  1034→                <div className="flex items-center gap-2">
+  1035→  1035→                  <span
+  1036→  1036→                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold font-[family-name:var(--font-inter)] ${
+  1037→  1037→                      popupBooking.status === 'completed'
+  1038→  1038→                        ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+  1039→  1039→                        : popupBooking.status === 'cancelled'
+  1040→  1040→                        ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+  1041→  1041→                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+  1042→  1042→                    }`}
+  1043→  1043→                  >
+  1044→  1044→                    <span className="material-symbols-outlined text-[12px]">
+  1045→  1045→                      {popupBooking.status === 'reserved'
+  1046→  1046→                        ? 'check_circle'
+  1047→  1047→                        : popupBooking.status === 'completed'
+  1048→  1048→                        ? 'verified'
+  1049→  1049→                        : popupBooking.status === 'cancelled'
+  1050→  1050→                        ? 'cancel'
+  1051→  1051→                        : 'pending'}
+  1052→  1052→                    </span>
+  1053→  1053→                    {popupBooking.status === 'reserved' ? 'Reservado' : popupBooking.status === 'completed' ? 'Completo' : popupBooking.status === 'cancelled' ? 'Cancelado' : popupBooking.status.charAt(0).toUpperCase() + popupBooking.status.slice(1).replace(/_/g, ' ')}
+  1054→  1054→                  </span>
+  1055→  1055→                  <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-mono">
+  1056→  1056→                    #{popupBooking.id.slice(-6)}
+  1057→  1057→                  </span>
+  1058→  1058→                </div>
+  1059→  1059→
+  1060→  1060→                {/* Divider */}
+  1061→  1061→                <div className="border-t border-white/5" />
+  1062→  1062→
+  1063→  1063→                {/* Client Info */}
+  1064→  1064→                {popupBooking.user && (
+  1065→  1065→                  <div className="flex items-center gap-3">
+  1066→  1066→                    <div className="w-10 h-10 rounded-full bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+  1067→  1067→                      <span className="material-symbols-outlined text-[#00ff41] text-[20px]">person</span>
+  1068→  1068→                    </div>
+  1069→  1069→                    <div className="min-w-0">
+  1070→  1070→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] truncate">
+  1071→  1071→                        {popupBooking.user.name}
+  1072→  1072→                      </p>
+  1073→  1073→                      <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">
+  1074→  1074→                        {popupBooking.user.email}
+  1075→  1075→                        {popupBooking.user.phone && ` · ${popupBooking.user.phone}`}
+  1076→  1076→                      </p>
+  1077→  1077→                    </div>
+  1078→  1078→                  </div>
+  1079→  1079→                )}
+  1080→  1080→
+  1081→  1081→                {/* Schedule */}
+  1082→  1082→                <div className="grid grid-cols-2 gap-3">
+  1083→  1083→                  <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+  1084→  1084→                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">
+  1085→  1085→                      Fecha
+  1086→  1086→                    </p>
+  1087→  1087→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1088→  1088→                      {popupBooking.date}
+  1089→  1089→                    </p>
+  1090→  1090→                  </div>
+  1091→  1091→                  <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+  1092→  1092→                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">
+  1093→  1093→                      Horario
+  1094→  1094→                    </p>
+  1095→  1095→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1096→  1096→                      {popupBooking.startTime} - {popupBooking.endTime}
+  1097→  1097→                    </p>
+  1098→  1098→                  </div>
+  1099→  1099→                </div>
+  1100→  1100→
+  1101→  1101→                {/* Payment */}
+  1102→  1102→                <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+  1103→  1103→                  <div className="flex items-center justify-between mb-2">
+  1104→  1104→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1105→  1105→                      Pago total
+  1106→  1106→                    </span>
+  1107→  1107→                    <span className="text-sm font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1108→  1108→                      S/ {popupBooking.totalPrice?.toFixed(2)}
+  1109→  1109→                    </span>
+  1110→  1110→                  </div>
+  1111→  1111→                  <div className="flex items-center justify-between mb-2">
+  1112→  1112→                    <span className="text-xs text-[#00ff41] font-[family-name:var(--font-inter)]">
+  1113→  1113→                      Adelanto (50%)
+  1114→  1114→                    </span>
+  1115→  1115→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">
+  1116→  1116→                      S/ {popupBooking.advanceAmount?.toFixed(2)}
+  1117→  1117→                    </span>
+  1118→  1118→                  </div>
+  1119→  1119→                  <div className="flex items-center justify-between">
+  1120→  1120→                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1121→  1121→                      Restante
+  1122→  1122→                    </span>
+  1123→  1123→                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1124→  1124→                      S/ {popupBooking.remainingAmount?.toFixed(2)}
+  1125→  1125→                    </span>
+  1126→  1126→                  </div>
+  1127→  1127→                  {popupBooking.paymentMethod && (
+  1128→  1128→                    <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-1.5">
+  1129→  1129→                      <span className="material-symbols-outlined text-[14px] text-cm-on-surface-variant">
+  1130→  1130→                        {popupBooking.paymentMethod === 'yape'
+  1131→  1131→                          ? 'phone_iphone'
+  1132→  1132→                          : popupBooking.paymentMethod === 'plin'
+  1133→  1133→                          ? 'phone_iphone'
+  1134→  1134→                          : popupBooking.paymentMethod === 'culqi'
+  1135→  1135→                          ? 'credit_card'
+  1136→  1136→                          : popupBooking.paymentMethod === 'card'
+  1137→  1137→                          ? 'credit_card'
+  1138→  1138→                          : popupBooking.paymentMethod === 'cash'
+  1139→  1139→                          ? 'payments'
+  1140→  1140→                          : 'account_balance'}
+  1141→  1141→                      </span>
+  1142→  1142→                      <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
+  1143→  1143→                        {popupBooking.paymentMethod}
+  1144→  1144→                      </span>
+  1145→  1145→                    </div>
+  1146→  1146→                  )}
+  1147→  1147→                </div>
+  1148→  1148→
+  1149→  1149→                {/* Notes */}
+  1150→  1150→                {popupBooking.notes && (
+  1151→  1151→                  <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+  1152→  1152→                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1">
+  1153→  1153→                      Notas
+  1154→  1154→                    </p>
+  1155→  1155→                    <p className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
+  1156→  1156→                      {popupBooking.notes}
+  1157→  1157→                    </p>
+  1158→  1158→                  </div>
+  1159→  1159→                )}
+  1160→  1160→              </div>
+  1161→  1161→            </motion.div>
+  1162→  1162→          </motion.div>
+  1163→  1163→        )}
+  1164→  1164→      </AnimatePresence>
+  1165→  1165→    </div>
+  1166→  1166→  )
+  1167→  1167→}
+  1168→  1168→

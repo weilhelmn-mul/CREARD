@@ -72,7 +72,8 @@ interface AppState {
   selectedCourtId: string | null
   selectedCourtIds: string[]  // Multiple courts for same date/time
   selectedDate: string | null
-  selectedTimeSlot: string | null
+  selectedTimeSlot: string | null // legacy: single slot "HH:MM - HH:MM"
+  selectedTimeSlots: string[] // new: array of start times e.g. ["08:00", "10:00"]
   user: User | null
   firebaseToken: string | null
   notifications: Notification[]
@@ -88,6 +89,9 @@ interface AppState {
   clearSelectedCourtIds: () => void
   setSelectedDate: (date: string | null) => void
   setSelectedTimeSlot: (time: string | null) => void
+  setSelectedTimeSlots: (slots: string[]) => void
+  toggleTimeSlot: (slot: string) => void
+  clearTimeSlots: () => void
   setUser: (user: User | null) => void
   setFirebaseToken: (token: string | null) => void
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void
@@ -108,6 +112,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedCourtIds: [],
   selectedDate: null,
   selectedTimeSlot: null,
+  selectedTimeSlots: [],
   user: persistedUser,
   firebaseToken: persistedToken,
   authChecked: false,
@@ -131,6 +136,12 @@ export const useAppStore = create<AppState>((set) => ({
   clearSelectedCourtIds: () => set({ selectedCourtIds: [] }),
   setSelectedDate: (date) => set({ selectedDate: date }),
   setSelectedTimeSlot: (time) => set({ selectedTimeSlot: time }),
+  setSelectedTimeSlots: (slots) => set({ selectedTimeSlots: slots }),
+  toggleTimeSlot: (slot) => set((state) => {
+    const has = state.selectedTimeSlots.includes(slot)
+    return { selectedTimeSlots: has ? state.selectedTimeSlots.filter((s) => s !== slot) : [...state.selectedTimeSlots, slot] }
+  }),
+  clearTimeSlots: () => set({ selectedTimeSlots: [], selectedTimeSlot: null }),
   setUser: (user) => {
     saveToStorage(STORAGE_KEY_USER, user)
     set({ user })
