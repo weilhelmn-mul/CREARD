@@ -156,7 +156,7 @@ function ViewRouter() {
 export default function Home() {
   const { currentView } = useAppStore()
   // REQUISITO 1 (AUDITORÍA): Footer visible en todas las vistas no-fullpage
-  const isFullPage = currentView === 'booking-form' || currentView === 'login' || currentView === 'register'
+  const isFullPage = currentView === 'booking-form' || currentView === 'booking' || currentView === 'login' || currentView === 'register'
 
   return (
     <div className="min-h-screen flex flex-col bg-cm-background">
