@@ -207,7 +207,7 @@ export default function HeroSection() {
     const date = dateList[selectedDateIdx].date
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     setSelectedDate(dateStr)
-    setView('search')
+    setView('booking')
   }, [selectedSport, selectedDateIdx, dateList, setSportFilter, setSelectedDate, setView])
 
   const handleSave = async () => {
@@ -425,26 +425,32 @@ export default function HeroSection() {
 
             {/* Tariff Info Panel */}
             <div className="rounded-xl bg-cm-surface-container-highest/30 border border-white/5 p-3 mb-5">
-              <div className="flex items-center gap-1.5 mb-2.5">
-                <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>info</span>
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
                 <span className="text-[10px] font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
-                  Tarifas por hora
+                  Precios por hora
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 {tariffInfo.map((t) => (
-                  <div key={t.sport} className="space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{t.emoji}</span>
+                  <div key={t.sport} className="rounded-lg bg-cm-surface-container-highest/40 p-2.5">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-base leading-none">{t.emoji}</span>
                       <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{t.label}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-md bg-cm-surface-container-highest/40">
-                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">06:00\u201318:00</span>
-                      <span className="font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-md bg-cm-surface-container-highest/40">
-                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">18:00\u201323:00</span>
-                      <span className="font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                          <span className="text-[13px]">\u2600\ufe0f</span>D\u00eda
+                        </span>
+                        <span className="text-[12px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                          <span className="text-[13px]">\ud83c\udf19</span>Noche
+                        </span>
+                        <span className="text-[12px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
