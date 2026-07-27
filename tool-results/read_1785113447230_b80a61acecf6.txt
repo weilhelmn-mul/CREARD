@@ -1,0 +1,642 @@
+    46→// --- Date List Generator ---
+    47→function generateDateList(count: number = 14) {
+    48→  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    49→  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    50→  const dates: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
+    51→
+    52→  for (let i = 0; i < count; i++) {
+    53→    const d = new Date()
+    54→    d.setDate(d.getDate() + i)
+    55→    dates.push({
+    56→      date: d,
+    57→      label: `${d.getDate()} ${months[d.getMonth()]}`,
+    58→      dayName: i === 0 ? 'Hoy' : days[d.getDay()],
+    59→      isToday: i === 0,
+    60→    })
+    61→  }
+    62→  return dates
+    63→}
+    64→
+    65→// --- Sport Buttons ---
+    66→const sportButtons = [
+    67→  { value: 'futbol', label: 'Fútbol 7', emoji: '⚽' },
+    68→  { value: 'voley', label: 'Vóley', emoji: '🏐' },
+    69→]
+    70→
+    71→// --- Time Slots (07:00 to 21:00) ---
+    72→const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => i + 7)
+    73→
+    74→// --- Gradient Mesh ---
+    75→function GradientMesh() {
+    76→  return (
+    77→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    78→      <motion.div
+    79→        className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-30"
+    80→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.3) 0%, transparent 70%)' }}
+    81→        animate={{ x: [0, 50, -30, 0], y: [0, -30, 50, 0], scale: [1, 1.1, 0.95, 1] }}
+    82→        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+    83→      />
+    84→      <motion.div
+    85→        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full opacity-20"
+    86→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.25) 0%, transparent 70%)' }}
+    87→        animate={{ x: [0, -40, 30, 0], y: [0, 40, -20, 0], scale: [1, 0.9, 1.15, 1] }}
+    88→        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+    89→      />
+    90→      <motion.div
+    91→        className="absolute -bottom-20 left-1/3 w-[350px] h-[350px] rounded-full opacity-15"
+    92→        style={{ background: 'radial-gradient(circle, rgba(0,230,57,0.2) 0%, transparent 70%)' }}
+    93→        animate={{ x: [0, 60, -40, 0], y: [0, -50, 30, 0], scale: [1, 1.2, 0.85, 1] }}
+    94→        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+    95→      />
+    96→    </div>
+    97→  )
+    98→}
+    99→
+   100→export default function HeroSection() {
+   101→  const { setView, setSportFilter, setSelectedDate } = useAppStore()
+   102→  const { settings, saveSection } = useSiteSettings()
+   103→  const { hero: defaults, heroBanners } = settings || {
+   104→    hero: {
+   105→      location: 'San Sebastián, Cusco',
+   106→      badge: 'La #1 en reservas deportivas del Cusco',
+   107→      headline: 'Reserva tu cancha',
+   108→      headlineHighlight: 'en segundos',
+   109→      subtitle: '4 canchas de fútbol 7 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+   110→      promoHighlight: '50% de adelanto',
+   111→      promoText: ', paga el resto al llegar',
+   112→      backgroundImage: '',
+   113→      secondaryImage: '',
+   114→      stats: [
+   115→        { label: 'Espacios', value: 6 },
+   116→        { label: 'Fútbol 7', value: 4 },
+   117→        { label: 'Vóley', value: 2 },
+   118→      ],
+   119→    },
+   120→    heroBanners: [],
+   121→  }
+   122→
+   123→  const activeBanners = (heroBanners || []).filter((b) => b.active && b.image)
+   124→  const [currentBanner, setCurrentBanner] = useState(0)
+   125→  const bannerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   126→
+   127→  // Auto-rotate banners
+   128→  useEffect(() => {
+   129→    if (activeBanners.length <= 1) return
+   130→    bannerTimerRef.current = setInterval(() => {
+   131→      setCurrentBanner((prev) => (prev + 1) % activeBanners.length)
+   132→    }, 5000)
+   133→    return () => {
+   134→      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current)
+   135→    }
+   136→  }, [activeBanners.length])
+   137→
+   138→  const [selectedSport, setSelectedSport] = useState<string | null>(null)
+   139→  const [selectedDateIdx, setSelectedDateIdx] = useState(0)
+   140→  const [availableSlots, setAvailableSlots] = useState<number | null>(null)
+   141→  const [courts, setCourts] = useState<any[]>([])
+   142→  const dateList = generateDateList(14)
+   143→  const dateScrollRef = useRef<HTMLDivElement>(null)
+   144→  const sectionRef = useRef<HTMLElement>(null)
+   145→  const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
+   146→
+   147→  // Edit state
+   148→  const [editOpen, setEditOpen] = useState(false)
+   149→  const [editForm, setEditForm] = useState(defaults)
+   150→  const [saving, setSaving] = useState(false)
+   151→
+   152→  useEffect(() => {
+   153→    if (settings) setEditForm(settings.hero)
+   154→  }, [settings])
+   155→
+   156→  // Fetch courts for pricing + available slots count
+   157→  useEffect(() => {
+   158→    fetch('/api/courts')
+   159→      .then((res) => res.json())
+   160→      .then((data) => {
+   161→        const courtList = Array.isArray(data) && data.length > 0 ? data : []
+   162→        setCourts(courtList)
+   163→        setAvailableSlots(Math.round((courtList.length || 6) * 8.5))
+   164→      })
+   165→      .catch(() => {
+   166→        setAvailableSlots(51)
+   167→      })
+   168→  }, [])
+   169→
+   170→  // Get price for a given hour based on selected sport
+   171→  const getPriceForHour = (hour: number): number | null => {
+   172→    if (!selectedSport || courts.length === 0) return null
+   173→    const sportCourts = courts.filter((c: any) => c.sport === selectedSport)
+   174→    if (sportCourts.length === 0) return null
+   175→    const court = sportCourts[0]
+   176→    const schedule: any[] = court.pricingSchedule || []
+   177→    const block = schedule.find((b: any) => hour >= b.startHour && hour < b.endHour)
+   178→    return block ? block.pricePerHour : (court.pricePerHour || 0)
+   179→  }
+   180→
+   181→  // Scroll date picker by direction
+   182→  const scrollDates = (direction: 'left' | 'right') => {
+   183→    if (!dateScrollRef.current) return
+   184→    const scrollAmount = dateScrollRef.current.clientWidth * 0.75
+   185→    dateScrollRef.current.scrollBy({
+   186→      left: direction === 'left' ? -scrollAmount : scrollAmount,
+   187→      behavior: 'smooth',
+   188→    })
+   189→  }
+   190→
+   191→  const handleSearch = useCallback(() => {
+   192→    const sport = selectedSport || 'todos'
+   193→    setSportFilter(sport)
+   194→    const date = dateList[selectedDateIdx].date
+   195→    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+   196→    setSelectedDate(dateStr)
+   197→    setView('search')
+   198→  }, [selectedSport, selectedDateIdx, dateList, setSportFilter, setSelectedDate, setView])
+   199→
+   200→  const handleSave = async () => {
+   201→    setSaving(true)
+   202→    const ok = await saveSection('hero', editForm)
+   203→    setSaving(false)
+   204→    if (ok) {
+   205→      setEditOpen(false)
+   206→      toast({ title: 'Sección actualizada', description: 'Los cambios del Hero fueron guardados' })
+   207→    } else {
+   208→      toast({ title: 'Error', description: 'No se pudieron guardar los cambios', variant: 'destructive' })
+   209→    }
+   210→  }
+   211→
+   212→  const updateStat = (idx: number, field: 'label' | 'value', val: string) => {
+   213→    const copy = [...editForm.stats]
+   214→    copy[idx] = { ...copy[idx], [field]: field === 'value' ? parseInt(val) || 0 : val }
+   215→    setEditForm({ ...editForm, stats: copy })
+   216→  }
+   217→  const removeStat = (idx: number) => {
+   218→    setEditForm({ ...editForm, stats: editForm.stats.filter((_, i) => i !== idx) })
+   219→  }
+   220→  const addStat = () => {
+   221→    setEditForm({ ...editForm, stats: [...editForm.stats, { label: 'Nuevo', value: 0 }] })
+   222→  }
+   223→
+   224→  const containerVariants = {
+   225→    hidden: {},
+   226→    visible: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+   227→  }
+   228→
+   229→  const itemVariants = {
+   230→    hidden: { opacity: 0, y: 24 },
+   231→    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] } },
+   232→  }
+   233→
+   234→  return (
+   235→    <>
+   236→      <SectionEditButton onClick={() => setEditOpen(true)} label="Editar Hero" />
+   237→
+   238→      <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
+   239→        <GradientMesh />
+   240→
+   241→        {/* Banner Carousel (shows when heroBanners exist) */}
+   242→        {activeBanners.length > 1 && (
+   243→          <div className="relative h-48 md:h-72 mb-6 rounded-2xl overflow-hidden">
+   244→            <AnimatePresence mode="wait">
+   245→              <motion.div
+   246→                key={currentBanner}
+   247→                initial={{ opacity: 0 }}
+   248→                animate={{ opacity: 1 }}
+   249→                exit={{ opacity: 0 }}
+   250→                transition={{ duration: 0.8 }}
+   251→                className="absolute inset-0"
+   252→              >
+   253→                <Image
+   254→                  src={activeBanners[currentBanner].image}
+   255→                  alt={activeBanners[currentBanner].title || 'Banner'}
+   256→                  fill
+   257→                  className="object-cover"
+   258→                  unoptimized
+   259→                />
+   260→                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+   261→                {(activeBanners[currentBanner].title || activeBanners[currentBanner].subtitle) && (
+   262→                  <div className="absolute bottom-4 left-4 right-4">
+   263→                    {activeBanners[currentBanner].subtitle && (
+   264→                      <span className="text-cm-primary text-[10px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
+   265→                    )}
+   266→                    {activeBanners[currentBanner].title && (
+   267→                      <h3 className="font-[family-name:var(--font-sora)] text-lg md:text-2xl font-bold text-white mt-0.5">
+   268→                        {activeBanners[currentBanner].title}
+   269→                      </h3>
+   270→                    )}
+   271→                  </div>
+   272→                )}
+   273→              </motion.div>
+   274→            </AnimatePresence>
+   275→
+   276→            {/* Dots */}
+   277→            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+   278→              {activeBanners.map((_, idx) => (
+   279→                <button type="button"
+   280→                  key={idx}
+   281→                  onClick={() => { setCurrentBanner(idx) }}
+   282→                  className={`w-2 h-2 rounded-full transition-all ${
+   283→                    idx === currentBanner ? 'bg-cm-primary w-4' : 'bg-white/50 hover:bg-white/70'
+   284→                  }`}
+   285→                />
+   286→              ))}
+   287→            </div>
+   288→          </div>
+   289→        )}
+   290→
+   291→        {/* Background image (uploaded by admin, only if no carousel) */}
+   292→        {!activeBanners.length && defaults.backgroundImage && (
+   293→          <div className="absolute inset-0 z-0">
+   294→            <img
+   295→              src={defaults.backgroundImage}
+   296→              alt=""
+   297→              className="w-full h-full object-cover opacity-30"
+   298→            />
+   299→            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+   300→          </div>
+   301→        )}
+   302→
+   303→        <motion.div
+   304→          className="relative max-w-4xl mx-auto text-center"
+   305→          variants={containerVariants}
+   306→          initial="hidden"
+   307→          animate={isSectionInView ? 'visible' : 'hidden'}
+   308→        >
+   309→          {/* Location Badge */}
+   310→          <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
+   311→            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   312→              location_on
+   313→            </span>
+   314→            <span className="text-cm-on-surface-variant text-xs font-medium tracking-wide uppercase font-[family-name:var(--font-inter)]">
+   315→              {defaults.location}
+   316→            </span>
+   317→          </motion.div>
+   318→
+   319→          {/* Hero Badge */}
+   320→          <motion.div
+   321→            variants={itemVariants}
+   322→            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+   323→          >
+   324→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   325→              bolt
+   326→            </span>
+   327→            <span className="text-xs font-semibold text-cm-primary uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   328→              {defaults.badge}
+   329→            </span>
+   330→          </motion.div>
+   331→
+   332→          {/* Headline */}
+   333→          <motion.h1
+   334→            variants={itemVariants}
+   335→            className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
+   336→          >
+   337→            {defaults.headline}{' '}
+   338→            <span className="text-cm-primary text-glow">{defaults.headlineHighlight}</span>
+   339→          </motion.h1>
+   340→
+   341→          {/* Subtitle */}
+   342→          <motion.p
+   343→            variants={itemVariants}
+   344→            className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
+   345→          >
+   346→            {defaults.subtitle}
+   347→          </motion.p>
+   348→
+   349→          {/* Search Panel */}
+   350→          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-4 md:p-6 max-w-2xl mx-auto glow-border">
+   351→            {/* Date Picker with Arrows */}
+   352→            <div className="relative mb-5">
+   353→              <button
+   354→                type="button"
+   355→                onClick={() => scrollDates('left')}
+   356→                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+   357→                aria-label="Fecha anterior"
+   358→              >
+   359→                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+   360→              </button>
+   361→
+   362→              <div
+   363→                ref={dateScrollRef}
+   364→                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth"
+   365→              >
+   366→                {dateList.map((d, idx) => (
+   367→                  <button
+   368→                    type="button"
+   369→                    key={idx}
+   370→                    onClick={() => setSelectedDateIdx(idx)}
+   371→                    className={`flex flex-col items-center px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[72px] flex-shrink-0 ${
+   372→                      selectedDateIdx === idx
+   373→                        ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/25 scale-105'
+   374→                        : 'bg-cm-surface-container-highest/50 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'
+   375→                    }`}
+   376→                  >
+   377→                    <span className="text-[10px] uppercase tracking-wider font-bold">{d.dayName}</span>
+   378→                    <span className="text-base mt-0.5 font-bold font-[family-name:var(--font-sora)]">{d.date.getDate()}</span>
+   379→                    <span className="text-[10px] mt-0.5 opacity-80">{d.label.split(' ')[1]}</span>
+   380→                  </button>
+   381→                ))}
+   382→              </div>
+   383→
+   384→              <button
+   385→                type="button"
+   386→                onClick={() => scrollDates('right')}
+   387→                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+   388→                aria-label="Fecha siguiente"
+   389→              >
+   390→                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+   391→              </button>
+   392→            </div>
+   393→
+   394→            {/* Sport Selection Buttons */}
+   395→            <div className="flex gap-3 mb-5">
+   396→              {sportButtons.map((sport) => (
+   397→                <button
+   398→                  type="button"
+   399→                  key={sport.value}
+   400→                  onClick={() => setSelectedSport(selectedSport === sport.value ? null : sport.value)}
+   401→                  className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
+   402→                    selectedSport === sport.value
+   403→                      ? 'bg-cm-primary/10 text-cm-primary border-cm-primary/40 shadow-md shadow-cm-primary/10'
+   404→                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border-white/10 hover:border-white/20'
+   405→                  }`}
+   406→                >
+   407→                  <span className="text-xl">{sport.emoji}</span>
+   408→                  <span className="font-[family-name:var(--font-sora)]">{sport.label}</span>
+   409→                </button>
+   410→              ))}
+   411→            </div>
+   412→
+   413→            {/* Time Slots with Prices */}
+   414→            <AnimatePresence>
+   415→              {selectedSport && (
+   416→                <motion.div
+   417→                  initial={{ opacity: 0, height: 0 }}
+   418→                  animate={{ opacity: 1, height: 'auto' }}
+   419→                  exit={{ opacity: 0, height: 0 }}
+   420→                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+   421→                  className="overflow-hidden mb-4"
+   422→                >
+   423→                  <div className="flex items-center gap-1.5 mb-2.5">
+   424→                    <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>schedule</span>
+   425→                    <span className="text-xs font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   426→                      Horarios y precios
+   427→                    </span>
+   428→                  </div>
+   429→                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-1">
+   430→                    {TIME_SLOTS.map((hour) => {
+   431→                      const price = getPriceForHour(hour)
+   432→                      return (
+   433→                        <div
+   434→                          key={hour}
+   435→                          className="flex items-center justify-between px-3 py-2 rounded-lg bg-cm-surface-container-highest/40 border border-white/5 hover:border-cm-primary/20 transition-colors"
+   436→                        >
+   437→                          <span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
+   438→                            {String(hour).padStart(2, '0')}:00 - {String(hour + 1).padStart(2, '0')}:00
+   439→                          </span>
+   440→                          <span className="text-xs font-bold text-cm-primary font-[family-name:var(--font-sora)]">
+   441→                            {price !== null ? `S/ ${price}` : '—'}
+   442→                          </span>
+   443→                        </div>
+   444→                      )
+   445→                    })}
+   446→                  </div>
+   447→                </motion.div>
+   448→              )}
+   449→            </AnimatePresence>
+   450→
+   451→            {/* Search Button */}
+   452→            <button
+   453→              type="button"
+   454→              onClick={handleSearch}
+   455→              className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-cm-primary text-cm-on-primary font-bold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.98] text-base"
+   456→            >
+   457→              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   458→                search
+   459→              </span>
+   460→              Buscar Canchas
+   461→            </button>
+   462→          </motion.div>
+   463→
+   464→          {/* Featured Promo Banner */}
+   465→          <motion.div
+   466→            variants={itemVariants}
+   467→            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cm-primary/10 via-cm-primary/5 to-transparent border border-cm-primary/15"
+   468→          >
+   469→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   470→              local_offer
+   471→            </span>
+   472→            <span className="text-cm-on-surface text-xs md:text-sm font-medium font-[family-name:var(--font-inter)]">
+   473→              <span className="text-cm-primary font-bold">{defaults.promoHighlight}</span>{defaults.promoText}
+   474→            </span>
+   475→          </motion.div>
+   476→
+   477→          {/* Stats */}
+   478→          <motion.div
+   479→            variants={itemVariants}
+   480→            className="flex flex-wrap justify-center gap-8 md:gap-14 mt-10 md:mt-14"
+   481→          >
+   482→            {defaults.stats.map((stat, idx) => (
+   483→              <div key={idx} className="text-center">
+   484→                <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   485→                  <AnimatedCounter target={stat.value} duration={2} />
+   486→                </p>
+   487→                <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   488→                  {stat.label}
+   489→                </p>
+   490→              </div>
+   491→            ))}
+   492→            <div className="text-center">
+   493→              <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   494→                <AnimatedCounter target={availableSlots ?? 51} duration={2.5} />
+   495→              </p>
+   496→              <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   497→                Horarios hoy
+   498→              </p>
+   499→            </div>
+   500→          </motion.div>
+   501→        </motion.div>
+   502→      </section>
+   503→
+   504→      {/* Edit Modal */}
+   505→      <EditModal
+   506→        open={editOpen}
+   507→        onClose={() => setEditOpen(false)}
+   508→        title="Editar Sección Hero"
+   509→        onSave={handleSave}
+   510→        saving={saving}
+   511→      >
+   512→        <FormField
+   513→          label="Ubicación"
+   514→          value={editForm.location}
+   515→          onChange={(v) => setEditForm({ ...editForm, location: v })}
+   516→          placeholder="Ej. San Sebastián, Cusco"
+   517→        />
+   518→        <FormField
+   519→          label="Badge principal"
+   520→          value={editForm.badge}
+   521→          onChange={(v) => setEditForm({ ...editForm, badge: v })}
+   522→          placeholder="Ej. La #1 en reservas deportivas del Cusco"
+   523→        />
+   524→        <div className="grid grid-cols-2 gap-3">
+   525→          <FormField
+   526→            label="Título (headline)"
+   527→            value={editForm.headline}
+   528→            onChange={(v) => setEditForm({ ...editForm, headline: v })}
+   529→            placeholder="Reserva tu cancha"
+   530→          />
+   531→          <FormField
+   532→            label="Highlight"
+   533→            value={editForm.headlineHighlight}
+   534→            onChange={(v) => setEditForm({ ...editForm, headlineHighlight: v })}
+   535→            placeholder="en segundos"
+   536→          />
+   537→        </div>
+   538→        <FormField
+   539→          label="Subtítulo"
+   540→          value={editForm.subtitle}
+   541→          onChange={(v) => setEditForm({ ...editForm, subtitle: v })}
+   542→          type="textarea"
+   543→          placeholder="Descripción principal..."
+   544→        />
+   545→        <div className="grid grid-cols-2 gap-3">
+   546→          <FormField
+   547→            label="Promo highlight"
+   548→            value={editForm.promoHighlight}
+   549→            onChange={(v) => setEditForm({ ...editForm, promoHighlight: v })}
+   550→            placeholder="50% de adelanto"
+   551→          />
+   552→          <FormField
+   553→            label="Promo texto"
+   554→            value={editForm.promoText}
+   555→            onChange={(v) => setEditForm({ ...editForm, promoText: v })}
+   556→            placeholder=", paga el resto al llegar"
+   557→          />
+   558→        </div>
+   559→
+   560→        {/* Hero Images */}
+   561→        <div>
+   562→          <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+   563→            Imágenes del Hero
+   564→          </label>
+   565→          <div className="grid grid-cols-2 gap-3">
+   566→            <div>
+   567→              {editForm.backgroundImage ? (
+   568→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   569→                  <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
+   570→                  <button type="button"
+   571→                    onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
+   572→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   573→                  >
+   574→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   575→                  </button>
+   576→                </div>
+   577→              ) : null}
+   578→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   579→                <input
+   580→                  type="file"
+   581→                  accept="image/jpeg,image/png,image/webp"
+   582→                  className="hidden"
+   583→                  onChange={async (e) => {
+   584→                    const file = e.target.files?.[0]
+   585→                    if (!file) return
+   586→                    const fd = new FormData()
+   587→                    fd.append('file', file)
+   588→                    fd.append('folder', 'hero')
+   589→                    try {
+   590→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   591→                      if (res.ok) {
+   592→                        const data = await res.json()
+   593→                        setEditForm({ ...editForm, backgroundImage: data.url })
+   594→                      }
+   595→                    } catch { /* silent */ }
+   596→                    e.target.value = ''
+   597→                  }}
+   598→                />
+   599→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   600→                Fondo
+   601→              </label>
+   602→            </div>
+   603→            <div>
+   604→              {editForm.secondaryImage ? (
+   605→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   606→                  <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
+   607→                  <button type="button"
+   608→                    onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
+   609→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   610→                  >
+   611→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   612→                  </button>
+   613→                </div>
+   614→              ) : null}
+   615→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   616→                <input
+   617→                  type="file"
+   618→                  accept="image/jpeg,image/png,image/webp"
+   619→                  className="hidden"
+   620→                  onChange={async (e) => {
+   621→                    const file = e.target.files?.[0]
+   622→                    if (!file) return
+   623→                    const fd = new FormData()
+   624→                    fd.append('file', file)
+   625→                    fd.append('folder', 'hero')
+   626→                    try {
+   627→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   628→                      if (res.ok) {
+   629→                        const data = await res.json()
+   630→                        setEditForm({ ...editForm, secondaryImage: data.url })
+   631→                      }
+   632→                    } catch { /* silent */ }
+   633→                    e.target.value = ''
+   634→                  }}
+   635→                />
+   636→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   637→                Secundaria
+   638→              </label>
+   639→            </div>
+   640→          </div>
+   641→        </div>
+   642→
+   643→        {/* Stats */}
+   644→        <div>
+   645→          <div className="flex items-center justify-between mb-1.5">
+   646→            <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
+   647→              Estadísticas
+   648→            </label>
+   649→            <button type="button"
+   650→              onClick={addStat}
+   651→              className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+   652→            >
+   653→              <span className="material-symbols-outlined text-[14px]">add</span>
+   654→              Agregar
+   655→            </button>
+   656→          </div>
+   657→          <div className="space-y-2">
+   658→            {editForm.stats.map((stat, idx) => (
+   659→              <div key={idx} className="flex items-center gap-2">
+   660→                <input
+   661→                  value={stat.label}
+   662→                  onChange={(e) => updateStat(idx, 'label', e.target.value)}
+   663→                  placeholder="Etiqueta"
+   664→                  className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   665→                />
+   666→                <input
+   667→                  type="number"
+   668→                  value={stat.value}
+   669→                  onChange={(e) => updateStat(idx, 'value', e.target.value)}
+   670→                  placeholder="0"
+   671→                  className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   672→                />
+   673→                <button type="button"
+   674→                  onClick={() => removeStat(idx)}
+   675→                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+   676→                >
+   677→                  <span className="material-symbols-outlined text-[16px]">delete</span>
+   678→                </button>
+   679→              </div>
+   680→            ))}
+   681→          </div>
+   682→        </div>
+   683→      </EditModal>
+   684→    </>
+   685→  )
+   686→}
+   687→
