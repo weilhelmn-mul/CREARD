@@ -1,192 +1,3 @@
-'use client'
-
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, useInView, AnimatePresence } from 'framer-motion'
-import { useAppStore } from '@/store/useAppStore'
-import { useSiteSettings } from '@/context/SiteSettingsContext'
-import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
-import { toast } from '@/hooks/use-toast'
-import Image from 'next/image'
-
-// --- Animated Counter Component ---
-function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
-  const [count, setCount] = useState(0)
-  const ref = useRef<HTMLSpanElement>(null)
-  const isInView = useInView(ref, { once: true, margin: '-50px' })
-  const hasStarted = useRef(false)
-
-  useEffect(() => {
-    if (!isInView || hasStarted.current) return
-    hasStarted.current = true
-
-    const startTime = performance.now()
-    const from = 0
-    const to = target
-
-    function update(currentTime: number) {
-      const elapsed = currentTime - startTime
-      const progress = Math.min(elapsed / (duration * 1000), 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      const current = Math.round(from + (to - from) * eased)
-      setCount(current)
-      if (progress < 1) {
-        requestAnimationFrame(update)
-      }
-    }
-    requestAnimationFrame(update)
-  }, [isInView, target, duration])
-
-  return (
-    <span ref={ref}>
-      {count}{suffix}
-    </span>
-  )
-}
-
-// --- Date List Generator ---
-function generateDateList(count: number = 14) {
-  const days = ['Dom', 'Lun', 'Mar', 'Mi\u00e9', 'Jue', 'Vie', 'S\u00e1b']
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-  const dates: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
-
-  for (let i = 0; i < count; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() + i)
-    dates.push({
-      date: d,
-      label: `${d.getDate()} ${months[d.getMonth()]}`,
-      dayName: i === 0 ? 'Hoy' : days[d.getDay()],
-      isToday: i === 0,
-    })
-  }
-  return dates
-}
-
-// --- Sport Buttons ---
-const sportButtons = [
-  { value: 'futbol', label: 'F\u00fatbol 7', emoji: '\u26bd' },
-  { value: 'voley', label: 'V\u00f3ley', emoji: '\ud83c\udfd0' },
-]
-
-// --- Gradient Mesh ---
-function GradientMesh() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <motion.div
-        className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-30"
-        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.3) 0%, transparent 70%)' }}
-        animate={{ x: [0, 50, -30, 0], y: [0, -30, 50, 0], scale: [1, 1.1, 0.95, 1] }}
-        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full opacity-20"
-        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.25) 0%, transparent 70%)' }}
-        animate={{ x: [0, -40, 30, 0], y: [0, 40, -20, 0], scale: [1, 0.9, 1.15, 1] }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        className="absolute -bottom-20 left-1/3 w-[350px] h-[350px] rounded-full opacity-15"
-        style={{ background: 'radial-gradient(circle, rgba(0,230,57,0.2) 0%, transparent 70%)' }}
-        animate={{ x: [0, 60, -40, 0], y: [0, -50, 30, 0], scale: [1, 1.2, 0.85, 1] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </div>
-  )
-}
-
-export default function HeroSection() {
-  const { setView, setSportFilter, setSelectedDate } = useAppStore()
-  const { settings, saveSection } = useSiteSettings()
-  const { hero: defaults, heroBanners } = settings || {
-    hero: {
-      location: 'San Sebasti\u00e1n, Cusco',
-      badge: 'La #1 en reservas deportivas del Cusco',
-      headline: 'Reserva tu cancha',
-      headlineHighlight: 'en segundos',
-      subtitle: '4 canchas de f\u00fatbol 7 y 2 canchas de v\u00f3ley profesional. Reserva f\u00e1cil, paga con Yape y disfruta sin complicaciones.',
-      promoHighlight: '50% de adelanto',
-      promoText: ', paga el resto al llegar',
-      backgroundImage: '',
-      secondaryImage: '',
-      stats: [
-        { label: 'Espacios', value: 6 },
-        { label: 'F\u00fatbol 7', value: 4 },
-        { label: 'V\u00f3ley', value: 2 },
-      ],
-    },
-    heroBanners: [],
-  }
-
-  const activeBanners = (heroBanners || []).filter((b) => b.active && b.image)
-  const [currentBanner, setCurrentBanner] = useState(0)
-  const bannerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Auto-rotate banners
-  useEffect(() => {
-    if (activeBanners.length <= 1) return
-    bannerTimerRef.current = setInterval(() => {
-      setCurrentBanner((prev) => (prev + 1) % activeBanners.length)
-    }, 5000)
-    return () => {
-      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current)
-    }
-  }, [activeBanners.length])
-
-  const [selectedSport, setSelectedSport] = useState<string | null>(null)
-  const [selectedDateIdx, setSelectedDateIdx] = useState(0)
-  const [availableSlots, setAvailableSlots] = useState<number | null>(null)
-  const [courts, setCourts] = useState<any[]>([])
-  const dateList = generateDateList(14)
-  const dateScrollRef = useRef<HTMLDivElement>(null)
-  const sectionRef = useRef<HTMLElement>(null)
-  const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
-
-  // Edit state
-  const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState(defaults)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (settings) setEditForm(settings.hero)
-  }, [settings])
-
-  // Fetch courts for pricing + available slots count
-  useEffect(() => {
-    fetch('/api/courts')
-      .then((res) => res.json())
-      .then((data) => {
-        const courtList = Array.isArray(data) && data.length > 0 ? data : []
-        setCourts(courtList)
-        setAvailableSlots(Math.round((courtList.length || 6) * 8.5))
-      })
-      .catch(() => {
-        setAvailableSlots(51)
-      })
-  }, [])
-
-  // Build tariff summary from courts pricingSchedule
-  const tariffInfo = (() => {
-    const result: { sport: string; emoji: string; label: string; morning: string; night: string }[] = []
-    const sports = [
-      { key: 'futbol', emoji: '\u26bd', label: 'F\u00fatbol 7' },
-      { key: 'voley', emoji: '\ud83c\udfd0', label: 'V\u00f3ley' },
-    ]
-    for (const s of sports) {
-      const sportCourts = courts.filter((c: any) => c.sport === s.key)
-      if (sportCourts.length === 0) {
-        result.push({ sport: s.key, emoji: s.emoji, label: s.label, morning: '—', night: '—' })
-        continue
-      }
-      const schedule: any[] = sportCourts[0].pricingSchedule || []
-      const morningBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('ma\u00f1ana') || (b.startHour >= 6 && b.startHour < 12))
-      const nightBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('noche') || b.startHour >= 18)
-      result.push({
-        sport: s.key,
-        emoji: s.emoji,
-        label: s.label,
-        morning: morningBlock ? `S/ ${morningBlock.pricePerHour}` : `S/ ${sportCourts[0].pricePerHour || '—'}`,
-        night: nightBlock ? `S/ ${nightBlock.pricePerHour}` : `S/ ${sportCourts[0].pricePerHour || '—'}`,
-      })
     }
     return result
   })()
@@ -438,19 +249,53 @@ export default function HeroSection() {
                       <span className="text-base leading-none">{t.emoji}</span>
                       <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{t.label}</span>
                     </div>
-                    <div className="space-y-1.5">
+    const sports = [
+      { key: 'futbol', emoji: '\u26bd', label: 'F\u00fatbol 7' },
+      { key: 'voley', emoji: '\ud83c\udfd0', label: 'V\u00f3ley' },
+    ]
+    for (const s of sports) {
+      const sportCourts = courts.filter((c: any) => c.sport === s.key)
+      if (sportCourts.length === 0) {
+        result.push({ sport: s.key, emoji: s.emoji, label: s.label, morning: '—', night: '—' })
+        continue
+      }
+      const schedule: any[] = sportCourts[0].pricingSchedule || []
+      const defaultPrice = sportCourts[0].pricePerHour || 0
+      const morningBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('ma\u00f1ana'))
+        || schedule.find((b: any) => b.startHour >= 6 && b.startHour < 12)
+      const afternoonBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('tarde'))
+        || schedule.find((b: any) => b.startHour >= 12 && b.startHour < 18)
+      const nightBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('noche'))
+        || schedule.find((b: any) => b.startHour >= 18)
+      const fmt = (b: any) => b ? `S/ ${b.pricePerHour}` : `S/ ${defaultPrice || '\u2014'}`
+      result.push({
+        sport: s.key,
+        emoji: s.emoji,
+        label: s.label,
+        morning: fmt(morningBlock),
+        afternoon: fmt(afternoonBlock),
+        night: fmt(nightBlock),
+      })
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                          <span className="text-[13px]">\u2600\ufe0f</span>D\u00eda
+                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                          <span className="text-[12px]">\u2600\ufe0f</span>Ma\u00f1ana
                         </span>
-                        <span className="text-[12px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
+                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                          <span className="text-[13px]">\ud83c\udf19</span>Noche
+                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                          <span className="text-[12px]">\u26c5</span>Tarde
                         </span>
-                        <span className="text-[12px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.afternoon}</span>
                       </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                          <span className="text-[12px]">\ud83c\udf19</span>Noche
+                        </span>
+                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+                      </div>
+                    </div>
                     </div>
                   </div>
                 ))}

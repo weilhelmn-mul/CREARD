@@ -613,15 +613,15 @@ export default function UnifiedBookingView() {
                       const cfg = sportConfig[court.sport] || { icon: 'sports', color: '#00ff41' }
                       return (
                         <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
-                          className={`w-full flex items-center gap-2.5 py-3 px-3 rounded-xl transition-all duration-200 border text-left ${
+                          className={`w-full flex items-center gap-2.5 py-3.5 px-3.5 rounded-xl transition-all duration-200 border text-left ${
                             isSelected
                               ? 'bg-[#00ff41]/10 border-[#00ff41]/30'
                               : 'bg-cm-surface-container-highest/40 border-transparent hover:border-white/10'
                           }`}>
-                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
                             isSelected ? 'bg-[#00ff41]/20' : 'bg-white/5'
                           }`}>
-                            <span className={`material-symbols-outlined text-[18px] ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'}`}
+                            <span className={`material-symbols-outlined text-[20px] ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'}`}
                               style={{ fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0' }}>
                               {cfg.icon}
                             </span>
@@ -629,9 +629,6 @@ export default function UnifiedBookingView() {
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-semibold font-[family-name:var(--font-sora)] truncate ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
                               {court.name}
-                            </p>
-                            <p className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">
-                              S/ {court.pricePerHour}/h
                             </p>
                           </div>
                           <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
@@ -770,7 +767,7 @@ export default function UnifiedBookingView() {
                 return (
                   <div key={cId} className="bg-cm-surface-container-highest/30 rounded-xl p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-[18px] text-[#00ff41]">{cfg.icon}</span>
+                      <span className="material-symbols-outlined text-[20px] text-[#00ff41]">{cfg.icon}</span>
                       <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{court.name}</span>
                       <span className="ml-auto text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
                     </div>
