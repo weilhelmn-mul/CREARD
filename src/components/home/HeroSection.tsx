@@ -45,7 +45,7 @@ function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number
 
 // --- Date List Generator ---
 function generateDateList(count: number = 14) {
-  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  const days = ['Dom', 'Lun', 'Mar', 'Mi\u00e9', 'Jue', 'Vie', 'S\u00e1b']
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   const dates: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
 
@@ -64,12 +64,9 @@ function generateDateList(count: number = 14) {
 
 // --- Sport Buttons ---
 const sportButtons = [
-  { value: 'futbol', label: 'Fútbol 7', emoji: '⚽' },
-  { value: 'voley', label: 'Vóley', emoji: '🏐' },
+  { value: 'futbol', label: 'F\u00fatbol 7', emoji: '\u26bd' },
+  { value: 'voley', label: 'V\u00f3ley', emoji: '\ud83c\udfd0' },
 ]
-
-// --- Time Slots (07:00 to 21:00) ---
-const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => i + 7)
 
 // --- Gradient Mesh ---
 function GradientMesh() {
@@ -102,19 +99,19 @@ export default function HeroSection() {
   const { settings, saveSection } = useSiteSettings()
   const { hero: defaults, heroBanners } = settings || {
     hero: {
-      location: 'San Sebastián, Cusco',
+      location: 'San Sebasti\u00e1n, Cusco',
       badge: 'La #1 en reservas deportivas del Cusco',
       headline: 'Reserva tu cancha',
       headlineHighlight: 'en segundos',
-      subtitle: '4 canchas de fútbol 7 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+      subtitle: '4 canchas de f\u00fatbol 7 y 2 canchas de v\u00f3ley profesional. Reserva f\u00e1cil, paga con Yape y disfruta sin complicaciones.',
       promoHighlight: '50% de adelanto',
       promoText: ', paga el resto al llegar',
       backgroundImage: '',
       secondaryImage: '',
       stats: [
         { label: 'Espacios', value: 6 },
-        { label: 'Fútbol 7', value: 4 },
-        { label: 'Vóley', value: 2 },
+        { label: 'F\u00fatbol 7', value: 4 },
+        { label: 'V\u00f3ley', value: 2 },
       ],
     },
     heroBanners: [],
@@ -167,16 +164,32 @@ export default function HeroSection() {
       })
   }, [])
 
-  // Get price for a given hour based on selected sport
-  const getPriceForHour = (hour: number): number | null => {
-    if (!selectedSport || courts.length === 0) return null
-    const sportCourts = courts.filter((c: any) => c.sport === selectedSport)
-    if (sportCourts.length === 0) return null
-    const court = sportCourts[0]
-    const schedule: any[] = court.pricingSchedule || []
-    const block = schedule.find((b: any) => hour >= b.startHour && hour < b.endHour)
-    return block ? block.pricePerHour : (court.pricePerHour || 0)
-  }
+  // Build tariff summary from courts pricingSchedule
+  const tariffInfo = (() => {
+    const result: { sport: string; emoji: string; label: string; morning: string; night: string }[] = []
+    const sports = [
+      { key: 'futbol', emoji: '\u26bd', label: 'F\u00fatbol 7' },
+      { key: 'voley', emoji: '\ud83c\udfd0', label: 'V\u00f3ley' },
+    ]
+    for (const s of sports) {
+      const sportCourts = courts.filter((c: any) => c.sport === s.key)
+      if (sportCourts.length === 0) {
+        result.push({ sport: s.key, emoji: s.emoji, label: s.label, morning: '—', night: '—' })
+        continue
+      }
+      const schedule: any[] = sportCourts[0].pricingSchedule || []
+      const morningBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('ma\u00f1ana') || (b.startHour >= 6 && b.startHour < 12))
+      const nightBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('noche') || b.startHour >= 18)
+      result.push({
+        sport: s.key,
+        emoji: s.emoji,
+        label: s.label,
+        morning: morningBlock ? `S/ ${morningBlock.pricePerHour}` : `S/ ${sportCourts[0].pricePerHour || '—'}`,
+        night: nightBlock ? `S/ ${nightBlock.pricePerHour}` : `S/ ${sportCourts[0].pricePerHour || '—'}`,
+      })
+    }
+    return result
+  })()
 
   // Scroll date picker by direction
   const scrollDates = (direction: 'left' | 'right') => {
@@ -203,7 +216,7 @@ export default function HeroSection() {
     setSaving(false)
     if (ok) {
       setEditOpen(false)
-      toast({ title: 'Sección actualizada', description: 'Los cambios del Hero fueron guardados' })
+      toast({ title: 'Secci\u00f3n actualizada', description: 'Los cambios del Hero fueron guardados' })
     } else {
       toast({ title: 'Error', description: 'No se pudieron guardar los cambios', variant: 'destructive' })
     }
@@ -410,43 +423,33 @@ export default function HeroSection() {
               ))}
             </div>
 
-            {/* Time Slots with Prices */}
-            <AnimatePresence>
-              {selectedSport && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  className="overflow-hidden mb-4"
-                >
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>schedule</span>
-                    <span className="text-xs font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
-                      Horarios y precios
-                    </span>
+            {/* Tariff Info Panel */}
+            <div className="rounded-xl bg-cm-surface-container-highest/30 border border-white/5 p-3 mb-5">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>info</span>
+                <span className="text-[10px] font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
+                  Tarifas por hora
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {tariffInfo.map((t) => (
+                  <div key={t.sport} className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{t.emoji}</span>
+                      <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{t.label}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-md bg-cm-surface-container-highest/40">
+                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">06:00\u201318:00</span>
+                      <span className="font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-md bg-cm-surface-container-highest/40">
+                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">18:00\u201323:00</span>
+                      <span className="font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-1">
-                    {TIME_SLOTS.map((hour) => {
-                      const price = getPriceForHour(hour)
-                      return (
-                        <div
-                          key={hour}
-                          className="flex items-center justify-between px-3 py-2 rounded-lg bg-cm-surface-container-highest/40 border border-white/5 hover:border-cm-primary/20 transition-colors"
-                        >
-                          <span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
-                            {String(hour).padStart(2, '0')}:00 - {String(hour + 1).padStart(2, '0')}:00
-                          </span>
-                          <span className="text-xs font-bold text-cm-primary font-[family-name:var(--font-sora)]">
-                            {price !== null ? `S/ ${price}` : '—'}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                ))}
+              </div>
+            </div>
 
             {/* Search Button */}
             <button
@@ -505,15 +508,15 @@ export default function HeroSection() {
       <EditModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title="Editar Sección Hero"
+        title="Editar Secci\u00f3n Hero"
         onSave={handleSave}
         saving={saving}
       >
         <FormField
-          label="Ubicación"
+          label="Ubicaci\u00f3n"
           value={editForm.location}
           onChange={(v) => setEditForm({ ...editForm, location: v })}
-          placeholder="Ej. San Sebastián, Cusco"
+          placeholder="Ej. San Sebasti\u00e1n, Cusco"
         />
         <FormField
           label="Badge principal"
@@ -523,7 +526,7 @@ export default function HeroSection() {
         />
         <div className="grid grid-cols-2 gap-3">
           <FormField
-            label="Título (headline)"
+            label="T\u00edtulo (headline)"
             value={editForm.headline}
             onChange={(v) => setEditForm({ ...editForm, headline: v })}
             placeholder="Reserva tu cancha"
@@ -536,11 +539,11 @@ export default function HeroSection() {
           />
         </div>
         <FormField
-          label="Subtítulo"
+          label="Subt\u00edtulo"
           value={editForm.subtitle}
           onChange={(v) => setEditForm({ ...editForm, subtitle: v })}
           type="textarea"
-          placeholder="Descripción principal..."
+          placeholder="Descripci\u00f3n principal..."
         />
         <div className="grid grid-cols-2 gap-3">
           <FormField
@@ -560,7 +563,7 @@ export default function HeroSection() {
         {/* Hero Images */}
         <div>
           <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
-            Imágenes del Hero
+            Im\u00e1genes del Hero
           </label>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -644,7 +647,7 @@ export default function HeroSection() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
-              Estadísticas
+              Estad\u00edsticas
             </label>
             <button type="button"
               onClick={addStat}
