@@ -43,31 +43,33 @@ function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number
   )
 }
 
-// --- Date Chips ---
-function getDateChips() {
+// --- Date List Generator ---
+function generateDateList(count: number = 14) {
   const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-  const chips: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
+  const dates: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
 
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < count; i++) {
     const d = new Date()
     d.setDate(d.getDate() + i)
-    chips.push({
+    dates.push({
       date: d,
       label: `${d.getDate()} ${months[d.getMonth()]}`,
       dayName: i === 0 ? 'Hoy' : days[d.getDay()],
       isToday: i === 0,
     })
   }
-  return chips
+  return dates
 }
 
-// --- Sport Options ---
-const sportOptions = [
-  { value: 'todos', label: 'Todos los deportes', icon: 'sports' },
-  { value: 'futbol', label: 'Fútbol 7', icon: 'sports_soccer' },
-  { value: 'voley', label: 'Vóley', icon: 'sports_volleyball' },
+// --- Sport Buttons ---
+const sportButtons = [
+  { value: 'futbol', label: 'Fútbol 7', emoji: '⚽' },
+  { value: 'voley', label: 'Vóley', emoji: '🏐' },
 ]
+
+// --- Time Slots (07:00 to 21:00) ---
+const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => i + 7)
 
 // --- Gradient Mesh ---
 function GradientMesh() {
@@ -133,10 +135,12 @@ export default function HeroSection() {
     }
   }, [activeBanners.length])
 
-  const [selectedSport, setSelectedSport] = useState('todos')
+  const [selectedSport, setSelectedSport] = useState<string | null>(null)
   const [selectedDateIdx, setSelectedDateIdx] = useState(0)
   const [availableSlots, setAvailableSlots] = useState<number | null>(null)
-  const dateChips = getDateChips()
+  const [courts, setCourts] = useState<any[]>([])
+  const dateList = generateDateList(14)
+  const dateScrollRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
   const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
 
@@ -149,26 +153,49 @@ export default function HeroSection() {
     if (settings) setEditForm(settings.hero)
   }, [settings])
 
-  // Fetch available slots
+  // Fetch courts for pricing + available slots count
   useEffect(() => {
     fetch('/api/courts')
       .then((res) => res.json())
       .then((data) => {
-        const courtCount = Array.isArray(data) ? data.length : 6
-        setAvailableSlots(Math.round(courtCount * 8.5))
+        const courtList = Array.isArray(data) && data.length > 0 ? data : []
+        setCourts(courtList)
+        setAvailableSlots(Math.round((courtList.length || 6) * 8.5))
       })
       .catch(() => {
         setAvailableSlots(51)
       })
   }, [])
 
+  // Get price for a given hour based on selected sport
+  const getPriceForHour = (hour: number): number | null => {
+    if (!selectedSport || courts.length === 0) return null
+    const sportCourts = courts.filter((c: any) => c.sport === selectedSport)
+    if (sportCourts.length === 0) return null
+    const court = sportCourts[0]
+    const schedule: any[] = court.pricingSchedule || []
+    const block = schedule.find((b: any) => hour >= b.startHour && hour < b.endHour)
+    return block ? block.pricePerHour : (court.pricePerHour || 0)
+  }
+
+  // Scroll date picker by direction
+  const scrollDates = (direction: 'left' | 'right') => {
+    if (!dateScrollRef.current) return
+    const scrollAmount = dateScrollRef.current.clientWidth * 0.75
+    dateScrollRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    })
+  }
+
   const handleSearch = useCallback(() => {
-    setSportFilter(selectedSport)
-    const date = dateChips[selectedDateIdx].date
+    const sport = selectedSport || 'todos'
+    setSportFilter(sport)
+    const date = dateList[selectedDateIdx].date
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     setSelectedDate(dateStr)
     setView('search')
-  }, [selectedSport, selectedDateIdx, dateChips, setSportFilter, setSelectedDate, setView])
+  }, [selectedSport, selectedDateIdx, dateList, setSportFilter, setSelectedDate, setView])
 
   const handleSave = async () => {
     setSaving(true)
@@ -319,55 +346,119 @@ export default function HeroSection() {
             {defaults.subtitle}
           </motion.p>
 
-          {/* Search Bar */}
-          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-3 md:p-4 max-w-2xl mx-auto glow-border">
-            {/* Date Chips */}
-            <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar px-1">
-              {dateChips.map((chip, idx) => (
-                <button type="button"
-                  key={idx}
-                  onClick={() => setSelectedDateIdx(idx)}
-                  className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[64px] ${
-                    selectedDateIdx === idx
-                      ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
-                      : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
+          {/* Search Panel */}
+          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-4 md:p-6 max-w-2xl mx-auto glow-border">
+            {/* Date Picker with Arrows */}
+            <div className="relative mb-5">
+              <button
+                type="button"
+                onClick={() => scrollDates('left')}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+                aria-label="Fecha anterior"
+              >
+                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+              </button>
+
+              <div
+                ref={dateScrollRef}
+                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth"
+              >
+                {dateList.map((d, idx) => (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => setSelectedDateIdx(idx)}
+                    className={`flex flex-col items-center px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[72px] flex-shrink-0 ${
+                      selectedDateIdx === idx
+                        ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/25 scale-105'
+                        : 'bg-cm-surface-container-highest/50 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wider font-bold">{d.dayName}</span>
+                    <span className="text-base mt-0.5 font-bold font-[family-name:var(--font-sora)]">{d.date.getDate()}</span>
+                    <span className="text-[10px] mt-0.5 opacity-80">{d.label.split(' ')[1]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => scrollDates('right')}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+                aria-label="Fecha siguiente"
+              >
+                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              </button>
+            </div>
+
+            {/* Sport Selection Buttons */}
+            <div className="flex gap-3 mb-5">
+              {sportButtons.map((sport) => (
+                <button
+                  type="button"
+                  key={sport.value}
+                  onClick={() => setSelectedSport(selectedSport === sport.value ? null : sport.value)}
+                  className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
+                    selectedSport === sport.value
+                      ? 'bg-cm-primary/10 text-cm-primary border-cm-primary/40 shadow-md shadow-cm-primary/10'
+                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border-white/10 hover:border-white/20'
                   }`}
                 >
-                  <span className="text-[10px] uppercase tracking-wider font-bold">{chip.dayName}</span>
-                  <span className="text-sm mt-0.5 font-semibold font-[family-name:var(--font-sora)]">{chip.label}</span>
+                  <span className="text-xl">{sport.emoji}</span>
+                  <span className="font-[family-name:var(--font-sora)]">{sport.label}</span>
                 </button>
               ))}
             </div>
 
-            {/* Sport Select + Search */}
-            <div className="flex gap-3">
-              <div className="relative flex-1">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[20px]">
-                  {sportOptions.find((s) => s.value === selectedSport)?.icon || 'sports'}
-                </span>
-                <select
-                  value={selectedSport}
-                  onChange={(e) => setSelectedSport(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm appearance-none cursor-pointer focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all font-[family-name:var(--font-inter)]"
+            {/* Time Slots with Prices */}
+            <AnimatePresence>
+              {selectedSport && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  className="overflow-hidden mb-4"
                 >
-                  {sportOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value} className="bg-cm-surface-container-highest text-cm-on-surface">
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>schedule</span>
+                    <span className="text-xs font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
+                      Horarios y precios
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto no-scrollbar pr-1">
+                    {TIME_SLOTS.map((hour) => {
+                      const price = getPriceForHour(hour)
+                      return (
+                        <div
+                          key={hour}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg bg-cm-surface-container-highest/40 border border-white/5 hover:border-cm-primary/20 transition-colors"
+                        >
+                          <span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">
+                            {String(hour).padStart(2, '0')}:00 - {String(hour + 1).padStart(2, '0')}:00
+                          </span>
+                          <span className="text-xs font-bold text-cm-primary font-[family-name:var(--font-sora)]">
+                            {price !== null ? `S/ ${price}` : '—'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-              <button type="button"
-                onClick={handleSearch}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.97]"
-              >
-                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
-                  search
-                </span>
-                <span className="hidden sm:inline">Buscar</span>
-              </button>
-            </div>
+            {/* Search Button */}
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-cm-primary text-cm-on-primary font-bold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.98] text-base"
+            >
+              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                search
+              </span>
+              Buscar Canchas
+            </button>
           </motion.div>
 
           {/* Featured Promo Banner */}
@@ -410,7 +501,7 @@ export default function HeroSection() {
         </motion.div>
       </section>
 
-      {/* ═══════ EDIT MODAL ═══════ */}
+      {/* Edit Modal */}
       <EditModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
@@ -477,7 +568,6 @@ export default function HeroSection() {
                 <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
                   <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
                   <button type="button"
-                    type="button"
                     onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
                     className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
                   >
@@ -515,7 +605,6 @@ export default function HeroSection() {
                 <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
                   <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
                   <button type="button"
-                    type="button"
                     onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
                     className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
                   >
@@ -558,7 +647,6 @@ export default function HeroSection() {
               Estadísticas
             </label>
             <button type="button"
-              type="button"
               onClick={addStat}
               className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
             >
@@ -583,7 +671,6 @@ export default function HeroSection() {
                   className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                 />
                 <button type="button"
-                  type="button"
                   onClick={() => removeStat(idx)}
                   className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
                 >
