@@ -1,0 +1,921 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useEffect, useState, useMemo, useCallback } from 'react'
+     4→     4→import { useAppStore } from '@/store/useAppStore'
+     5→     5→import { motion } from 'framer-motion'
+     6→     6→import { toast } from '@/hooks/use-toast'
+     7→     7→import { getAuthHeaders } from '@/lib/auth-helpers'
+     8→     8→import CulqiPayButton from '@/components/payments/CulqiPayButton'
+     9→     9→
+    10→    10→/* ───────────── Interfaces ───────────── */
+    11→    11→
+    12→    12→interface PricingScheduleItem {
+    13→    13→  label: string
+    14→    14→  startHour: number
+    15→    15→  endHour: number
+    16→    16→  pricePerHour: number
+    17→    17→}
+    18→    18→
+    19→    19→interface Court {
+    20→    20→  id: string
+    21→    21→  name: string
+    22→    22→  sport: string
+    23→    23→  pricePerHour: number
+    24→    24→  pricingSchedule: PricingScheduleItem[]
+    25→    25→  branch: { name: string; city: string }
+    26→    26→  images: string[]
+    27→    27→}
+    28→    28→
+    29→    29→interface BookingResponse {
+    30→    30→  id: string
+    31→    31→  courtId: string
+    32→    32→  courtIds: string[]
+    33→    33→  userId: string
+    34→    34→  date: string
+    35→    35→  startTime: string
+    36→    36→  endTime: string
+    37→    37→  totalPrice: number
+    38→    38→  advanceAmount: number
+    39→    39→  remainingAmount: number
+    40→    40→  status: string
+    41→    41→  paymentMethod: string | null
+    42→    42→}
+    43→    43→
+    44→    44→/* ───────────── Constants ───────────── */
+    45→    45→
+    46→    46→const sportIcons: Record<string, string> = {
+    47→    47→  futbol: 'sports_soccer',
+    48→    48→  voley: 'sports_volleyball',
+    49→    49→  basket: 'sports_basketball',
+    50→    50→  tenis: 'sports_tennis',
+    51→    51→  eventos: 'celebration',
+    52→    52→  padel: 'sports_tennis',
+    53→    53→}
+    54→    54→
+    55→    55→const paymentMethods = [
+    56→    56→  { value: 'culqi', label: 'Culqi', icon: 'credit_card', color: '#f97316' },
+    57→    57→]
+    58→    58→
+    59→    59→
+    60→    60→/* ───────────── Helpers ───────────── */
+    61→    61→
+    62→    62→function parseDate(dateStr: string | null): Date {
+    63→    63→  if (!dateStr) return new Date()
+    64→    64→  const parts = dateStr.split('-')
+    65→    65→  if (parts.length === 3) {
+    66→    66→    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    67→    67→  }
+    68→    68→  // Fallback in case a Date object was stored
+    69→    69→  return new Date(dateStr)
+    70→    70→}
+    71→    71→
+    72→    72→function formatDateES(date: Date): string {
+    73→    73→  return date.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    74→    74→}
+    75→    75→
+    76→    76→function formatDateShort(date: Date): string {
+    77→    77→  return date.toLocaleDateString('es', { day: 'numeric', month: 'short' })
+    78→    78→}
+    79→    79→
+    80→    80→function getRefCode(bookingId: string): string {
+    81→    81→  const hash = bookingId.slice(-8).toUpperCase()
+    82→    82→  return `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`
+    83→    83→}
+    84→    84→
+    85→    85→/**
+    86→    86→ * Calculate price for a time slot using a pricing schedule.
+    87→    87→ * Supports slots that span multiple schedules (e.g., 16:00-19:00).
+    88→    88→ * Returns { total, breakdown } where breakdown shows per-schedule detail.
+    89→    89→ */
+    90→    90→function calculatePriceForTimeSlot(
+    91→    91→  schedule: PricingScheduleItem[],
+    92→    92→  startTime: string,
+    93→    93→  endTime: string,
+    94→    94→): { total: number; breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> } {
+    95→    95→  const [startH, startM] = startTime.split(':').map(Number)
+    96→    96→  const [endH, endM] = endTime.split(':').map(Number)
+    97→    97→  const startDecimal = startH + startM / 60
+    98→    98→  const endDecimal = endH + endM / 60
+    99→    99→
+   100→   100→  if (schedule.length === 0) return { total: 0, breakdown: [] }
+   101→   101→
+   102→   102→  const sorted = [...schedule].sort((a, b) => a.startHour - b.startHour)
+   103→   103→  let total = 0
+   104→   104→  let cursor = startDecimal
+   105→   105→  const breakdown: Array<{ label: string; hours: number; pricePerHour: number; subtotal: number }> = []
+   106→   106→
+   107→   107→  for (const slot of sorted) {
+   108→   108→    if (cursor >= slot.endHour) continue
+   109→   109→    const overlapStart = Math.max(cursor, slot.startHour)
+   110→   110→    const overlapEnd = Math.min(endDecimal, slot.endHour)
+   111→   111→    if (overlapEnd > overlapStart) {
+   112→   112→      const hours = overlapEnd - overlapStart
+   113→   113→      const subtotal = Math.round(hours * slot.pricePerHour * 100) / 100
+   114→   114→      breakdown.push({ label: slot.label, hours: Math.round(hours * 100) / 100, pricePerHour: slot.pricePerHour, subtotal })
+   115→   115→      total += subtotal
+   116→   116→      cursor = overlapEnd
+   117→   117→    }
+   118→   118→  }
+   119→   119→  return { total: Math.round(total * 100) / 100, breakdown }
+   120→   120→}
+   121→   121→
+   122→   122→/* ───────────── Component ───────────── */
+   123→   123→
+   124→   124→export default function BookingForm() {
+   125→   125→  const {
+   126→   126→    selectedCourtId,
+   127→   127→    selectedCourtIds,
+   128→   128→    selectedDate,
+   129→   129→    selectedTimeSlot,
+   130→   130→    user,
+   131→   131→    setView,
+   132→   132→    addNotification,
+   133→   133→    setSelectedCourt,
+   134→   134→    setSelectedDate,
+   135→   135→    setSelectedTimeSlot,
+   136→   136→    clearSelectedCourtIds,
+   137→   137→  } = useAppStore()
+   138→   138→
+   139→   139→  const [courts, setCourts] = useState<Court[]>([])
+   140→   140→  const [loading, setLoading] = useState(true)
+   141→   141→  const [submitting, setSubmitting] = useState(false)
+   142→   142→  const [success, setSuccess] = useState(false)
+   143→   143→  const [bookingRefs, setBookingRefs] = useState<string[]>([])
+   144→   144→  const [bookingDataList, setBookingDataList] = useState<BookingResponse[]>([])
+   145→   145→  const [createdCount, setCreatedCount] = useState(0)
+   146→   146→  const [failedCount, setFailedCount] = useState(0)
+   147→   147→
+   148→   148→  const [paymentMethod, setPaymentMethod] = useState('culqi')
+   149→   149→  const [formStep, setFormStep] = useState<'form' | 'payment' | 'success'>('form')
+   150→   150→  const [clientName, setClientName] = useState(user?.name || '')
+   151→   151→  const [clientEmail, setClientEmail] = useState(user?.email || '')
+   152→   152→  const [clientPhone, setClientPhone] = useState(user?.phone || '')
+   153→   153→
+   154→   154→  // Parse store values
+   155→   155→  const bookingDate = useMemo(() => parseDate(selectedDate), [selectedDate])
+   156→   156→  const timeParts = useMemo(() => {
+   157→   157→    if (!selectedTimeSlot) return { start: '', end: '' }
+   158→   158→    const parts = selectedTimeSlot.split(' - ')
+   159→   159→    return { start: parts[0] || '', end: parts[1] || '' }
+   160→   160→  }, [selectedTimeSlot])
+   161→   161→
+   162→   162→  const { start: startStr, end: endStr } = timeParts
+   163→   163→
+   164→   164→  // Calculate pricing for all courts
+   165→   165→  const courtPricings = useMemo(() => {
+   166→   166→    return courts.map((c) => {
+   167→   167→      if (!startStr || !endStr) return { court: c, total: c.pricePerHour, breakdown: [] }
+   168→   168→      if (c.pricingSchedule && c.pricingSchedule.length > 0) {
+   169→   169→        const result = calculatePriceForTimeSlot(c.pricingSchedule, startStr, endStr)
+   170→   170→        if (result.total > 0) return { court: c, ...result }
+   171→   171→      }
+   172→   172→      const [sh, sm] = startStr.split(':').map(Number)
+   173→   173→      const [eh, em] = endStr.split(':').map(Number)
+   174→   174→      const hours = Math.max((eh * 60 + em - sh * 60 - sm) / 60, 0.5)
+   175→   175→      return { court: c, total: c.pricePerHour * hours, breakdown: [] }
+   176→   176→    })
+   177→   177→  }, [courts, startStr, endStr])
+   178→   178→
+   179→   179→  const totalPrice = courtPricings.reduce((sum, cp) => sum + cp.total, 0)
+   180→   180→  const advanceAmount = totalPrice * 0.5
+   181→   181→  const remainingAmount = totalPrice * 0.5
+   182→   182→
+   183→   183→  // For backward compat: first court (used in some places)
+   184→   184→  const court = courts[0] || null
+   185→   185→  const pricingResult = courtPricings[0] || { total: 0, breakdown: [] }
+   186→   186→
+   187→   187→  /* ──── Fetch courts (support multiple) ──── */
+   188→   188→  useEffect(() => {
+   189→   189→    const courtIds = selectedCourtIds.length > 0 ? selectedCourtIds : (selectedCourtId ? [selectedCourtId] : [])
+   190→   190→    if (courtIds.length === 0 || !selectedTimeSlot) {
+   191→   191→      setView('court-detail')
+   192→   192→      return
+   193→   193→    }
+   194→   194→    let cancelled = false
+   195→   195→    setLoading(true)
+   196→   196→    Promise.all(
+   197→   197→      courtIds.map((id) =>
+   198→   198→        fetch(`/api/courts?id=${id}`)
+   199→   199→          .then((res) => res.json())
+   200→   200→          .then((data) => {
+   201→   201→            if (data.error) return null
+   202→   202→            return data
+   203→   203→          })
+   204→   204→          .catch(() => null)
+   205→   205→      )
+   206→   206→    )
+   207→   207→      .then((results) => {
+   208→   208→        if (!cancelled) {
+   209→   209→          const validCourts = results.filter(Boolean) as Court[]
+   210→   210→          if (validCourts.length === 0) {
+   211→   211→            setView('court-detail')
+   212→   212→            return
+   213→   213→          }
+   214→   214→          setCourts(validCourts)
+   215→   215→          setLoading(false)
+   216→   216→        }
+   217→   217→      })
+   218→   218→      .catch(() => {
+   219→   219→        if (!cancelled) {
+   220→   220→          setLoading(false)
+   221→   221→          setView('court-detail')
+   222→   222→        }
+   223→   223→      })
+   224→   224→    return () => {
+   225→   225→      cancelled = true
+   226→   226→    }
+   227→   227→  }, [selectedCourtId, selectedCourtIds, selectedTimeSlot, setView])
+   228→   228→
+   229→   229→  /* ──── Pre-fill from user ──── */
+   230→   230→  useEffect(() => {
+   231→   231→    if (user) {
+   232→   232→      setClientName(user.name || '')
+   233→   233→      setClientEmail(user.email || '')
+   234→   234→      setClientPhone(user.phone || '')
+   235→   235→    }
+   236→   236→  }, [user])
+   237→   237→
+   238→   238→  /* ──── Submit: Create ONE booking for ALL courts ──── */
+   239→   239→  const handleSubmit = useCallback(async () => {
+   240→   240→    if (courts.length === 0 || !selectedDate || !timeParts.start || !timeParts.end) return
+   241→   241→    if (!user?.id) {
+   242→   242→      toast({ title: 'Inicia sesión', description: 'Debes iniciar sesión para reservar.', variant: 'destructive' })
+   243→   243→      setView('login')
+   244→   244→      return
+   245→   245→    }
+   246→   246→    if (!clientName.trim() || !clientPhone.trim()) {
+   247→   247→      toast({ title: 'Datos incompletos', description: 'Nombre y teléfono son requeridos.', variant: 'destructive' })
+   248→   248→      return
+   249→   249→    }
+   250→   250→    // FIX P2-10: Validate email format
+   251→   251→    if (clientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail.trim())) {
+   252→   252→      toast({ title: 'Email inválido', description: 'Ingresa un email válido.', variant: 'destructive' })
+   253→   253→      return
+   254→   254→    }
+   255→   255→    // FIX P2-10: Validate Peruvian phone format (9 digits, optionally +51)
+   256→   256→    const phoneDigits = clientPhone.replace(/[^0-9]/g, '')
+   257→   257→    if (phoneDigits.length < 9 || phoneDigits.length > 11) {
+   258→   258→      toast({ title: 'Teléfono inválido', description: 'Ingresa un número de 9 dígitos.', variant: 'destructive' })
+   259→   259→      return
+   260→   260→    }
+   261→   261→
+   262→   262→    setSubmitting(true)
+   263→   263→
+   264→   264→    try {
+   265→   265→      // Single API call with all court IDs
+   266→   266→      const res = await fetch('/api/bookings', {
+   267→   267→        method: 'POST',
+   268→   268→        headers: getAuthHeaders(),
+   269→   269→        body: JSON.stringify({
+   270→   270→          courtIds: courts.map((c) => c.id),
+   271→   271→          userId: user.id,
+   272→   272→          date: selectedDate,
+   273→   273→          startTime: timeParts.start,
+   274→   274→          endTime: timeParts.end,
+   275→   275→          totalPrice,
+   276→   276→          advanceAmount,
+   277→   277→          remainingAmount,
+   278→   278→          status: 'reserved',
+   279→   279→          paymentMethod,
+   280→   280→        }),
+   281→   281→      })
+   282→   282→
+   283→   283→      if (!res.ok) {
+   284→   284→        const data = await res.json()
+   285→   285→        toast({
+   286→   286→          title: 'Error al crear reserva',
+   287→   287→          description: data.error || 'Horario no disponible.',
+   288→   288→          variant: 'destructive',
+   289→   289→        })
+   290→   290→        setSubmitting(false)
+   291→   291→        return
+   292→   292→      }
+   293→   293→
+   294→   294→      const booking = await res.json() as BookingResponse
+   295→   295→      setBookingDataList([booking])
+   296→   296→      setCreatedCount(1)
+   297→   297→      setFailedCount(0)
+   298→   298→      setBookingRefs([getRefCode(booking.id)])
+   299→   299→
+   300→   300→      // Clear the court selection cart
+   301→   301→      clearSelectedCourtIds()
+   302→   302→      setFormStep('payment')
+   303→   303→    } catch {
+   304→   304→      toast({
+   305→   305→        title: 'Error',
+   306→   306→        description: 'No se pudo crear la reserva.',
+   307→   307→        variant: 'destructive',
+   308→   308→      })
+   309→   309→    }
+   310→   310→
+   311→   311→    setSubmitting(false)
+   312→   312→  }, [
+   313→   313→    courts, selectedDate, timeParts, user, clientName, clientPhone,
+   314→   314→    totalPrice, advanceAmount, remainingAmount, paymentMethod,
+   315→   315→    addNotification, setView, clearSelectedCourtIds,
+   316→   316→  ])
+   317→   317→
+   318→   318→  /* ──── Culqi payment success callback ──── */
+   319→   319→  const handlePaymentSuccess = useCallback(() => {
+   320→   320→    setFormStep('success')
+   321→   321→    setSuccess(true)
+   322→   322→    const courtNames = courts.map((c) => c.name).join(', ')
+   323→   323→    if (bookingDataList.length > 0) {
+   324→   324→      addNotification({
+   325→   325→        title: 'Reserva confirmada',
+   326→   326→        message: `${courts.length} cancha${courts.length > 1 ? 's' : ''}: ${courtNames} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRefs.join(', ')}`,
+   327→   327→        type: 'success',
+   328→   328→      })
+   329→   329→    }
+   330→   330→  }, [courts, bookingDataList, bookingDate, timeParts.start, bookingRefs, addNotification])
+   331→   331→
+   332→   332→  /* ──── Culqi payment error callback ──── */
+   333→   333→  const handlePaymentError = useCallback((error: string) => {
+   334→   334→    toast({ title: 'Error en el pago', description: error, variant: 'destructive' })
+   335→   335→  }, [])
+   336→   336→
+   337→   337→  /* ──── Go back ──── */
+   338→   338→  const handleBack = useCallback(() => {
+   339→   339→    if (formStep === 'payment') {
+   340→   340→      // Cancel: go back to form, the booking stays as 'pending'
+   341→   341→      setFormStep('form')
+   342→   342→      return
+   343→   343→    }
+   344→   344→    if (success) {
+   345→   345→      setSelectedCourt(null)
+   346→   346→      setSelectedDate(null)
+   347→   347→      setSelectedTimeSlot(null)
+   348→   348→      setView('bookings')
+   349→   349→    } else {
+   350→   350→      setView('court-detail')
+   351→   351→    }
+   352→   352→  }, [success, formStep, setSelectedCourt, setSelectedDate, setSelectedTimeSlot, setView])
+   353→   353→
+   354→   354→  /* ───────────── Render ───────────── */
+   355→   355→
+   356→   356→  if (loading) {
+   357→   357→    return (
+   358→   358→      <div className="min-h-screen bg-cm-background">
+   359→   359→        <div className="max-w-lg mx-auto px-4 py-6">
+   360→   360→          <div className="animate-pulse space-y-4">
+   361→   361→            <div className="h-4 bg-cm-surface-container-highest rounded w-1/4" />
+   362→   362→            <div className="h-36 bg-cm-surface-container-highest rounded-xl" />
+   363→   363→            <div className="h-48 bg-cm-surface-container-highest rounded-xl" />
+   364→   364→            <div className="h-40 bg-cm-surface-container-highest rounded-xl" />
+   365→   365→          </div>
+   366→   366→        </div>
+   367→   367→      </div>
+   368→   368→    )
+   369→   369→  }
+   370→   370→
+   371→   371→  if (!court) return null
+   372→   372→
+   373→   373→  return (
+   374→   374→    <motion.div
+   375→   375→      initial={{ opacity: 0, x: '100%' }}
+   376→   376→      animate={{ opacity: 1, x: 0 }}
+   377→   377→      exit={{ opacity: 0, x: '100%' }}
+   378→   378→      transition={{ type: 'tween', duration: 0.3 }}
+   379→   379→      className="min-h-screen bg-cm-background"
+   380→   380→    >
+   381→   381→      {/* Payment Step */}
+   382→   382→      {!success && formStep === 'payment' && (
+   383→   383→        <motion.div
+   384→   384→          key="payment"
+   385→   385→          initial={{ opacity: 0, x: '100%' }}
+   386→   386→          animate={{ opacity: 1, x: 0 }}
+   387→   387→          exit={{ opacity: 0, x: '-100%' }}
+   388→   388→          transition={{ type: 'tween', duration: 0.3 }}
+   389→   389→          className="max-w-lg mx-auto px-4 py-6 pb-40"
+   390→   390→        >
+   391→   391→          {/* Header */}
+   392→   392→          <div className="flex items-center gap-3 mb-6">
+   393→   393→            <button type="button"
+   394→   394→              onClick={handleBack}
+   395→   395→              className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+   396→   396→            >
+   397→   397→              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+   398→   398→            </button>
+   399→   399→            <div>
+   400→   400→              <h1 className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">
+   401→   401→                Pagar Adelanto
+   402→   402→              </h1>
+   403→   403→              <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+   404→   404→                Ref: {bookingRefs.join(', ')}
+   405→   405→              </p>
+   406→   406→            </div>
+   407→   407→          </div>
+   408→   408→
+   409→   409→          {/* Booking summary */}
+   410→   410→          <div className="glass-card rounded-2xl p-4 mb-6">
+   411→   411→            <div className="flex items-center gap-3 mb-3">
+   412→   412→              <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   413→   413→                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">sports</span>
+   414→   414→              </div>
+   415→   415→              <div className="flex-1 min-w-0">
+   416→   416→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   417→   417→                  {courts.length} cancha{courts.length > 1 ? 's' : ''} · {formatDateShort(bookingDate)} · {timeParts.start} - {timeParts.end}
+   418→   418→                </p>
+   419→   419→              </div>
+   420→   420→              <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">
+   421→   421→                S/ {advanceAmount.toFixed(2)}
+   422→   422→              </p>
+   423→   423→            </div>
+   424→   424→            <div className="bg-cm-surface-container-highest/40 rounded-lg p-2.5 text-center">
+   425→   425→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50% requerido</p>
+   426→   426→              <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante S/ {remainingAmount.toFixed(2)} se paga en el local</p>
+   427→   427→            </div>
+   428→   428→          </div>
+   429→   429→
+   430→   430→          {/* Culqi Payment - use first booking ID */}
+   431→   431→          {bookingDataList.length > 0 && (
+   432→   432→            <CulqiPayButton
+   433→   433→              bookingId={bookingDataList[0].id}
+   434→   434→              totalAmount={totalPrice}
+   435→   435→              remainingAmount={remainingAmount}
+   436→   436→              paymentType="advance"
+   437→   437→              userEmail={clientEmail || user?.email || ''}
+   438→   438→              buttonText="Pagar Adelanto con Culqi"
+   439→   439→              onSuccess={handlePaymentSuccess}
+   440→   440→              onError={handlePaymentError}
+   441→   441→              onClose={() => setFormStep('form')}
+   442→   442→            />
+   443→   443→          )}
+   444→   444→
+   445→   445→          {/* Security badge */}
+   446→   446→          <div className="flex items-center justify-center gap-2 mt-4">
+   447→   447→            <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/40" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+   448→   448→            <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">
+   449→   449→              Pagos seguros procesados por Culqi
+   450→   450→            </span>
+   451→   451→          </div>
+   452→   452→        </motion.div>
+   453→   453→      )}
+   454→   454→
+   455→   455→      {/* Form Step */}
+   456→   456→      {!success && formStep !== 'payment' && (
+   457→   457→        <motion.div
+   458→   458→          key="form"
+   459→   459→          initial={{ opacity: 0 }}
+   460→   460→          animate={{ opacity: 1 }}
+   461→   461→          exit={{ opacity: 0 }}
+   462→   462→          className="max-w-lg mx-auto px-4 py-6 pb-40"
+   463→   463→        >
+   464→   464→          {/* Header */}
+   465→   465→          <div className="flex items-center gap-3 mb-6">
+   466→   466→            <button type="button"
+   467→   467→              onClick={handleBack}
+   468→   468→              className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors"
+   469→   469→            >
+   470→   470→              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+   471→   471→            </button>
+   472→   472→            <h1 className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">
+   473→   473→              Nueva Reserva
+   474→   474→            </h1>
+   475→   475→          </div>
+   476→   476→
+   477→   477→          {/* ─── Summary Card ─── */}
+   478→   478→          <div className="glass-card rounded-2xl p-4 mb-6">
+   479→   479→            <h3 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-2">
+   480→   480→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+   481→   481→              {courts.length} cancha{courts.length > 1 ? 's' : ''} seleccionada{courts.length > 1 ? 's' : ''}
+   482→   482→            </h3>
+   483→   483→            <div className="space-y-3">
+   484→   484→              {courts.map((c) => {
+   485→   485→                const cp = courtPricings.find((p) => p.court.id === c.id)
+   486→   486→                return (
+   487→   487→                  <div key={c.id} className="flex items-start gap-3">
+   488→   488→                    <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   489→   489→                      <span className="material-symbols-outlined text-[#00ff41] text-[20px]">
+   490→   490→                        {sportIcons[c.sport] || 'sports'}
+   491→   491→                      </span>
+   492→   492→                    </div>
+   493→   493→                    <div className="flex-1 min-w-0">
+   494→   494→                      <p className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">
+   495→   495→                        {c.name}
+   496→   496→                      </p>
+   497→   497→                      {c.sport === 'voley' && (
+   498→   498→                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-400 mt-0.5 font-[family-name:var(--font-inter)]">
+   499→   499→                          <span className="material-symbols-outlined text-[10px]">sports_volleyball</span>
+   500→   500→                          Vóley — {c.name.includes('A') ? 'Cancha A' : c.name.includes('B') ? 'Cancha B' : 'Individual'}
+   501→   501→                        </span>
+   502→   502→                      )}
+   503→   503→                      <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
+   504→   504→                        {c.branch.name}
+   505→   505→                      </p>
+   506→   506→                    </div>
+   507→   507→                    <p className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)] flex-shrink-0">
+   508→   508→                      S/ {(cp?.total || 0).toFixed(2)}
+   509→   509→                    </p>
+   510→   510→                  </div>
+   511→   511→                )
+   512→   512→              })}
+   513→   513→            </div>
+   514→   514→
+   515→   515→            <div className="mt-4 grid grid-cols-2 gap-3">
+   516→   516→              <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+   517→   517→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   518→   518→                  <span className="material-symbols-outlined text-[12px]">calendar_month</span>
+   519→   519→                  Fecha
+   520→   520→                </p>
+   521→   521→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+   522→   522→                  {formatDateShort(bookingDate)}
+   523→   523→                </p>
+   524→   524→              </div>
+   525→   525→              <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+   526→   526→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   527→   527→                  <span className="material-symbols-outlined text-[12px]">schedule</span>
+   528→   528→                  Horario
+   529→   529→                </p>
+   530→   530→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   531→   531→                  {timeParts.start} - {timeParts.end}
+   532→   532→                </p>
+   533→   533→              </div>
+   534→   534→            </div>
+   535→   535→          </div>
+   536→   536→
+   537→   537→          {/* ─── Payment Breakdown ─── */}
+   538→   538→          <div className="glass-card rounded-2xl p-4 mb-6">
+   539→   539→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-4 flex items-center gap-2">
+   540→   540→              <span
+   541→   541→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   542→   542→                style={{ fontVariationSettings: '"FILL" 1' }}
+   543→   543→              >
+   544→   544→                receipt_long
+   545→   545→              </span>
+   546→   546→              Resumen de Pago
+   547→   547→            </h2>
+   548→   548→
+   549→   549→            <div className="space-y-3">
+   550→   550→              {/* Per-court pricing */}
+   551→   551→              {courtPricings.map((cp) => (
+   552→   552→                <div key={cp.court.id} className="flex items-center justify-between">
+   553→   553→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   554→   554→                    {cp.court.name}
+   555→   555→                    {cp.breakdown.length > 0 && (
+   556→   556→                      <span className="text-[10px] ml-1 text-cm-on-surface-variant/60">
+   557→   557→                        ({cp.breakdown.map((b) => `${b.label} ${b.hours}h`).join(' + ')})
+   558→   558→                      </span>
+   559→   559→                    )}
+   560→   560→                  </span>
+   561→   561→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   562→   562→                    S/ {cp.total.toFixed(2)}
+   563→   563→                  </span>
+   564→   564→                </div>
+   565→   565→              ))}
+   566→   566→
+   567→   567→              <div className="flex items-center justify-between">
+   568→   568→                <div className="flex items-center gap-2">
+   569→   569→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   570→   570→                    Adelanto 50%
+   571→   571→                  </span>
+   572→   572→                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">
+   573→   573→                    REQUERIDO
+   574→   574→                  </span>
+   575→   575→                </div>
+   576→   576→                <span className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)] text-glow">
+   577→   577→                  S/ {advanceAmount.toFixed(2)}
+   578→   578→                </span>
+   579→   579→              </div>
+   580→   580→
+   581→   581→              <div className="border-t border-dashed border-white/10 pt-3 flex items-center justify-between">
+   582→   582→                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   583→   583→                  Pago restante 50%
+   584→   584→                </span>
+   585→   585→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   586→   586→                  S/ {remainingAmount.toFixed(2)}
+   587→   587→                </span>
+   588→   588→              </div>
+   589→   589→
+   590→   590→              <div className="border-t border-white/5 pt-3 flex items-center justify-between">
+   591→   591→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   592→   592→                  Total
+   593→   593→                </span>
+   594→   594→                <span className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   595→   595→                  S/ {totalPrice.toFixed(2)}
+   596→   596→                </span>
+   597→   597→              </div>
+   598→   598→            </div>
+   599→   599→          </div>
+   600→   600→
+   601→   601→          {/* ─── Payment Method ─── */}
+   602→   602→          <div className="mb-6">
+   603→   603→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3 flex items-center gap-2">
+   604→   604→              <span
+   605→   605→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   606→   606→                style={{ fontVariationSettings: '"FILL" 1' }}
+   607→   607→              >
+   608→   608→                payment
+   609→   609→              </span>
+   610→   610→              Método de pago
+   611→   611→            </h2>
+   612→   612→            <div className="grid grid-cols-1 gap-2">
+   613→   613→              {paymentMethods.map((pm) => {
+   614→   614→                const isSelected = paymentMethod === pm.value
+   615→   615→                return (
+   616→   616→                  <div
+   617→   617→                    key={pm.value}
+   618→   618→                    className={`flex items-center gap-3 py-3 px-4 rounded-xl transition-all duration-200 ${
+   619→   619→                      isSelected
+   620→   620→                        ? 'bg-[#00ff41]/8 border border-[#00ff41]/30'
+   621→   621→                        : 'bg-cm-surface-container-highest/40 border border-transparent'
+   622→   622→                    }`}
+   623→   623→                  >
+   624→   624→                    <div
+   625→   625→                      className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200"
+   626→   626→                      style={{
+   627→   627→                        backgroundColor: isSelected ? `${pm.color}20` : 'rgba(45,56,42,0.3)',
+   628→   628→                      }}
+   629→   629→                    >
+   630→   630→                      <span
+   631→   631→                        className={`material-symbols-outlined text-[22px] transition-colors duration-200`}
+   632→   632→                        style={{
+   633→   633→                          color: isSelected ? pm.color : '#84967e',
+   634→   634→                          fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0',
+   635→   635→                        }}
+   636→   636→                      >
+   637→   637→                        {pm.icon}
+   638→   638→                      </span>
+   639→   639→                    </div>
+   640→   640→                    <span
+   641→   641→                      className={`text-[11px] font-semibold transition-colors duration-200 font-[family-name:var(--font-inter)] ${
+   642→   642→                        isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'
+   643→   643→                      }`}
+   644→   644→                    >
+   645→   645→                      {pm.label}
+   646→   646→                    </span>
+   647→   647→                  </div>
+   648→   648→                )
+   649→   649→              })}
+   650→   650→            </div>
+   651→   651→          </div>
+   652→   652→
+   653→   653→          {/* ─── Client Info ─── */}
+   654→   654→          <div className="mb-6">
+   655→   655→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3 flex items-center gap-2">
+   656→   656→              <span
+   657→   657→                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+   658→   658→                style={{ fontVariationSettings: '"FILL" 1' }}
+   659→   659→              >
+   660→   660→                person
+   661→   661→              </span>
+   662→   662→              Datos de contacto
+   663→   663→            </h2>
+   664→   664→            <div className="space-y-3">
+   665→   665→              <div>
+   666→   666→                <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
+   667→   667→                  Nombre completo <span className="text-red-400">*</span>
+   668→   668→                </label>
+   669→   669→                <div className="relative">
+   670→   670→                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[18px]">
+   671→   671→                    badge
+   672→   672→                  </span>
+   673→   673→                  <input
+   674→   674→                    type="text"
+   675→   675→                    value={clientName}
+   676→   676→                    onChange={(e) => setClientName(e.target.value)}
+   677→   677→                    placeholder="Tu nombre"
+   678→   678→                    className="w-full pl-10 pr-4 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]"
+   679→   679→                  />
+   680→   680→                </div>
+   681→   681→              </div>
+   682→   682→              <div>
+   683→   683→                <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
+   684→   684→                  Email
+   685→   685→                </label>
+   686→   686→                <div className="relative">
+   687→   687→                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[18px]">
+   688→   688→                    mail
+   689→   689→                  </span>
+   690→   690→                  <input
+   691→   691→                    type="email"
+   692→   692→                    value={clientEmail}
+   693→   693→                    onChange={(e) => setClientEmail(e.target.value)}
+   694→   694→                    placeholder="tu@email.com"
+   695→   695→                    className="w-full pl-10 pr-4 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]"
+   696→   696→                  />
+   697→   697→                </div>
+   698→   698→              </div>
+   699→   699→              <div>
+   700→   700→                <label className="text-xs text-cm-on-surface-variant mb-1.5 block font-[family-name:var(--font-inter)]">
+   701→   701→                  Teléfono <span className="text-red-400">*</span>
+   702→   702→                </label>
+   703→   703→                <div className="relative">
+   704→   704→                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[18px]">
+   705→   705→                    phone
+   706→   706→                  </span>
+   707→   707→                  <input
+   708→   708→                    type="tel"
+   709→   709→                    value={clientPhone}
+   710→   710→                    onChange={(e) => setClientPhone(e.target.value)}
+   711→   711→                    placeholder="+51 999 999 999"
+   712→   712→                    className="w-full pl-10 pr-4 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]"
+   713→   713→                  />
+   714→   714→                </div>
+   715→   715→              </div>
+   716→   716→            </div>
+   717→   717→          </div>
+   718→   718→        </motion.div>
+   719→   719→      )}
+   720→   720→
+   721→   721→      {/* Success Step */}
+   722→   722→      {success && (
+   723→   723→        <motion.div
+   724→   724→          key="success"
+   725→   725→          initial={{ opacity: 0, scale: 0.95 }}
+   726→   726→          animate={{ opacity: 1, scale: 1 }}
+   727→   727→          exit={{ opacity: 0, scale: 0.95 }}
+   728→   728→          transition={{ duration: 0.4 }}
+   729→   729→          className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]"
+   730→   730→        >
+   731→   731→          {/* Success Icon */}
+   732→   732→          <motion.div
+   733→   733→            initial={{ scale: 0 }}
+   734→   734→            animate={{ scale: 1 }}
+   735→   735→            transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+   736→   736→            className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6"
+   737→   737→          >
+   738→   738→            <span
+   739→   739→              className="material-symbols-outlined text-[#00ff41] text-[48px]"
+   740→   740→              style={{ fontVariationSettings: '"FILL" 1' }}
+   741→   741→            >
+   742→   742→              check_circle
+   743→   743→            </span>
+   744→   744→          </motion.div>
+   745→   745→
+   746→   746→          <motion.div
+   747→   747→            initial={{ opacity: 0, y: 20 }}
+   748→   748→            animate={{ opacity: 1, y: 0 }}
+   749→   749→            transition={{ delay: 0.3 }}
+   750→   750→            className="text-center mb-8"
+   751→   751→          >
+   752→   752→            <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">
+   753→   753→              ¡Reserva Confirmada!
+   754→   754→            </h2>
+   755→   755→            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
+   756→   756→              Tu cancha ha sido reservada exitosamente
+   757→   757→            </p>
+   758→   758→          </motion.div>
+   759→   759→
+   760→   760→          {/* Booking Details Card */}
+   761→   761→          <motion.div
+   762→   762→            initial={{ opacity: 0, y: 20 }}
+   763→   763→            animate={{ opacity: 1, y: 0 }}
+   764→   764→            transition={{ delay: 0.4 }}
+   765→   765→            className="w-full glass-card rounded-2xl p-5 mb-6"
+   766→   766→          >
+   767→   767→            {/* Reference */}
+   768→   768→            <div className="text-center mb-4 pb-4 border-b border-dashed border-white/10">
+   769→   769→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1">
+   770→   770→                Referencia de reserva
+   771→   771→              </p>
+   772→   772→              <p className="font-mono text-xl font-bold text-[#00ff41] text-glow tracking-wider">
+   773→   773→                {bookingRefs.join(' · ')}
+   774→   774→              </p>
+   775→   775→            </div>
+   776→   776→
+   777→   777→            <div className="space-y-3">
+   778→   778→              <div className="flex items-center gap-3">
+   779→   779→                <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   780→   780→                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">sports</span>
+   781→   781→                </div>
+   782→   782→                <div className="min-w-0">
+   783→   783→                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   784→   784→                    {courts.map((c) => c.name).join(', ')}
+   785→   785→                  </p>
+   786→   786→                  <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   787→   787→                    {createdCount} reserva{createdCount > 1 ? 's' : ''} creada{createdCount > 1 ? 's' : ''}
+   788→   788→                    {failedCount > 0 && ` · ${failedCount} fallida${failedCount > 1 ? 's' : ''}`}
+   789→   789→                  </p>
+   790→   790→                </div>
+   791→   791→              </div>
+   792→   792→
+   793→   793→              <div className="grid grid-cols-2 gap-3">
+   794→   794→                <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+   795→   795→                  <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">Fecha</p>
+   796→   796→                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+   797→   797→                    {formatDateShort(bookingDate)}
+   798→   798→                  </p>
+   799→   799→                </div>
+   800→   800→                <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
+   801→   801→                  <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">Horario</p>
+   802→   802→                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   803→   803→                    {timeParts.start} - {timeParts.end}
+   804→   804→                  </p>
+   805→   805→                </div>
+   806→   806→              </div>
+   807→   807→
+   808→   808→              <div className="bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3">
+   809→   809→                <div className="flex items-center justify-between">
+   810→   810→                  <span className="text-xs text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold">
+   811→   811→                    Adelanto pagado
+   812→   812→                  </span>
+   813→   813→                  <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">
+   814→   814→                    S/ {advanceAmount.toFixed(2)}
+   815→   815→                  </span>
+   816→   816→                </div>
+   817→   817→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">
+   818→   818→                  Pago restante: S/ {remainingAmount.toFixed(2)} (en el local)
+   819→   819→                </p>
+   820→   820→              </div>
+   821→   821→
+   822→   822→              {bookingDataList.length > 0 && bookingDataList[0].paymentMethod && (
+   823→   823→                <div className="flex items-center gap-2">
+   824→   824→                  <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant">
+   825→   825→                    {(['cash','EFECTIVO']).includes(bookingDataList[0].paymentMethod)
+   826→   826→                      ? 'payments'
+   827→   827→                      : (['transfer','yape','YAPE','plin','PLIN']).includes(bookingDataList[0].paymentMethod)
+   828→   828→                      ? 'phone_iphone'
+   829→   829→                      : 'credit_card'}
+   830→   830→                  </span>
+   831→   831→                  <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   832→   832→                    Pagado con{' '}
+   833→   833→                    <span className="capitalize font-semibold text-cm-on-surface">
+   834→   834→                      {bookingDataList[0].paymentMethod}
+   835→   835→                    </span>
+   836→   836→                  </span>
+   837→   837→                </div>
+   838→   838→              )}
+   839→   839→            </div>
+   840→   840→          </motion.div>
+   841→   841→
+   842→   842→          {/* Back Button */}
+   843→   843→          <motion.div
+   844→   844→            initial={{ opacity: 0, y: 20 }}
+   845→   845→            animate={{ opacity: 1, y: 0 }}
+   846→   846→            transition={{ delay: 0.5 }}
+   847→   847→            className="w-full space-y-3"
+   848→   848→          >
+   849→   849→            <button type="button"
+   850→   850→              onClick={handleBack}
+   851→   851→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2"
+   852→   852→            >
+   853→   853→              <span className="material-symbols-outlined text-[20px]">bookmark</span>
+   854→   854→              Ver Mis Reservas
+   855→   855→            </button>
+   856→   856→            <button type="button"
+   857→   857→              onClick={() => {
+   858→   858→                setSelectedCourt(null)
+   859→   859→                setSelectedDate(null)
+   860→   860→                setSelectedTimeSlot(null)
+   861→   861→                setView('search')
+   862→   862→              }}
+   863→   863→              className="w-full py-3 text-cm-on-surface-variant text-sm font-medium font-[family-name:var(--font-inter)] hover:text-cm-on-surface transition-colors"
+   864→   864→            >
+   865→   865→              Buscar más canchas
+   866→   866→            </button>
+   867→   867→          </motion.div>
+   868→   868→        </motion.div>
+   869→   869→      )}
+   870→   870→
+   871→   871→      {/* ─── Bottom Submit Bar (form only) ─── */}
+   872→   872→      {!success && formStep === 'form' && (
+   873→   873→        <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
+   874→   874→          <div className="max-w-lg mx-auto p-4">
+   875→   875→            <div className="flex items-center justify-between mb-3">
+   876→   876→              <div>
+   877→   877→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   878→   878→                  Adelanto a pagar
+   879→   879→                </p>
+   880→   880→                <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg text-glow">
+   881→   881→                  S/ {advanceAmount.toFixed(2)}
+   882→   882→                </p>
+   883→   883→              </div>
+   884→   884→              <div className="text-right">
+   885→   885→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
+   886→   886→                  {formatDateES(bookingDate)}
+   887→   887→                </p>
+   888→   888→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   889→   889→                  {timeParts.start} - {timeParts.end}
+   890→   890→                </p>
+   891→   891→              </div>
+   892→   892→            </div>
+   893→   893→            <button type="button"
+   894→   894→              disabled={submitting}
+   895→   895→              onClick={handleSubmit}
+   896→   896→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2"
+   897→   897→            >
+   898→   898→              {submitting ? (
+   899→   899→                <>
+   900→   900→                  <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
+   901→   901→                  Procesando reserva...
+   902→   902→                </>
+   903→   903→              ) : (
+   904→   904→                <>
+   905→   905→                  <span
+   906→   906→                    className="material-symbols-outlined text-[20px]"
+   907→   907→                    style={{ fontVariationSettings: '"FILL" 1' }}
+   908→   908→                  >
+   909→   909→                    verified_payment
+   910→   910→                  </span>
+   911→   911→                  Confirmar Reserva y Pagar Adelanto
+   912→   912→                </>
+   913→   913→              )}
+   914→   914→            </button>
+   915→   915→          </div>
+   916→   916→        </div>
+   917→   917→      )}
+   918→   918→    </motion.div>
+   919→   919→  )
+   920→   920→}
+   921→   921→
