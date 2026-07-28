@@ -164,11 +164,6 @@ export default function HeroSection() {
       })
   }, [])
 
-  // Correct hardcoded prices by sport and time period
-  const tariffInfo = [
-    { sport: 'futbol', emoji: '\u26bd', label: 'Fútbol 7', morning: 'S/ 35', afternoon: 'S/ 35', night: 'S/ 50' },
-    { sport: 'voley', emoji: '\ud83c\udfd0', label: 'Vóley', morning: 'S/ 30', afternoon: 'S/ 30', night: 'S/ 45' },
-  ]
 
   // Scroll date picker by direction
   const scrollDates = (direction: 'left' | 'right') => {
@@ -400,17 +395,6 @@ export default function HeroSection() {
                   <span className="font-[family-name:var(--font-sora)]">{sport.label}</span>
                 </button>
               ))}
-            </div>
-
-            {/* Tariff Info Panel */}
-            <div className="rounded-xl bg-cm-surface-container-highest/30 border border-white/5 p-3 mb-5">
-              <div className="flex items-center gap-1.5 mb-3">
-                <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
-                <span className="text-[10px] font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
-                  Precios por hora
-                </span>
-              </div>
-              <div className="space-y-3">                {tariffInfo.map((t) => (                  <div key={t.sport}>                    <div className="flex items-center gap-1.5 mb-2">                      <span className="text-sm leading-none">{t.emoji}</span>                      <span className="text-[12px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{t.label}</span>                    </div>                    <div className="grid grid-cols-3 gap-2">                      <div className="text-center">                        <div className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center justify-center gap-1">                          <span>\u2600\ufe0f</span>                          <span>Ma\u00f1ana</span>                        </div>                        <div className="text-[13px] font-bold text-cm-primary font-[family-name:var(--font-sora)] mt-0.5">{t.morning}</div>                      </div>                      <div className="text-center">                        <div className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center justify-center gap-1">                          <span>\u26c5</span>                          <span>Tarde</span>                        </div>                        <div className="text-[13px] font-bold text-cm-primary font-[family-name:var(--font-sora)] mt-0.5">{t.afternoon}</div>                      </div>                      <div className="text-center">                        <div className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center justify-center gap-1">                          <span>\ud83c\udf19</span>                          <span>Noche</span>                        </div>                        <div className="text-[13px] font-bold text-cm-primary font-[family-name:var(--font-sora)] mt-0.5">{t.night}</div>                      </div>                    </div>                  </div>                ))}              </div>
             </div>
 
             {/* Search Button */}
