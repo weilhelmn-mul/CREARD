@@ -590,49 +590,49 @@ export default function UnifiedBookingView() {
 
           {/* ── Court Selector ── */}
           <div className="mb-5">
-            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-2.5 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-[#00ff41]" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
               Selecciona Canchas
               {selectedCourtIds.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#00ff41]/15 text-[#00ff41] text-[10px] font-bold">
-                  {selectedCourtIds.length}
+                  {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
                 </span>
               )}
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="space-y-3">
               {Object.entries(courtsBySport).map(([sport, sportCourts]) => (
                 <div key={sport}>
                   {Object.keys(courtsBySport).length > 1 && (
-                    <p className="text-[10px] font-semibold text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)] mb-1.5 px-1 uppercase tracking-wider">
+                    <p className="text-[10px] font-semibold text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] mb-2 px-0.5 uppercase tracking-wider">
                       {sportConfig[sport]?.label || sport}
                     </p>
                   )}
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {sportCourts.map((court) => {
                       const isSelected = selectedCourtIds.includes(court.id)
                       const cfg = sportConfig[court.sport] || { icon: 'sports', color: '#00ff41' }
                       return (
                         <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
-                          className={`w-full flex items-center gap-2.5 py-3.5 px-3.5 rounded-xl transition-all duration-200 border text-left ${
+                          className={`group relative w-full flex items-center gap-3 py-3 px-3 rounded-2xl transition-all duration-200 border text-left ${
                             isSelected
-                              ? 'bg-[#00ff41]/10 border-[#00ff41]/30'
-                              : 'bg-cm-surface-container-highest/40 border-transparent hover:border-white/10'
+                              ? 'bg-[#00ff41]/10 border-[#00ff41]/30 shadow-[0_0_16px_rgba(0,255,65,0.08)]'
+                              : 'bg-cm-surface-container-highest/30 border-white/5 hover:border-white/15 hover:bg-cm-surface-container-highest/50'
                           }`}>
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                            isSelected ? 'bg-[#00ff41]/20' : 'bg-white/5'
+                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                            isSelected ? 'bg-[#00ff41]/20 shadow-[0_0_12px_rgba(0,255,65,0.15)]' : 'bg-white/[0.04] group-hover:bg-white/[0.07]'
                           }`}>
-                            <span className={`material-symbols-outlined text-[20px] ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'}`}
+                            <span className={`material-symbols-outlined text-[22px] transition-colors duration-200 ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant/60 group-hover:text-cm-on-surface-variant'}`}
                               style={{ fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0' }}>
                               {cfg.icon}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold font-[family-name:var(--font-sora)] truncate ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
+                            <p className={`text-[13px] font-semibold font-[family-name:var(--font-sora)] truncate transition-colors duration-200 ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
                               {court.name}
                             </p>
                           </div>
-                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                            isSelected ? 'bg-[#00ff41] border-[#00ff41]' : 'border-white/20'
+                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                            isSelected ? 'bg-[#00ff41] border-[#00ff41] scale-110' : 'border-white/15 group-hover:border-white/30'
                           }`}>
                             {isSelected && (
                               <span className="material-symbols-outlined text-[#003907] text-[14px]">check</span>
@@ -686,10 +686,6 @@ export default function UnifiedBookingView() {
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                 {visibleSlots.map((slot) => {
                   const status = getUnifiedSlotStatus(slot)
-                  const hour = parseInt(slot.split(':')[0], 10)
-                  const isMorning = hour < 18
-                  const sport = courts.find((c) => c.id === selectedCourtIds[0])?.sport || 'futbol'
-                  const cfg = sportConfig[sport] || { color: '#00ff41' }
 
                   let bgClass = 'bg-cm-surface-container-highest/40 border-white/5 hover:border-white/15'
                   let textClass = 'text-cm-on-surface'
@@ -720,9 +716,7 @@ export default function UnifiedBookingView() {
                       <p className={`text-sm font-semibold font-[family-name:var(--font-sora)] ${textClass}`}>
                         {formatHour(slot)}
                       </p>
-                      <p className={`text-[10px] font-[family-name:var(--font-inter)] mt-0.5 ${status === 'selected' ? 'text-blue-400/70' : 'text-cm-on-surface-variant/40'}`}>
-                        {isMorning ? 'Mañana' : 'Noche'}
-                      </p>
+
                       <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
                     </button>
                   )

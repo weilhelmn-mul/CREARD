@@ -164,39 +164,11 @@ export default function HeroSection() {
       })
   }, [])
 
-  // Build tariff summary from courts pricingSchedule
-  const tariffInfo = (() => {
-    const result: { sport: string; emoji: string; label: string; morning: string; afternoon: string; night: string }[] = []
-    const sports = [
-      { key: 'futbol', emoji: '\u26bd', label: 'F\u00fatbol 7' },
-      { key: 'voley', emoji: '\ud83c\udfd0', label: 'V\u00f3ley' },
-    ]
-    for (const s of sports) {
-      const sportCourts = courts.filter((c: any) => c.sport === s.key)
-      if (sportCourts.length === 0) {
-        result.push({ sport: s.key, emoji: s.emoji, label: s.label, morning: '—', afternoon: '—', night: '—' })
-        continue
-      }
-      const schedule: any[] = sportCourts[0].pricingSchedule || []
-      const defaultPrice = sportCourts[0].pricePerHour || 0
-      const morningBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('ma\u00f1ana'))
-        || schedule.find((b: any) => b.startHour >= 6 && b.startHour < 12)
-      const afternoonBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('tarde'))
-        || schedule.find((b: any) => b.startHour >= 12 && b.startHour < 18)
-      const nightBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('noche'))
-        || schedule.find((b: any) => b.startHour >= 18)
-      const fmt = (b: any) => b ? `S/ ${b.pricePerHour}` : `S/ ${defaultPrice || '—'}`
-      result.push({
-        sport: s.key,
-        emoji: s.emoji,
-        label: s.label,
-        morning: fmt(morningBlock),
-        afternoon: fmt(afternoonBlock),
-        night: fmt(nightBlock),
-      })
-    }
-    return result
-  })()
+  // Correct hardcoded prices by sport and time period
+  const tariffInfo = [
+    { sport: 'futbol', emoji: '\u26bd', label: 'Fútbol 7', morning: 'S/ 35', afternoon: 'S/ 35', night: 'S/ 50' },
+    { sport: 'voley', emoji: '\ud83c\udfd0', label: 'Vóley', morning: 'S/ 30', afternoon: 'S/ 30', night: 'S/ 45' },
+  ]
 
   // Scroll date picker by direction
   const scrollDates = (direction: 'left' | 'right') => {
