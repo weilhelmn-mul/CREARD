@@ -1,0 +1,709 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback } from 'react'
+     4→     4→import { motion, useInView, AnimatePresence } from 'framer-motion'
+     5→     5→import { useAppStore } from '@/store/useAppStore'
+     6→     6→import { useSiteSettings } from '@/context/SiteSettingsContext'
+     7→     7→import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
+     8→     8→import { toast } from '@/hooks/use-toast'
+     9→     9→import Image from 'next/image'
+    10→    10→
+    11→    11→// --- Animated Counter Component ---
+    12→    12→function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
+    13→    13→  const [count, setCount] = useState(0)
+    14→    14→  const ref = useRef<HTMLSpanElement>(null)
+    15→    15→  const isInView = useInView(ref, { once: true, margin: '-50px' })
+    16→    16→  const hasStarted = useRef(false)
+    17→    17→
+    18→    18→  useEffect(() => {
+    19→    19→    if (!isInView || hasStarted.current) return
+    20→    20→    hasStarted.current = true
+    21→    21→
+    22→    22→    const startTime = performance.now()
+    23→    23→    const from = 0
+    24→    24→    const to = target
+    25→    25→
+    26→    26→    function update(currentTime: number) {
+    27→    27→      const elapsed = currentTime - startTime
+    28→    28→      const progress = Math.min(elapsed / (duration * 1000), 1)
+    29→    29→      const eased = 1 - Math.pow(1 - progress, 3)
+    30→    30→      const current = Math.round(from + (to - from) * eased)
+    31→    31→      setCount(current)
+    32→    32→      if (progress < 1) {
+    33→    33→        requestAnimationFrame(update)
+    34→    34→      }
+    35→    35→    }
+    36→    36→    requestAnimationFrame(update)
+    37→    37→  }, [isInView, target, duration])
+    38→    38→
+    39→    39→  return (
+    40→    40→    <span ref={ref}>
+    41→    41→      {count}{suffix}
+    42→    42→    </span>
+    43→    43→  )
+    44→    44→}
+    45→    45→
+    46→    46→// --- Date List Generator ---
+    47→    47→function generateDateList(count: number = 14) {
+    48→    48→  const days = ['Dom', 'Lun', 'Mar', 'Mi\u00e9', 'Jue', 'Vie', 'S\u00e1b']
+    49→    49→  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    50→    50→  const dates: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
+    51→    51→
+    52→    52→  for (let i = 0; i < count; i++) {
+    53→    53→    const d = new Date()
+    54→    54→    d.setDate(d.getDate() + i)
+    55→    55→    dates.push({
+    56→    56→      date: d,
+    57→    57→      label: `${d.getDate()} ${months[d.getMonth()]}`,
+    58→    58→      dayName: i === 0 ? 'Hoy' : days[d.getDay()],
+    59→    59→      isToday: i === 0,
+    60→    60→    })
+    61→    61→  }
+    62→    62→  return dates
+    63→    63→}
+    64→    64→
+    65→    65→// --- Sport Buttons ---
+    66→    66→const sportButtons = [
+    67→    67→  { value: 'futbol', label: 'F\u00fatbol 7', emoji: '\u26bd' },
+    68→    68→  { value: 'voley', label: 'V\u00f3ley', emoji: '\ud83c\udfd0' },
+    69→    69→]
+    70→    70→
+    71→    71→// --- Gradient Mesh ---
+    72→    72→function GradientMesh() {
+    73→    73→  return (
+    74→    74→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    75→    75→      <motion.div
+    76→    76→        className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-30"
+    77→    77→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.3) 0%, transparent 70%)' }}
+    78→    78→        animate={{ x: [0, 50, -30, 0], y: [0, -30, 50, 0], scale: [1, 1.1, 0.95, 1] }}
+    79→    79→        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+    80→    80→      />
+    81→    81→      <motion.div
+    82→    82→        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full opacity-20"
+    83→    83→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.25) 0%, transparent 70%)' }}
+    84→    84→        animate={{ x: [0, -40, 30, 0], y: [0, 40, -20, 0], scale: [1, 0.9, 1.15, 1] }}
+    85→    85→        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+    86→    86→      />
+    87→    87→      <motion.div
+    88→    88→        className="absolute -bottom-20 left-1/3 w-[350px] h-[350px] rounded-full opacity-15"
+    89→    89→        style={{ background: 'radial-gradient(circle, rgba(0,230,57,0.2) 0%, transparent 70%)' }}
+    90→    90→        animate={{ x: [0, 60, -40, 0], y: [0, -50, 30, 0], scale: [1, 1.2, 0.85, 1] }}
+    91→    91→        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+    92→    92→      />
+    93→    93→    </div>
+    94→    94→  )
+    95→    95→}
+    96→    96→
+    97→    97→export default function HeroSection() {
+    98→    98→  const { setView, setSportFilter, setSelectedDate } = useAppStore()
+    99→    99→  const { settings, saveSection } = useSiteSettings()
+   100→   100→  const { hero: defaults, heroBanners } = settings || {
+   101→   101→    hero: {
+   102→   102→      location: 'San Sebasti\u00e1n, Cusco',
+   103→   103→      badge: 'La #1 en reservas deportivas del Cusco',
+   104→   104→      headline: 'Reserva tu cancha',
+   105→   105→      headlineHighlight: 'en segundos',
+   106→   106→      subtitle: '4 canchas de f\u00fatbol 7 y 2 canchas de v\u00f3ley profesional. Reserva f\u00e1cil, paga con Yape y disfruta sin complicaciones.',
+   107→   107→      promoHighlight: '50% de adelanto',
+   108→   108→      promoText: ', paga el resto al llegar',
+   109→   109→      backgroundImage: '',
+   110→   110→      secondaryImage: '',
+   111→   111→      stats: [
+   112→   112→        { label: 'Espacios', value: 6 },
+   113→   113→        { label: 'F\u00fatbol 7', value: 4 },
+   114→   114→        { label: 'V\u00f3ley', value: 2 },
+   115→   115→      ],
+   116→   116→    },
+   117→   117→    heroBanners: [],
+   118→   118→  }
+   119→   119→
+   120→   120→  const activeBanners = (heroBanners || []).filter((b) => b.active && b.image)
+   121→   121→  const [currentBanner, setCurrentBanner] = useState(0)
+   122→   122→  const bannerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   123→   123→
+   124→   124→  // Auto-rotate banners
+   125→   125→  useEffect(() => {
+   126→   126→    if (activeBanners.length <= 1) return
+   127→   127→    bannerTimerRef.current = setInterval(() => {
+   128→   128→      setCurrentBanner((prev) => (prev + 1) % activeBanners.length)
+   129→   129→    }, 5000)
+   130→   130→    return () => {
+   131→   131→      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current)
+   132→   132→    }
+   133→   133→  }, [activeBanners.length])
+   134→   134→
+   135→   135→  const [selectedSport, setSelectedSport] = useState<string | null>(null)
+   136→   136→  const [selectedDateIdx, setSelectedDateIdx] = useState(0)
+   137→   137→  const [availableSlots, setAvailableSlots] = useState<number | null>(null)
+   138→   138→  const [courts, setCourts] = useState<any[]>([])
+   139→   139→  const dateList = generateDateList(14)
+   140→   140→  const dateScrollRef = useRef<HTMLDivElement>(null)
+   141→   141→  const sectionRef = useRef<HTMLElement>(null)
+   142→   142→  const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
+   143→   143→
+   144→   144→  // Edit state
+   145→   145→  const [editOpen, setEditOpen] = useState(false)
+   146→   146→  const [editForm, setEditForm] = useState(defaults)
+   147→   147→  const [saving, setSaving] = useState(false)
+   148→   148→
+   149→   149→  useEffect(() => {
+   150→   150→    if (settings) setEditForm(settings.hero)
+   151→   151→  }, [settings])
+   152→   152→
+   153→   153→  // Fetch courts for pricing + available slots count
+   154→   154→  useEffect(() => {
+   155→   155→    fetch('/api/courts')
+   156→   156→      .then((res) => res.json())
+   157→   157→      .then((data) => {
+   158→   158→        const courtList = Array.isArray(data) && data.length > 0 ? data : []
+   159→   159→        setCourts(courtList)
+   160→   160→        setAvailableSlots(Math.round((courtList.length || 6) * 8.5))
+   161→   161→      })
+   162→   162→      .catch(() => {
+   163→   163→        setAvailableSlots(51)
+   164→   164→      })
+   165→   165→  }, [])
+   166→   166→
+   167→   167→  // Build tariff summary from courts pricingSchedule
+   168→   168→  const tariffInfo = (() => {
+   169→   169→    const result: { sport: string; emoji: string; label: string; morning: string; afternoon: string; night: string }[] = []
+   170→   170→    const sports = [
+   171→   171→      { key: 'futbol', emoji: '\u26bd', label: 'F\u00fatbol 7' },
+   172→   172→      { key: 'voley', emoji: '\ud83c\udfd0', label: 'V\u00f3ley' },
+   173→   173→    ]
+   174→   174→    for (const s of sports) {
+   175→   175→      const sportCourts = courts.filter((c: any) => c.sport === s.key)
+   176→   176→      if (sportCourts.length === 0) {
+   177→   177→        result.push({ sport: s.key, emoji: s.emoji, label: s.label, morning: '—', afternoon: '—', night: '—' })
+   178→   178→        continue
+   179→   179→      }
+   180→   180→      const schedule: any[] = sportCourts[0].pricingSchedule || []
+   181→   181→      const defaultPrice = sportCourts[0].pricePerHour || 0
+   182→   182→      const morningBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('ma\u00f1ana'))
+   183→   183→        || schedule.find((b: any) => b.startHour >= 6 && b.startHour < 12)
+   184→   184→      const afternoonBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('tarde'))
+   185→   185→        || schedule.find((b: any) => b.startHour >= 12 && b.startHour < 18)
+   186→   186→      const nightBlock = schedule.find((b: any) => b.label?.toLowerCase().includes('noche'))
+   187→   187→        || schedule.find((b: any) => b.startHour >= 18)
+   188→   188→      const fmt = (b: any) => b ? `S/ ${b.pricePerHour}` : `S/ ${defaultPrice || '—'}`
+   189→   189→      result.push({
+   190→   190→        sport: s.key,
+   191→   191→        emoji: s.emoji,
+   192→   192→        label: s.label,
+   193→   193→        morning: fmt(morningBlock),
+   194→   194→        afternoon: fmt(afternoonBlock),
+   195→   195→        night: fmt(nightBlock),
+   196→   196→      })
+   197→   197→    }
+   198→   198→    return result
+   199→   199→  })()
+   200→   200→
+   201→   201→  // Scroll date picker by direction
+   202→   202→  const scrollDates = (direction: 'left' | 'right') => {
+   203→   203→    if (!dateScrollRef.current) return
+   204→   204→    const scrollAmount = dateScrollRef.current.clientWidth * 0.75
+   205→   205→    dateScrollRef.current.scrollBy({
+   206→   206→      left: direction === 'left' ? -scrollAmount : scrollAmount,
+   207→   207→      behavior: 'smooth',
+   208→   208→    })
+   209→   209→  }
+   210→   210→
+   211→   211→  const handleSearch = useCallback(() => {
+   212→   212→    const sport = selectedSport || 'todos'
+   213→   213→    setSportFilter(sport)
+   214→   214→    const date = dateList[selectedDateIdx].date
+   215→   215→    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+   216→   216→    setSelectedDate(dateStr)
+   217→   217→    setView('booking')
+   218→   218→  }, [selectedSport, selectedDateIdx, dateList, setSportFilter, setSelectedDate, setView])
+   219→   219→
+   220→   220→  const handleSave = async () => {
+   221→   221→    setSaving(true)
+   222→   222→    const ok = await saveSection('hero', editForm)
+   223→   223→    setSaving(false)
+   224→   224→    if (ok) {
+   225→   225→      setEditOpen(false)
+   226→   226→      toast({ title: 'Secci\u00f3n actualizada', description: 'Los cambios del Hero fueron guardados' })
+   227→   227→    } else {
+   228→   228→      toast({ title: 'Error', description: 'No se pudieron guardar los cambios', variant: 'destructive' })
+   229→   229→    }
+   230→   230→  }
+   231→   231→
+   232→   232→  const updateStat = (idx: number, field: 'label' | 'value', val: string) => {
+   233→   233→    const copy = [...editForm.stats]
+   234→   234→    copy[idx] = { ...copy[idx], [field]: field === 'value' ? parseInt(val) || 0 : val }
+   235→   235→    setEditForm({ ...editForm, stats: copy })
+   236→   236→  }
+   237→   237→  const removeStat = (idx: number) => {
+   238→   238→    setEditForm({ ...editForm, stats: editForm.stats.filter((_, i) => i !== idx) })
+   239→   239→  }
+   240→   240→  const addStat = () => {
+   241→   241→    setEditForm({ ...editForm, stats: [...editForm.stats, { label: 'Nuevo', value: 0 }] })
+   242→   242→  }
+   243→   243→
+   244→   244→  const containerVariants = {
+   245→   245→    hidden: {},
+   246→   246→    visible: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+   247→   247→  }
+   248→   248→
+   249→   249→  const itemVariants = {
+   250→   250→    hidden: { opacity: 0, y: 24 },
+   251→   251→    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] } },
+   252→   252→  }
+   253→   253→
+   254→   254→  return (
+   255→   255→    <>
+   256→   256→      <SectionEditButton onClick={() => setEditOpen(true)} label="Editar Hero" />
+   257→   257→
+   258→   258→      <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
+   259→   259→        <GradientMesh />
+   260→   260→
+   261→   261→        {/* Banner Carousel (shows when heroBanners exist) */}
+   262→   262→        {activeBanners.length > 1 && (
+   263→   263→          <div className="relative h-48 md:h-72 mb-6 rounded-2xl overflow-hidden">
+   264→   264→            <AnimatePresence mode="wait">
+   265→   265→              <motion.div
+   266→   266→                key={currentBanner}
+   267→   267→                initial={{ opacity: 0 }}
+   268→   268→                animate={{ opacity: 1 }}
+   269→   269→                exit={{ opacity: 0 }}
+   270→   270→                transition={{ duration: 0.8 }}
+   271→   271→                className="absolute inset-0"
+   272→   272→              >
+   273→   273→                <Image
+   274→   274→                  src={activeBanners[currentBanner].image}
+   275→   275→                  alt={activeBanners[currentBanner].title || 'Banner'}
+   276→   276→                  fill
+   277→   277→                  className="object-cover"
+   278→   278→                  unoptimized
+   279→   279→                />
+   280→   280→                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+   281→   281→                {(activeBanners[currentBanner].title || activeBanners[currentBanner].subtitle) && (
+   282→   282→                  <div className="absolute bottom-4 left-4 right-4">
+   283→   283→                    {activeBanners[currentBanner].subtitle && (
+   284→   284→                      <span className="text-cm-primary text-[10px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
+   285→   285→                    )}
+   286→   286→                    {activeBanners[currentBanner].title && (
+   287→   287→                      <h3 className="font-[family-name:var(--font-sora)] text-lg md:text-2xl font-bold text-white mt-0.5">
+   288→   288→                        {activeBanners[currentBanner].title}
+   289→   289→                      </h3>
+   290→   290→                    )}
+   291→   291→                  </div>
+   292→   292→                )}
+   293→   293→              </motion.div>
+   294→   294→            </AnimatePresence>
+   295→   295→
+   296→   296→            {/* Dots */}
+   297→   297→            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+   298→   298→              {activeBanners.map((_, idx) => (
+   299→   299→                <button type="button"
+   300→   300→                  key={idx}
+   301→   301→                  onClick={() => { setCurrentBanner(idx) }}
+   302→   302→                  className={`w-2 h-2 rounded-full transition-all ${
+   303→   303→                    idx === currentBanner ? 'bg-cm-primary w-4' : 'bg-white/50 hover:bg-white/70'
+   304→   304→                  }`}
+   305→   305→                />
+   306→   306→              ))}
+   307→   307→            </div>
+   308→   308→          </div>
+   309→   309→        )}
+   310→   310→
+   311→   311→        {/* Background image (uploaded by admin, only if no carousel) */}
+   312→   312→        {!activeBanners.length && defaults.backgroundImage && (
+   313→   313→          <div className="absolute inset-0 z-0">
+   314→   314→            <img
+   315→   315→              src={defaults.backgroundImage}
+   316→   316→              alt=""
+   317→   317→              className="w-full h-full object-cover opacity-30"
+   318→   318→            />
+   319→   319→            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+   320→   320→          </div>
+   321→   321→        )}
+   322→   322→
+   323→   323→        <motion.div
+   324→   324→          className="relative max-w-4xl mx-auto text-center"
+   325→   325→          variants={containerVariants}
+   326→   326→          initial="hidden"
+   327→   327→          animate={isSectionInView ? 'visible' : 'hidden'}
+   328→   328→        >
+   329→   329→          {/* Location Badge */}
+   330→   330→          <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
+   331→   331→            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   332→   332→              location_on
+   333→   333→            </span>
+   334→   334→            <span className="text-cm-on-surface-variant text-xs font-medium tracking-wide uppercase font-[family-name:var(--font-inter)]">
+   335→   335→              {defaults.location}
+   336→   336→            </span>
+   337→   337→          </motion.div>
+   338→   338→
+   339→   339→          {/* Hero Badge */}
+   340→   340→          <motion.div
+   341→   341→            variants={itemVariants}
+   342→   342→            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+   343→   343→          >
+   344→   344→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   345→   345→              bolt
+   346→   346→            </span>
+   347→   347→            <span className="text-xs font-semibold text-cm-primary uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   348→   348→              {defaults.badge}
+   349→   349→            </span>
+   350→   350→          </motion.div>
+   351→   351→
+   352→   352→          {/* Headline */}
+   353→   353→          <motion.h1
+   354→   354→            variants={itemVariants}
+   355→   355→            className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
+   356→   356→          >
+   357→   357→            {defaults.headline}{' '}
+   358→   358→            <span className="text-cm-primary text-glow">{defaults.headlineHighlight}</span>
+   359→   359→          </motion.h1>
+   360→   360→
+   361→   361→          {/* Subtitle */}
+   362→   362→          <motion.p
+   363→   363→            variants={itemVariants}
+   364→   364→            className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
+   365→   365→          >
+   366→   366→            {defaults.subtitle}
+   367→   367→          </motion.p>
+   368→   368→
+   369→   369→          {/* Search Panel */}
+   370→   370→          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-4 md:p-6 max-w-2xl mx-auto glow-border">
+   371→   371→            {/* Date Picker with Arrows */}
+   372→   372→            <div className="relative mb-5">
+   373→   373→              <button
+   374→   374→                type="button"
+   375→   375→                onClick={() => scrollDates('left')}
+   376→   376→                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+   377→   377→                aria-label="Fecha anterior"
+   378→   378→              >
+   379→   379→                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+   380→   380→              </button>
+   381→   381→
+   382→   382→              <div
+   383→   383→                ref={dateScrollRef}
+   384→   384→                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth"
+   385→   385→              >
+   386→   386→                {dateList.map((d, idx) => (
+   387→   387→                  <button
+   388→   388→                    type="button"
+   389→   389→                    key={idx}
+   390→   390→                    onClick={() => setSelectedDateIdx(idx)}
+   391→   391→                    className={`flex flex-col items-center px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[72px] flex-shrink-0 ${
+   392→   392→                      selectedDateIdx === idx
+   393→   393→                        ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/25 scale-105'
+   394→   394→                        : 'bg-cm-surface-container-highest/50 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'
+   395→   395→                    }`}
+   396→   396→                  >
+   397→   397→                    <span className="text-[10px] uppercase tracking-wider font-bold">{d.dayName}</span>
+   398→   398→                    <span className="text-base mt-0.5 font-bold font-[family-name:var(--font-sora)]">{d.date.getDate()}</span>
+   399→   399→                    <span className="text-[10px] mt-0.5 opacity-80">{d.label.split(' ')[1]}</span>
+   400→   400→                  </button>
+   401→   401→                ))}
+   402→   402→              </div>
+   403→   403→
+   404→   404→              <button
+   405→   405→                type="button"
+   406→   406→                onClick={() => scrollDates('right')}
+   407→   407→                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+   408→   408→                aria-label="Fecha siguiente"
+   409→   409→              >
+   410→   410→                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+   411→   411→              </button>
+   412→   412→            </div>
+   413→   413→
+   414→   414→            {/* Sport Selection Buttons */}
+   415→   415→            <div className="flex gap-3 mb-5">
+   416→   416→              {sportButtons.map((sport) => (
+   417→   417→                <button
+   418→   418→                  type="button"
+   419→   419→                  key={sport.value}
+   420→   420→                  onClick={() => setSelectedSport(selectedSport === sport.value ? null : sport.value)}
+   421→   421→                  className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
+   422→   422→                    selectedSport === sport.value
+   423→   423→                      ? 'bg-cm-primary/10 text-cm-primary border-cm-primary/40 shadow-md shadow-cm-primary/10'
+   424→   424→                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border-white/10 hover:border-white/20'
+   425→   425→                  }`}
+   426→   426→                >
+   427→   427→                  <span className="text-xl">{sport.emoji}</span>
+   428→   428→                  <span className="font-[family-name:var(--font-sora)]">{sport.label}</span>
+   429→   429→                </button>
+   430→   430→              ))}
+   431→   431→            </div>
+   432→   432→
+   433→   433→            {/* Tariff Info Panel */}
+   434→   434→            <div className="rounded-xl bg-cm-surface-container-highest/30 border border-white/5 p-3 mb-5">
+   435→   435→              <div className="flex items-center gap-1.5 mb-3">
+   436→   436→                <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
+   437→   437→                <span className="text-[10px] font-semibold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   438→   438→                  Precios por hora
+   439→   439→                </span>
+   440→   440→              </div>
+   441→   441→              <div className="grid grid-cols-2 gap-2.5">
+   442→   442→                {tariffInfo.map((t) => (
+   443→   443→                  <div key={t.sport} className="rounded-lg bg-cm-surface-container-highest/40 p-2.5">
+   444→   444→                    <div className="flex items-center gap-1.5 mb-2">
+   445→   445→                      <span className="text-base leading-none">{t.emoji}</span>
+   446→   446→                      <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{t.label}</span>
+   447→   447→                    </div>
+   448→   448→                    <div className="space-y-1">
+   449→   449→                      <div className="flex items-center justify-between">
+   450→   450→                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   451→   451→                          <span className="text-[12px]">\u2600\ufe0f</span>Ma\u00f1ana
+   452→   452→                        </span>
+   453→   453→                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.morning}</span>
+   454→   454→                      </div>
+   455→   455→                      <div className="flex items-center justify-between">
+   456→   456→                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   457→   457→                          <span className="text-[12px]">\u26c5</span>Tarde
+   458→   458→                        </span>
+   459→   459→                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.afternoon}</span>
+   460→   460→                      </div>
+   461→   461→                      <div className="flex items-center justify-between">
+   462→   462→                        <span className="flex items-center gap-1 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   463→   463→                          <span className="text-[12px]">\ud83c\udf19</span>Noche
+   464→   464→                        </span>
+   465→   465→                        <span className="text-[11px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{t.night}</span>
+   466→   466→                      </div>
+   467→   467→                    </div>
+   468→   468→                  </div>
+   469→   469→                ))}
+   470→   470→              </div>
+   471→   471→            </div>
+   472→   472→
+   473→   473→            {/* Search Button */}
+   474→   474→            <button
+   475→   475→              type="button"
+   476→   476→              onClick={handleSearch}
+   477→   477→              className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-cm-primary text-cm-on-primary font-bold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.98] text-base"
+   478→   478→            >
+   479→   479→              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   480→   480→                search
+   481→   481→              </span>
+   482→   482→              Buscar Canchas
+   483→   483→            </button>
+   484→   484→          </motion.div>
+   485→   485→
+   486→   486→          {/* Featured Promo Banner */}
+   487→   487→          <motion.div
+   488→   488→            variants={itemVariants}
+   489→   489→            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cm-primary/10 via-cm-primary/5 to-transparent border border-cm-primary/15"
+   490→   490→          >
+   491→   491→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   492→   492→              local_offer
+   493→   493→            </span>
+   494→   494→            <span className="text-cm-on-surface text-xs md:text-sm font-medium font-[family-name:var(--font-inter)]">
+   495→   495→              <span className="text-cm-primary font-bold">{defaults.promoHighlight}</span>{defaults.promoText}
+   496→   496→            </span>
+   497→   497→          </motion.div>
+   498→   498→
+   499→   499→          {/* Stats */}
+   500→   500→          <motion.div
+   501→   501→            variants={itemVariants}
+   502→   502→            className="flex flex-wrap justify-center gap-8 md:gap-14 mt-10 md:mt-14"
+   503→   503→          >
+   504→   504→            {defaults.stats.map((stat, idx) => (
+   505→   505→              <div key={idx} className="text-center">
+   506→   506→                <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   507→   507→                  <AnimatedCounter target={stat.value} duration={2} />
+   508→   508→                </p>
+   509→   509→                <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   510→   510→                  {stat.label}
+   511→   511→                </p>
+   512→   512→              </div>
+   513→   513→            ))}
+   514→   514→            <div className="text-center">
+   515→   515→              <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   516→   516→                <AnimatedCounter target={availableSlots ?? 51} duration={2.5} />
+   517→   517→              </p>
+   518→   518→              <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   519→   519→                Horarios hoy
+   520→   520→              </p>
+   521→   521→            </div>
+   522→   522→          </motion.div>
+   523→   523→        </motion.div>
+   524→   524→      </section>
+   525→   525→
+   526→   526→      {/* Edit Modal */}
+   527→   527→      <EditModal
+   528→   528→        open={editOpen}
+   529→   529→        onClose={() => setEditOpen(false)}
+   530→   530→        title="Editar Secci\u00f3n Hero"
+   531→   531→        onSave={handleSave}
+   532→   532→        saving={saving}
+   533→   533→      >
+   534→   534→        <FormField
+   535→   535→          label="Ubicaci\u00f3n"
+   536→   536→          value={editForm.location}
+   537→   537→          onChange={(v) => setEditForm({ ...editForm, location: v })}
+   538→   538→          placeholder="Ej. San Sebasti\u00e1n, Cusco"
+   539→   539→        />
+   540→   540→        <FormField
+   541→   541→          label="Badge principal"
+   542→   542→          value={editForm.badge}
+   543→   543→          onChange={(v) => setEditForm({ ...editForm, badge: v })}
+   544→   544→          placeholder="Ej. La #1 en reservas deportivas del Cusco"
+   545→   545→        />
+   546→   546→        <div className="grid grid-cols-2 gap-3">
+   547→   547→          <FormField
+   548→   548→            label="T\u00edtulo (headline)"
+   549→   549→            value={editForm.headline}
+   550→   550→            onChange={(v) => setEditForm({ ...editForm, headline: v })}
+   551→   551→            placeholder="Reserva tu cancha"
+   552→   552→          />
+   553→   553→          <FormField
+   554→   554→            label="Highlight"
+   555→   555→            value={editForm.headlineHighlight}
+   556→   556→            onChange={(v) => setEditForm({ ...editForm, headlineHighlight: v })}
+   557→   557→            placeholder="en segundos"
+   558→   558→          />
+   559→   559→        </div>
+   560→   560→        <FormField
+   561→   561→          label="Subt\u00edtulo"
+   562→   562→          value={editForm.subtitle}
+   563→   563→          onChange={(v) => setEditForm({ ...editForm, subtitle: v })}
+   564→   564→          type="textarea"
+   565→   565→          placeholder="Descripci\u00f3n principal..."
+   566→   566→        />
+   567→   567→        <div className="grid grid-cols-2 gap-3">
+   568→   568→          <FormField
+   569→   569→            label="Promo highlight"
+   570→   570→            value={editForm.promoHighlight}
+   571→   571→            onChange={(v) => setEditForm({ ...editForm, promoHighlight: v })}
+   572→   572→            placeholder="50% de adelanto"
+   573→   573→          />
+   574→   574→          <FormField
+   575→   575→            label="Promo texto"
+   576→   576→            value={editForm.promoText}
+   577→   577→            onChange={(v) => setEditForm({ ...editForm, promoText: v })}
+   578→   578→            placeholder=", paga el resto al llegar"
+   579→   579→          />
+   580→   580→        </div>
+   581→   581→
+   582→   582→        {/* Hero Images */}
+   583→   583→        <div>
+   584→   584→          <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+   585→   585→            Im\u00e1genes del Hero
+   586→   586→          </label>
+   587→   587→          <div className="grid grid-cols-2 gap-3">
+   588→   588→            <div>
+   589→   589→              {editForm.backgroundImage ? (
+   590→   590→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   591→   591→                  <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
+   592→   592→                  <button type="button"
+   593→   593→                    onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
+   594→   594→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   595→   595→                  >
+   596→   596→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   597→   597→                  </button>
+   598→   598→                </div>
+   599→   599→              ) : null}
+   600→   600→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   601→   601→                <input
+   602→   602→                  type="file"
+   603→   603→                  accept="image/jpeg,image/png,image/webp"
+   604→   604→                  className="hidden"
+   605→   605→                  onChange={async (e) => {
+   606→   606→                    const file = e.target.files?.[0]
+   607→   607→                    if (!file) return
+   608→   608→                    const fd = new FormData()
+   609→   609→                    fd.append('file', file)
+   610→   610→                    fd.append('folder', 'hero')
+   611→   611→                    try {
+   612→   612→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   613→   613→                      if (res.ok) {
+   614→   614→                        const data = await res.json()
+   615→   615→                        setEditForm({ ...editForm, backgroundImage: data.url })
+   616→   616→                      }
+   617→   617→                    } catch { /* silent */ }
+   618→   618→                    e.target.value = ''
+   619→   619→                  }}
+   620→   620→                />
+   621→   621→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   622→   622→                Fondo
+   623→   623→              </label>
+   624→   624→            </div>
+   625→   625→            <div>
+   626→   626→              {editForm.secondaryImage ? (
+   627→   627→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   628→   628→                  <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
+   629→   629→                  <button type="button"
+   630→   630→                    onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
+   631→   631→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   632→   632→                  >
+   633→   633→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   634→   634→                  </button>
+   635→   635→                </div>
+   636→   636→              ) : null}
+   637→   637→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   638→   638→                <input
+   639→   639→                  type="file"
+   640→   640→                  accept="image/jpeg,image/png,image/webp"
+   641→   641→                  className="hidden"
+   642→   642→                  onChange={async (e) => {
+   643→   643→                    const file = e.target.files?.[0]
+   644→   644→                    if (!file) return
+   645→   645→                    const fd = new FormData()
+   646→   646→                    fd.append('file', file)
+   647→   647→                    fd.append('folder', 'hero')
+   648→   648→                    try {
+   649→   649→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   650→   650→                      if (res.ok) {
+   651→   651→                        const data = await res.json()
+   652→   652→                        setEditForm({ ...editForm, secondaryImage: data.url })
+   653→   653→                      }
+   654→   654→                    } catch { /* silent */ }
+   655→   655→                    e.target.value = ''
+   656→   656→                  }}
+   657→   657→                />
+   658→   658→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   659→   659→                Secundaria
+   660→   660→              </label>
+   661→   661→            </div>
+   662→   662→          </div>
+   663→   663→        </div>
+   664→   664→
+   665→   665→        {/* Stats */}
+   666→   666→        <div>
+   667→   667→          <div className="flex items-center justify-between mb-1.5">
+   668→   668→            <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
+   669→   669→              Estad\u00edsticas
+   670→   670→            </label>
+   671→   671→            <button type="button"
+   672→   672→              onClick={addStat}
+   673→   673→              className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+   674→   674→            >
+   675→   675→              <span className="material-symbols-outlined text-[14px]">add</span>
+   676→   676→              Agregar
+   677→   677→            </button>
+   678→   678→          </div>
+   679→   679→          <div className="space-y-2">
+   680→   680→            {editForm.stats.map((stat, idx) => (
+   681→   681→              <div key={idx} className="flex items-center gap-2">
+   682→   682→                <input
+   683→   683→                  value={stat.label}
+   684→   684→                  onChange={(e) => updateStat(idx, 'label', e.target.value)}
+   685→   685→                  placeholder="Etiqueta"
+   686→   686→                  className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   687→   687→                />
+   688→   688→                <input
+   689→   689→                  type="number"
+   690→   690→                  value={stat.value}
+   691→   691→                  onChange={(e) => updateStat(idx, 'value', e.target.value)}
+   692→   692→                  placeholder="0"
+   693→   693→                  className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   694→   694→                />
+   695→   695→                <button type="button"
+   696→   696→                  onClick={() => removeStat(idx)}
+   697→   697→                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+   698→   698→                >
+   699→   699→                  <span className="material-symbols-outlined text-[16px]">delete</span>
+   700→   700→                </button>
+   701→   701→              </div>
+   702→   702→            ))}
+   703→   703→          </div>
+   704→   704→        </div>
+   705→   705→      </EditModal>
+   706→   706→    </>
+   707→   707→  )
+   708→   708→}
+   709→   709→
