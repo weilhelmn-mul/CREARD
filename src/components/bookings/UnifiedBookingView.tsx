@@ -590,141 +590,138 @@ export default function UnifiedBookingView() {
 
           {/* ── Court Selector ── */}
           <div className="mb-5">
-            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px] text-[#00ff41]" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-4 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
               Selecciona Canchas
               {selectedCourtIds.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#00ff41]/15 text-[#00ff41] text-[10px] font-bold">
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold font-[family-name:var(--font-inter)]">
                   {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
                 </span>
               )}
             </h2>
-            <div className="space-y-3">
-              {Object.entries(courtsBySport).map(([sport, sportCourts]) => (
-                <div key={sport}>
-                  {Object.keys(courtsBySport).length > 1 && (
-                    <p className="text-[10px] font-semibold text-cm-on-surface-variant/50 font-[family-name:var(--font-inter)] mb-2 px-0.5 uppercase tracking-wider">
-                      {sportConfig[sport]?.label || sport}
-                    </p>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    {sportCourts.map((court) => {
-                      const isSelected = selectedCourtIds.includes(court.id)
-                      const cfg = sportConfig[court.sport] || { icon: 'sports', color: '#00ff41' }
-                      return (
-                        <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
-                          className={`group relative w-full flex items-center gap-3 py-3 px-3 rounded-2xl transition-all duration-200 border text-left ${
-                            isSelected
-                              ? 'bg-[#00ff41]/10 border-[#00ff41]/30 shadow-[0_0_16px_rgba(0,255,65,0.08)]'
-                              : 'bg-cm-surface-container-highest/30 border-white/5 hover:border-white/15 hover:bg-cm-surface-container-highest/50'
-                          }`}>
-                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-                            isSelected ? 'bg-[#00ff41]/20 shadow-[0_0_12px_rgba(0,255,65,0.15)]' : 'bg-white/[0.04] group-hover:bg-white/[0.07]'
-                          }`}>
-                            <span className={`material-symbols-outlined text-[22px] transition-colors duration-200 ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant/60 group-hover:text-cm-on-surface-variant'}`}
-                              style={{ fontVariationSettings: isSelected ? '"FILL" 1' : '"FILL" 0' }}>
-                              {cfg.icon}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] font-semibold font-[family-name:var(--font-sora)] truncate transition-colors duration-200 ${isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
-                              {court.name}
-                            </p>
-                          </div>
-                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-                            isSelected ? 'bg-[#00ff41] border-[#00ff41] scale-110' : 'border-white/15 group-hover:border-white/30'
-                          }`}>
-                            {isSelected && (
-                              <span className="material-symbols-outlined text-[#003907] text-[14px]">check</span>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="space-y-6">
+              {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
+                const cfg = sportConfig[sport] || { label: sport, icon: 'sports', color: '#00ff41' }
+                const isFutbol = sport === 'futbol'
+                const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
+                return (
+                  <section key={sport} className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-cm-primary text-[18px]">{cfg.icon}</span>
+                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-cm-primary font-[family-name:var(--font-inter)]">
+                          Canchas de {cfg.label}
+                        </h3>
+                      </div>
+                      <span className="text-[10px] text-cm-on-surface-variant bg-cm-surface-container-highest/60 px-2.5 py-0.5 rounded-full font-[family-name:var(--font-inter)]">
+                        {surfaceLabel}
+                      </span>
+                    </div>
+                    <div className={`grid gap-3 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+                      {sportCourts.map((court) => {
+                        const isSelected = selectedCourtIds.includes(court.id)
+                        const schedule = court.pricingSchedule || []
+                        const prices = schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour]
+                        const minPrice = Math.min(...prices)
+                        const maxPrice = Math.max(...prices)
+                        const priceText = minPrice === maxPrice ? `S/ ${minPrice}/h` : `S/ ${minPrice} - S/ ${maxPrice}`
+                        return (
+                          <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
+                            className={`group relative w-full flex flex-col p-3 rounded-2xl border transition-all duration-300 text-left active:scale-[0.97] ${
+                              isSelected
+                                ? 'border-cm-primary/50 bg-cm-surface-container shadow-[0_0_20px_rgba(0,255,65,0.06)]'
+                                : 'bg-cm-surface-container-highest/20 border-white/5 hover:border-cm-primary/25 hover:bg-cm-surface-container-highest/40'
+                            }`}>
+                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-xl relative overflow-hidden mb-3 border border-white/[0.08] ${
+                              isFutbol ? 'bg-gradient-to-br from-[#064e3b] to-[#065f46]' : 'bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]'
+                            }`}>
+                              {isFutbol ? (
+                                <>
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-white/20 rounded-full" />
+                                  <div className="absolute left-0 top-1/4 h-1/2 w-2 border-r border-y border-white/20" />
+                                  <div className="absolute right-0 top-1/4 h-1/2 w-2 border-l border-y border-white/20" />
+                                </>
+                              ) : (
+                                <>
+                                  <div className="absolute inset-2 border border-white/20" />
+                                  <div className="absolute inset-x-2 top-[30%] h-[40%] border-y border-white/10" />
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/40 shadow-sm z-10" />
+                                </>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className={`text-[13px] font-bold font-[family-name:var(--font-sora)] leading-tight ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>
+                                  {court.name}
+                                </p>
+                                <p className="text-[10px] text-cm-primary font-medium font-[family-name:var(--font-inter)] mt-0.5">Disponible</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cm-primary shadow-[0_0_6px_rgba(0,255,65,0.5)]' : 'bg-cm-primary/50'}`} />
+                                <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{priceText}</span>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           </div>
-
           {/* ── Time Slot Grid ── */}
           {selectedCourtIds.length > 0 && (
             <div className="mb-5">
-              <div className="flex items-center justify-between mb-2.5">
-                <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px] text-[#00ff41]">schedule</span>
-                  Horarios Disponibles
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cm-primary text-[18px]">schedule</span>
+                  <h2 className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Horarios Disponibles</h2>
                   {bookingsLoading && (
-                    <span className="material-symbols-outlined text-[14px] animate-spin ml-1">progress_activity</span>
+                    <span className="material-symbols-outlined text-[14px] animate-spin text-cm-on-surface-variant">progress_activity</span>
                   )}
-                </h2>
-                {selectedTimeSlots.length > 0 && (
-                  <button type="button" onClick={clearTimeSlots}
-                    className="text-[10px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)]">
-                    Limpiar
-                  </button>
-                )}
+                </div>
+                <span className="text-[10px] font-bold px-3 py-1 bg-cm-primary/10 text-cm-primary rounded-full font-[family-name:var(--font-inter)] truncate max-w-[180px]">
+                  {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+                </span>
               </div>
-
-              {/* Legend */}
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-sm bg-[#00ff41]/20 border border-[#00ff41]/40" />
-                  <span className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">Disponible</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-sm bg-red-500/20 border border-red-500/40" />
-                  <span className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">Ocupado</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-500/40" />
-                  <span className="text-[10px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">Seleccionado</span>
-                </div>
-              </div>
-
-              {/* Slots grid */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)] mb-3">
+                {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+              </p>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {visibleSlots.map((slot) => {
                   const status = getUnifiedSlotStatus(slot)
-
-                  let bgClass = 'bg-cm-surface-container-highest/40 border-white/5 hover:border-white/15'
-                  let textClass = 'text-cm-on-surface'
-                  let dotColor = 'transparent'
+                  const hour = parseInt(slot.split(':')[0], 10)
+                  const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
+                  let chipClass = 'bg-white/[0.06] text-cm-on-surface border-white/10 hover:bg-white/10'
                   let clickAllowed = true
-
                   if (status === 'selected') {
-                    bgClass = 'bg-blue-500/15 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.1)]'
-                    textClass = 'text-blue-400'
-                    dotColor = 'bg-blue-400'
+                    chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
                   } else if (status === 'occupied') {
-                    bgClass = 'bg-red-500/8 border-red-500/20 cursor-not-allowed'
-                    textClass = 'text-cm-on-surface-variant/30 line-through'
-                    dotColor = 'bg-red-500/40'
+                    chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/30 border-white/5 opacity-40 cursor-not-allowed'
                     clickAllowed = false
                   } else if (status === 'past') {
-                    bgClass = 'bg-cm-surface-container-highest/20 border-transparent cursor-not-allowed'
-                    textClass = 'text-cm-on-surface-variant/20 line-through'
+                    chipClass = 'bg-white/[0.01] text-cm-on-surface-variant/20 border-transparent cursor-not-allowed'
                     clickAllowed = false
-                  } else {
-                    dotColor = `bg-[#00ff41]/60`
                   }
-
                   return (
                     <button key={slot} type="button" disabled={!clickAllowed}
                       onClick={() => handleSlotToggle(slot)}
-                      className={`relative py-3 px-2 rounded-xl border transition-all duration-200 text-center ${bgClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
-                      <p className={`text-sm font-semibold font-[family-name:var(--font-sora)] ${textClass}`}>
-                        {formatHour(slot)}
-                      </p>
-
-                      <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                      className={`py-3 px-2 rounded-lg font-medium border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+                      {slot} - {nextHour}
                     </button>
                   )
                 })}
               </div>
+              {selectedTimeSlots.length > 0 && (
+                <button type="button" onClick={clearTimeSlots}
+                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+                  Limpiar selección
+                </button>
+              )}
             </div>
           )}
-
           {/* ── Empty state: no courts selected ── */}
           {selectedCourtIds.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
