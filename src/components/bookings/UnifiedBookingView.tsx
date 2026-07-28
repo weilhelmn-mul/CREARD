@@ -601,15 +601,15 @@ export default function UnifiedBookingView() {
             </h2>
             <div className="space-y-6">
               {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
-                const cfg = sportConfig[sport] || { label: sport, icon: 'sports', color: '#00ff41' }
+                const cfg = sportConfig[sport] || { label: sport, icon: 'sports' }
                 const isFutbol = sport === 'futbol'
                 const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
                 return (
                   <section key={sport} className="space-y-3">
                     <div className="flex items-center justify-between border-b border-white/5 pb-2">
                       <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-cm-primary text-[18px]">{cfg.icon}</span>
-                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-cm-primary font-[family-name:var(--font-inter)]">
+                        <span className={`material-symbols-outlined text-[18px] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>{cfg.icon}</span>
+                        <h3 className={`text-[11px] font-bold uppercase tracking-widest font-[family-name:var(--font-inter)] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>
                           Canchas de {cfg.label}
                         </h3>
                       </div>
@@ -617,30 +617,46 @@ export default function UnifiedBookingView() {
                         {surfaceLabel}
                       </span>
                     </div>
-                    <div className={`grid gap-3 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+                    <div className={`grid gap-5 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
                       {sportCourts.map((court) => {
                         const isSelected = selectedCourtIds.includes(court.id)
                         const schedule = court.pricingSchedule || []
-                        const prices = schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour]
-                        const minPrice = Math.min(...prices)
-                        const maxPrice = Math.max(...prices)
-                        const priceText = minPrice === maxPrice ? `S/ ${minPrice}/h` : `S/ ${minPrice} - S/ ${maxPrice}`
+                        const uniquePrices = [...new Set(schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour])]
+                        const dayPrice = Math.min(...uniquePrices)
+                        const nightPrice = Math.max(...uniquePrices)
+                        const singlePrice = uniquePrices.length === 1
+                        const accentBorder = isFutbol
+                          ? isSelected ? 'border-cm-primary/60' : 'border-[#3d4a42]'
+                          : isSelected ? 'border-[#b4c5ff]/60' : 'border-[#3d4a42]'
+                        const accentBg = isFutbol
+                          ? isSelected ? 'bg-[#1b211d]' : 'bg-[#171d19]'
+                          : isSelected ? 'bg-[#1b1d21]' : 'bg-[#171d19]'
+                        const accentShadow = isFutbol
+                          ? isSelected ? 'shadow-[0_0_0_1px_#68dba9]' : ''
+                          : isSelected ? 'shadow-[0_0_0_1px_#b4c5ff]' : ''
+                        const accentText = isFutbol
+                          ? isSelected ? 'text-cm-primary' : 'text-cm-on-surface'
+                          : isSelected ? 'text-[#b4c5ff]' : 'text-cm-on-surface'
+                        const hoverBorder = isFutbol
+                          ? 'hover:border-cm-primary/50'
+                          : 'hover:border-[#b4c5ff]/50'
                         return (
                           <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
-                            className={`group relative w-full flex flex-col p-3 rounded-2xl border transition-all duration-300 text-left active:scale-[0.97] ${
-                              isSelected
-                                ? 'border-cm-primary/50 bg-cm-surface-container shadow-[0_0_20px_rgba(0,255,65,0.06)]'
-                                : 'bg-cm-surface-container-highest/20 border-white/5 hover:border-cm-primary/25 hover:bg-cm-surface-container-highest/40'
-                            }`}>
-                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-xl relative overflow-hidden mb-3 border border-white/[0.08] ${
-                              isFutbol ? 'bg-gradient-to-br from-[#064e3b] to-[#065f46]' : 'bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]'
-                            }`}>
+                            className={`group relative w-full flex flex-col p-3 rounded-xl border transition-all duration-300 text-left active:scale-[0.97] ${accentBg} ${accentBorder} ${accentShadow} ${hoverBorder}`}>
+                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-lg relative overflow-hidden mb-3 border border-white/10 ${
+                              isFutbol ? '' : ''
+                            }`} style={{
+                              background: isFutbol
+                                ? 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)'
+                                : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                              boxShadow: 'inset 0 0 40px rgba(0,0,0,0.3)'
+                            }}>
                               {isFutbol ? (
                                 <>
                                   <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
-                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-white/20 rounded-full" />
-                                  <div className="absolute left-0 top-1/4 h-1/2 w-2 border-r border-y border-white/20" />
-                                  <div className="absolute right-0 top-1/4 h-1/2 w-2 border-l border-y border-white/20" />
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-white/20 rounded-full" />
+                                  <div className="absolute left-0 top-1/4 h-1/2 w-3 border-r border-y border-white/20" />
+                                  <div className="absolute right-0 top-1/4 h-1/2 w-3 border-l border-y border-white/20" />
                                 </>
                               ) : (
                                 <>
@@ -650,18 +666,46 @@ export default function UnifiedBookingView() {
                                 </>
                               )}
                             </div>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className={`text-[13px] font-bold font-[family-name:var(--font-sora)] leading-tight ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>
-                                  {court.name}
-                                </p>
-                                <p className="text-[10px] text-cm-primary font-medium font-[family-name:var(--font-inter)] mt-0.5">Disponible</p>
+                            {isFutbol ? (
+                              <div className="w-full space-y-1">
+                                <div className="flex justify-between items-start">
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+                                  <span className={`w-2 h-2 rounded-full mt-2 ${isFutbol ? 'bg-cm-primary' : 'bg-[#b4c5ff]'}`} />
+                                </div>
+                                <p className={`text-[11px] ${isFutbol ? 'text-cm-primary' : 'text-cm-primary'} font-medium font-[family-name:var(--font-inter)]`}>Disponible</p>
+                                <div className="flex flex-col gap-1 mt-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+                                  </div>
+                                  {!singlePrice && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1.5">
-                                <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cm-primary shadow-[0_0_6px_rgba(0,255,65,0.5)]' : 'bg-cm-primary/50'}`} />
-                                <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{priceText}</span>
+                            ) : (
+                              <div className="w-full flex justify-between items-center">
+                                <div>
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+                                  <p className="text-[11px] text-cm-primary font-medium font-[family-name:var(--font-inter)]">Disponible</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+                                  </div>
+                                  {!singlePrice && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </button>
                         )
                       })}
@@ -686,33 +730,35 @@ export default function UnifiedBookingView() {
                   {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
                 </span>
               </div>
-              <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)] mb-3">
-                {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
-              </p>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {visibleSlots.map((slot) => {
-                  const status = getUnifiedSlotStatus(slot)
-                  const hour = parseInt(slot.split(':')[0], 10)
-                  const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
-                  let chipClass = 'bg-white/[0.06] text-cm-on-surface border-white/10 hover:bg-white/10'
-                  let clickAllowed = true
-                  if (status === 'selected') {
-                    chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
-                  } else if (status === 'occupied') {
-                    chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/30 border-white/5 opacity-40 cursor-not-allowed'
-                    clickAllowed = false
-                  } else if (status === 'past') {
-                    chipClass = 'bg-white/[0.01] text-cm-on-surface-variant/20 border-transparent cursor-not-allowed'
-                    clickAllowed = false
-                  }
-                  return (
-                    <button key={slot} type="button" disabled={!clickAllowed}
-                      onClick={() => handleSlotToggle(slot)}
-                      className={`py-3 px-2 rounded-lg font-medium border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
-                      {slot} - {nextHour}
-                    </button>
-                  )
-                })}
+              <div className="space-y-2">
+                <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)]">
+                  {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+                </p>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  {visibleSlots.map((slot) => {
+                    const status = getUnifiedSlotStatus(slot)
+                    const hour = parseInt(slot.split(':')[0], 10)
+                    const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
+                    let chipClass = 'bg-white/10 backdrop-blur-md text-cm-on-surface font-medium border border-white/20 hover:bg-white/20 shadow-sm'
+                    let clickAllowed = true
+                    if (status === 'selected') {
+                      chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
+                    } else if (status === 'occupied') {
+                      chipClass = 'bg-white/5 backdrop-blur-sm text-cm-on-surface-variant font-medium border border-white/10 opacity-40 cursor-not-allowed'
+                      clickAllowed = false
+                    } else if (status === 'past') {
+                      chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/20 border border-transparent cursor-not-allowed'
+                      clickAllowed = false
+                    }
+                    return (
+                      <button key={slot} type="button" disabled={!clickAllowed}
+                        onClick={() => handleSlotToggle(slot)}
+                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+                        {slot} - {nextHour}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
               {selectedTimeSlots.length > 0 && (
                 <button type="button" onClick={clearTimeSlots}
