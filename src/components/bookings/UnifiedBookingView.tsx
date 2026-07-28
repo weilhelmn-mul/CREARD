@@ -675,12 +675,12 @@ export default function UnifiedBookingView() {
                                 <p className={`text-[11px] ${isFutbol ? 'text-cm-primary' : 'text-cm-primary'} font-medium font-[family-name:var(--font-inter)]`}>Disponible</p>
                                 <div className="flex flex-col gap-1 mt-1">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
                                     <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
                                   </div>
                                   {!singlePrice && (
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
                                       <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
                                     </div>
                                   )}
@@ -694,12 +694,12 @@ export default function UnifiedBookingView() {
                                 </div>
                                 <div className="flex flex-col items-end gap-0.5">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
                                     <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
                                   </div>
                                   {!singlePrice && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
                                       <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
                                     </div>
                                   )}
