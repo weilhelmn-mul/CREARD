@@ -1,0 +1,127 @@
+          {/* ── Court Selector ── */}
+          <div className="mb-5">
+            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-4 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+              Selecciona Canchas
+              {selectedCourtIds.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold font-[family-name:var(--font-inter)]">
+                  {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </h2>
+            <div className="space-y-6">
+              {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
+                const cfg = sportConfig[sport] || { label: sport, icon: 'sports' }
+                const isFutbol = sport === 'futbol'
+                const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
+                return (
+                  <section key={sport} className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`material-symbols-outlined text-[18px] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>{cfg.icon}</span>
+                        <h3 className={`text-[11px] font-bold uppercase tracking-widest font-[family-name:var(--font-inter)] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>
+                          Canchas de {cfg.label}
+                        </h3>
+                      </div>
+                      <span className="text-[10px] text-cm-on-surface-variant bg-cm-surface-container-highest/60 px-2.5 py-0.5 rounded-full font-[family-name:var(--font-inter)]">
+                        {surfaceLabel}
+                      </span>
+                    </div>
+                    <div className={`grid gap-5 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+                      {sportCourts.map((court) => {
+                        const isSelected = selectedCourtIds.includes(court.id)
+                        const schedule = court.pricingSchedule || []
+                        const uniquePrices = [...new Set(schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour])]
+                        const dayPrice = Math.min(...uniquePrices)
+                        const nightPrice = Math.max(...uniquePrices)
+                        const singlePrice = uniquePrices.length === 1
+                        const accentBorder = isFutbol
+                          ? isSelected ? 'border-cm-primary/60' : 'border-[#3d4a42]'
+                          : isSelected ? 'border-[#b4c5ff]/60' : 'border-[#3d4a42]'
+                        const accentBg = isFutbol
+                          ? isSelected ? 'bg-[#1b211d]' : 'bg-[#171d19]'
+                          : isSelected ? 'bg-[#1b1d21]' : 'bg-[#171d19]'
+                        const accentShadow = isFutbol
+                          ? isSelected ? 'shadow-[0_0_0_1px_#68dba9]' : ''
+                          : isSelected ? 'shadow-[0_0_0_1px_#b4c5ff]' : ''
+                        const accentText = isFutbol
+                          ? isSelected ? 'text-cm-primary' : 'text-cm-on-surface'
+                          : isSelected ? 'text-[#b4c5ff]' : 'text-cm-on-surface'
+                        const hoverBorder = isFutbol
+                          ? 'hover:border-cm-primary/50'
+                          : 'hover:border-[#b4c5ff]/50'
+                        return (
+                          <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
+                            className={`group relative w-full flex flex-col p-3 rounded-xl border transition-all duration-300 text-left active:scale-[0.97] ${accentBg} ${accentBorder} ${accentShadow} ${hoverBorder}`}>
+                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-lg relative overflow-hidden mb-3 border border-white/10 ${
+                              isFutbol ? '' : ''
+                            }`} style={{
+                              background: isFutbol
+                                ? 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)'
+                                : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+                              boxShadow: 'inset 0 0 40px rgba(0,0,0,0.3)'
+                            }}>
+                              {isFutbol ? (
+                                <>
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-white/20 rounded-full" />
+                                  <div className="absolute left-0 top-1/4 h-1/2 w-3 border-r border-y border-white/20" />
+                                  <div className="absolute right-0 top-1/4 h-1/2 w-3 border-l border-y border-white/20" />
+                                </>
+                              ) : (
+                                <>
+                                  <div className="absolute inset-2 border border-white/20" />
+                                  <div className="absolute inset-x-2 top-[30%] h-[40%] border-y border-white/10" />
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/40 shadow-sm z-10" />
+                                </>
+                              )}
+                            </div>
+                            {isFutbol ? (
+                              <div className="w-full space-y-1">
+                                <div className="flex justify-between items-start">
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+                                  <span className={`w-2 h-2 rounded-full mt-2 ${isFutbol ? 'bg-cm-primary' : 'bg-[#b4c5ff]'}`} />
+                                </div>
+                                <p className={`text-[11px] ${isFutbol ? 'text-cm-primary' : 'text-cm-primary'} font-medium font-[family-name:var(--font-inter)]`}>Disponible</p>
+                                <div className="flex flex-col gap-1 mt-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+                                  </div>
+                                  {!singlePrice && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full flex justify-between items-center">
+                                <div>
+                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+                                  <p className="text-[11px] text-cm-primary font-medium font-[family-name:var(--font-inter)]">Disponible</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs">\u2600\ufe0f</span>
+                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+                                  </div>
+                                  {!singlePrice && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs">\ud83c\udf19</span>
+                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </div>
