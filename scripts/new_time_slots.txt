@@ -1,0 +1,51 @@
+          {/* ── Time Slot Grid ── */}
+          {selectedCourtIds.length > 0 && (
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cm-primary text-[18px]">schedule</span>
+                  <h2 className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Horarios Disponibles</h2>
+                  {bookingsLoading && (
+                    <span className="material-symbols-outlined text-[14px] animate-spin text-cm-on-surface-variant">progress_activity</span>
+                  )}
+                </div>
+                <span className="text-[10px] font-bold px-3 py-1 bg-cm-primary/10 text-cm-primary rounded-full font-[family-name:var(--font-inter)] truncate max-w-[180px]">
+                  {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+                </span>
+              </div>
+              <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)] mb-3">
+                {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+              </p>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                {visibleSlots.map((slot) => {
+                  const status = getUnifiedSlotStatus(slot)
+                  const hour = parseInt(slot.split(':')[0], 10)
+                  const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
+                  let chipClass = 'bg-white/[0.06] text-cm-on-surface border-white/10 hover:bg-white/10'
+                  let clickAllowed = true
+                  if (status === 'selected') {
+                    chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
+                  } else if (status === 'occupied') {
+                    chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/30 border-white/5 opacity-40 cursor-not-allowed'
+                    clickAllowed = false
+                  } else if (status === 'past') {
+                    chipClass = 'bg-white/[0.01] text-cm-on-surface-variant/20 border-transparent cursor-not-allowed'
+                    clickAllowed = false
+                  }
+                  return (
+                    <button key={slot} type="button" disabled={!clickAllowed}
+                      onClick={() => handleSlotToggle(slot)}
+                      className={`py-3 px-2 rounded-lg font-medium border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+                      {slot} - {nextHour}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedTimeSlots.length > 0 && (
+                <button type="button" onClick={clearTimeSlots}
+                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+                  Limpiar selección
+                </button>
+              )}
+            </div>
+          )}

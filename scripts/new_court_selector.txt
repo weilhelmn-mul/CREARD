@@ -1,0 +1,83 @@
+          {/* ── Court Selector ── */}
+          <div className="mb-5">
+            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-4 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+              Selecciona Canchas
+              {selectedCourtIds.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold font-[family-name:var(--font-inter)]">
+                  {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </h2>
+            <div className="space-y-6">
+              {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
+                const cfg = sportConfig[sport] || { label: sport, icon: 'sports', color: '#00ff41' }
+                const isFutbol = sport === 'futbol'
+                const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
+                return (
+                  <section key={sport} className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-cm-primary text-[18px]">{cfg.icon}</span>
+                        <h3 className="text-[11px] font-bold uppercase tracking-widest text-cm-primary font-[family-name:var(--font-inter)]">
+                          Canchas de {cfg.label}
+                        </h3>
+                      </div>
+                      <span className="text-[10px] text-cm-on-surface-variant bg-cm-surface-container-highest/60 px-2.5 py-0.5 rounded-full font-[family-name:var(--font-inter)]">
+                        {surfaceLabel}
+                      </span>
+                    </div>
+                    <div className={`grid gap-3 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+                      {sportCourts.map((court) => {
+                        const isSelected = selectedCourtIds.includes(court.id)
+                        const schedule = court.pricingSchedule || []
+                        const prices = schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour]
+                        const minPrice = Math.min(...prices)
+                        const maxPrice = Math.max(...prices)
+                        const priceText = minPrice === maxPrice ? `S/ ${minPrice}/h` : `S/ ${minPrice} - S/ ${maxPrice}`
+                        return (
+                          <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
+                            className={`group relative w-full flex flex-col p-3 rounded-2xl border transition-all duration-300 text-left active:scale-[0.97] ${
+                              isSelected
+                                ? 'border-cm-primary/50 bg-cm-surface-container shadow-[0_0_20px_rgba(0,255,65,0.06)]'
+                                : 'bg-cm-surface-container-highest/20 border-white/5 hover:border-cm-primary/25 hover:bg-cm-surface-container-highest/40'
+                            }`}>
+                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-xl relative overflow-hidden mb-3 border border-white/[0.08] ${
+                              isFutbol ? 'bg-gradient-to-br from-[#064e3b] to-[#065f46]' : 'bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]'
+                            }`}>
+                              {isFutbol ? (
+                                <>
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border border-white/20 rounded-full" />
+                                  <div className="absolute left-0 top-1/4 h-1/2 w-2 border-r border-y border-white/20" />
+                                  <div className="absolute right-0 top-1/4 h-1/2 w-2 border-l border-y border-white/20" />
+                                </>
+                              ) : (
+                                <>
+                                  <div className="absolute inset-2 border border-white/20" />
+                                  <div className="absolute inset-x-2 top-[30%] h-[40%] border-y border-white/10" />
+                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/40 shadow-sm z-10" />
+                                </>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className={`text-[13px] font-bold font-[family-name:var(--font-sora)] leading-tight ${isSelected ? 'text-cm-primary' : 'text-cm-on-surface'}`}>
+                                  {court.name}
+                                </p>
+                                <p className="text-[10px] text-cm-primary font-medium font-[family-name:var(--font-inter)] mt-0.5">Disponible</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-cm-primary shadow-[0_0_6px_rgba(0,255,65,0.5)]' : 'bg-cm-primary/50'}`} />
+                                <span className="text-[11px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{priceText}</span>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          </div>
