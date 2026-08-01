@@ -3,8 +3,7 @@
 // ============================================================
 // CREARD - YapeQRPayButton
 // Muestra QR de Yape y boton "Ya realice el pago"
-// La reserva queda en estado 'payment_pending' hasta que
-// el administrador valide manualmente.
+// Soporta paymentType: 'advance' (adelanto) o 'remaining' (restante)
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -24,10 +23,12 @@ interface YapeConfig {
 interface YapeQRPayButtonProps {
   /** IDs de reservas en Firestore */
   bookingIds: string[];
-  /** Monto a pagar (adelanto) en soles */
+  /** Monto a pagar en soles */
   amount: number;
   /** Nombre/email del usuario */
   userEmail?: string;
+  /** Tipo de pago: 'advance' o 'remaining' */
+  paymentType?: 'advance' | 'remaining';
   /** Texto del boton */
   buttonText?: string;
   /** Clase CSS adicional */
@@ -42,7 +43,8 @@ export default function YapeQRPayButton({
   bookingIds,
   amount,
   userEmail = '',
-  buttonText = 'Ya realic\u00e9 el pago',
+  paymentType = 'advance',
+  buttonText,
   className = '',
   onPaymentMarked,
   onBack,
@@ -51,6 +53,13 @@ export default function YapeQRPayButton({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [marked, setMarked] = useState(false);
+
+  const isRemaining = paymentType === 'remaining';
+  const defaultButtonText = isRemaining
+    ? 'Ya realic\u00e9 el pago del restante'
+    : 'Ya realic\u00e9 el pago';
+  const displayButtonText = buttonText || defaultButtonText;
+  const displayAmount = isRemaining ? amount : amount;
 
   // Fetch Yape config
   useEffect(() => {
@@ -72,7 +81,7 @@ export default function YapeQRPayButton({
       const res = await fetch('/api/payment-validation', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingIds }),
+        body: JSON.stringify({ bookingIds, paymentType }),
       });
 
       const data = await res.json();
@@ -84,7 +93,9 @@ export default function YapeQRPayButton({
       setMarked(true);
       toast({
         title: 'Pago registrado',
-        description: 'Tu reserva queda pendiente de validacion. Recibiras una notificacion cuando se confirme.',
+        description: isRemaining
+          ? 'Tu pago restante queda pendiente de validaci\u00f3n. El administrador verificar\u00e1 tu pago.'
+          : 'Tu reserva queda pendiente de validaci\u00f3n. Recibir\u00e1s una notificaci\u00f3n cuando se confirme.',
       });
       onPaymentMarked?.();
     } catch (error: any) {
@@ -96,7 +107,7 @@ export default function YapeQRPayButton({
     } finally {
       setSubmitting(false);
     }
-  }, [submitting, bookingIds, onPaymentMarked]);
+  }, [submitting, bookingIds, paymentType, isRemaining, onPaymentMarked]);
 
   if (loading) {
     return (
@@ -117,10 +128,12 @@ export default function YapeQRPayButton({
           <span className="material-symbols-outlined text-amber-400 text-[40px]" style={{ fontVariationSettings: '"FILL" 1' }}>hourglass_top</span>
         </div>
         <h3 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface mb-2">
-          Pendiente de validacion
+          {isRemaining ? 'Pago restante pendiente' : 'Pendiente de validaci\u00f3n'}
         </h3>
         <p className="text-sm text-cm-on-surface-variant text-center max-w-xs font-[family-name:var(--font-inter)]">
-          Tu reserva ha sido registrada. El administrador validara tu pago y recibiras una confirmacion.
+          {isRemaining
+            ? 'El administrador validar\u00e1 tu pago restante y actualizar\u00e1 tu reserva.'
+            : 'Tu reserva ha sido registrada. El administrador validar\u00e1 tu pago y recibir\u00e1s una confirmaci\u00f3n.'}
         </p>
         {onBack && (
           <button
@@ -139,7 +152,7 @@ export default function YapeQRPayButton({
     return (
       <div className="text-center py-8">
         <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
-          Configuracion de Yape no disponible. Contacta al administrador.
+          Configuraci\u00f3n de Yape no disponible. Contacta al administrador.
         </p>
       </div>
     );
@@ -177,20 +190,22 @@ export default function YapeQRPayButton({
           )}
           {config.numero_yape && (
             <div>
-              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Numero Yape</p>
+              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">N\u00famero Yape</p>
               <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{config.numero_yape}</p>
             </div>
           )}
           <div className="bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3">
-            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</p>
-            <p className="text-xl font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {amount.toFixed(2)}</p>
+            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+              {isRemaining ? 'Monto restante a pagar' : 'Monto a pagar'}
+            </p>
+            <p className="text-xl font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {displayAmount.toFixed(2)}</p>
           </div>
         </div>
       </div>
 
       {/* Instructions */}
       <p className="text-xs text-cm-on-surface-variant text-center max-w-xs mb-5 font-[family-name:var(--font-inter)]">
-        {config.mensaje || 'Escanea el codigo QR con la aplicacion Yape y realiza el pago del monto correspondiente.'}
+        {config.mensaje || 'Escanea el c\u00f3digo QR con la aplicaci\u00f3n Yape y realiza el pago del monto correspondiente.'}
       </p>
 
       {/* Mark as paid button */}
@@ -205,7 +220,7 @@ export default function YapeQRPayButton({
         ) : (
           <>
             <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
-            {buttonText}
+            {displayButtonText}
           </>
         )}
       </button>

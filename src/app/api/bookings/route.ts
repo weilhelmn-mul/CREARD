@@ -112,6 +112,7 @@ function toCamelBooking(b: Record<string, unknown>) {
     status: migrateStatus(b.status || 'reserved'),
     slotStatus: b.slot_status,
     paymentMethod: b.payment_method,
+    remainingPaymentStatus: b.remaining_payment_status || null,
     notes: b.notes,
     createdAt: b.created_at,
     updatedAt: b.updated_at,

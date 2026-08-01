@@ -1,7 +1,7 @@
 // ============================================================
 // CREARD - API Route: /api/payment-validation
 // GET   : Lista reservas pendientes de validacion (admin)
-// POST  : Crea reserva con estado 'payment_pending' (usuario)
+// POST  : Marca reserva como pendiente (adelanto o restante)
 // PATCH : Valida o rechaza un pago (admin)
 // ============================================================
 
@@ -56,7 +56,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/payment-validation - User: mark booking as payment_pending
+// POST /api/payment-validation - User: mark booking as pending validation
+// Supports paymentType: 'advance' (default) or 'remaining'
 export async function POST(request: NextRequest) {
   const authResult = await requireAuth(request, 'user');
   if (authResult instanceof NextResponse) return authResult;
@@ -64,26 +65,44 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { bookingIds } = body;
+    const { bookingIds, paymentType } = body;
 
     if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
       return NextResponse.json({ error: 'IDs de reserva requeridos.' }, { status: 400 });
     }
+
+    const isRemaining = paymentType === 'remaining';
 
     const db = getAdminDb();
     const batch = db.batch();
 
     for (const bookingId of bookingIds) {
       const ref = db.collection('bookings').doc(bookingId);
-      batch.update(ref, {
-        status: 'payment_pending',
-        payment_method: 'Yape QR',
-        updated_at: Timestamp.now(),
-      });
+
+      if (isRemaining) {
+        // For remaining payments, keep status as 'reserved' but add a flag
+        batch.update(ref, {
+          remaining_payment_status: 'pending',
+          payment_method: 'Yape QR',
+          updated_at: Timestamp.now(),
+        });
+      } else {
+        // For advance payments, set the whole booking to payment_pending
+        batch.update(ref, {
+          status: 'payment_pending',
+          payment_method: 'Yape QR',
+          updated_at: Timestamp.now(),
+        });
+      }
     }
 
     await batch.commit();
-    return NextResponse.json({ success: true, message: 'Reserva marcada como pendiente de validacion.' });
+    return NextResponse.json({
+      success: true,
+      message: isRemaining
+        ? 'Pago restante marcado como pendiente de validacion.'
+        : 'Reserva marcada como pendiente de validacion.'
+    });
   } catch (error: any) {
     console.error('[PAYMENT-VALIDATION] Error marking pending:', error.message);
     return NextResponse.json({ error: 'Error al procesar.' }, { status: 500 });
@@ -115,21 +134,37 @@ export async function PATCH(request: NextRequest) {
     }
     const booking = bookingSnap.data();
 
-    // Update booking status
-    if (action === 'validate') {
-      await bookingRef.update({
-        status: 'reserved',
-        slot_status: 'reserved',
-        updated_at: now,
-      });
+    // Determine if this is a remaining payment validation
+    const isRemainingPayment = booking.remaining_payment_status === 'pending';
+
+    // Build update object
+    const updateData: Record<string, any> = { updated_at: now };
+
+    if (isRemainingPayment) {
+      // Remaining payment validation
+      if (action === 'validate') {
+        // Mark remaining as paid
+        updateData.remaining_payment_status = 'validated';
+        updateData.remaining_amount = 0;
+        updateData.advance_amount = booking.total_price;
+        // Keep booking as reserved
+      } else {
+        // Reject remaining payment - keep the amount owed
+        updateData.remaining_payment_status = 'rejected';
+      }
     } else {
-      // Reject: free up the slot
-      await bookingRef.update({
-        status: 'cancelled',
-        slot_status: 'available',
-        updated_at: now,
-      });
+      // Advance payment validation
+      if (action === 'validate') {
+        updateData.status = 'reserved';
+        updateData.slot_status = 'reserved';
+      } else {
+        // Reject: free up the slot
+        updateData.status = 'cancelled';
+        updateData.slot_status = 'available';
+      }
     }
+
+    await bookingRef.update(updateData);
 
     // Create payment validation record (audit log)
     await db.collection('payment_validations').add({
@@ -142,8 +177,9 @@ export async function PATCH(request: NextRequest) {
       start_time: booking.start_time,
       end_time: booking.end_time,
       amount: booking.total_price || 0,
-      advance_amount: booking.advance_amount || 0,
+      advance_amount: isRemainingPayment ? (booking.remaining_amount || 0) : (booking.advance_amount || 0),
       payment_method: booking.payment_method || 'Yape QR',
+      payment_type: isRemainingPayment ? 'remaining' : 'advance',
       action,
       observation: observation || '',
       validated_by: authUser.id,
@@ -155,8 +191,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: action === 'validate'
-        ? 'Pago validado. Reserva confirmada.'
-        : 'Pago rechazado. Reserva liberada.',
+        ? (isRemainingPayment ? 'Pago restante validado. Saldo completado.' : 'Pago validado. Reserva confirmada.')
+        : (isRemainingPayment ? 'Pago restante rechazado. El monto sigue pendiente.' : 'Pago rechazado. Reserva liberada.'),
     });
   } catch (error: any) {
     console.error('[PAYMENT-VALIDATION] Error:', error.message);
