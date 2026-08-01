@@ -548,13 +548,13 @@ export default function UnifiedBookingView() {
               {formStep === 'select' && 'Reservar Cancha'}
               {formStep === 'summary' && 'Confirmar Reserva'}
               {formStep === 'payment' && 'Pagar Adelanto'}
-              {formStep === 'done' && 'Reserva Confirmada'}
+              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Pago Registrado' : 'Reserva Confirmada')}
             </h1>
             <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
               {formStep === 'select' && 'Selecciona canchas y horarios en un solo lugar'}
               {formStep === 'summary' && 'Verifica los detalles antes de pagar'}
               {formStep === 'payment' && `Ref: ${bookingRefs.join(', ')}`}
-              {formStep === 'done' && 'Tu reserva ha sido registrada exitosamente'}
+              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Espera la confirmacion del administrador' : 'Tu reserva ha sido registrada exitosamente')}
             </p>
           </div>
         </div>
@@ -969,14 +969,63 @@ export default function UnifiedBookingView() {
         <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.4 }}
           className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]">
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
-            className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6">
-            <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>{activePaymentMethod === "yape_qr" ? "hourglass_top" : "check_circle"}</span>
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-8">
-            <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">{activePaymentMethod === "yape_qr" ? "Pago Registrado" : "Reserva Confirmada"}</h2>
-            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">{activePaymentMethod === "yape_qr" ? "Tu reserva queda pendiente de validación. Recibirás una notificación cuando se confirme." : "Tu reserva ha sido registrada exitosamente"}</p>
-          </motion.div>
+
+          {activePaymentMethod === 'yape_qr' ? (
+            /* ── Yape: Pendiente de validación (attractive design) ── */
+            <>
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+                className="relative mb-6">
+                <div className="w-28 h-28 rounded-full flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(129,140,248,0.15) 100%)', border: '2px solid rgba(251,191,36,0.3)' }}>
+                  <span className="material-symbols-outlined text-amber-400 text-[52px]" style={{ fontVariationSettings: '"FILL" 1' }}>hourglass_top</span>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-amber-400 text-[16px]">schedule</span>
+                </div>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-5">
+                <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Pago Registrado</h2>
+                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] leading-relaxed">
+                  Tu reserva queda <span className="text-amber-400 font-semibold">pendiente de validación</span>. El administrador verificará tu pago y actualizará el estado de tu reserva.
+                </p>
+              </motion.div>
+
+              {/* Prominent call-to-action card */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+                className="w-full rounded-2xl p-5 mb-5 overflow-hidden relative"
+                style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(129,140,248,0.08) 100%)', border: '1.5px solid rgba(251,191,36,0.25)' }}>
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-400/5 -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-indigo-400/5 translate-y-1/2 -translate-x-1/2" />
+                <div className="relative flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="material-symbols-outlined text-amber-400 text-[22px]">info</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-300 font-[family-name:var(--font-sora)] mb-1">
+                      Revisa tu bandeja de reservas
+                    </p>
+                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] leading-relaxed">
+                      Una vez que el administrador valide tu pago, tu reserva cambiará a estado <span className="text-green-400 font-semibold">"Reservado"</span>. Si el pago no puede ser verificado, aparecerá como <span className="text-red-400 font-semibold">"Rechazado"</span>.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          ) : (
+            /* ── Non-Yape: Reserva confirmada ── */
+            <>
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+                className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6">
+                <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-8">
+                <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Reserva Confirmada</h2>
+                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">Tu reserva ha sido registrada exitosamente</p>
+              </motion.div>
+            </>
+          )}
+
+          {/* Booking details card (shared) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="w-full glass-card rounded-2xl p-5 mb-6">
             <div className="text-center mb-4 pb-4 border-b border-dashed border-white/10">
               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1">Referencia de reserva</p>
@@ -1010,10 +1059,15 @@ export default function UnifiedBookingView() {
                   </p>
                 </div>
               </div>
-              <div className="bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3">
+              <div className={activePaymentMethod === 'yape_qr'
+                ? 'bg-amber-500/10 border border-amber-500/25 rounded-lg p-3'
+                : 'bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3'
+              }>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-cm-on-surface-variant font-medium">{activePaymentMethod === "yape_qr" ? "⏳ Pago pendiente de validación" : "✔ Adelanto pagado"}</span>
-                  <span className={activePaymentMethod === "yape_qr" ? "text-sm font-bold text-amber-400" : "text-sm font-bold text-[#00ff41]"}>S/ {advanceAmount.toFixed(2)}</span>
+                  <span className="text-xs text-cm-on-surface-variant font-medium">
+                    {activePaymentMethod === 'yape_qr' ? 'Pago pendiente de validación' : 'Adelanto pagado'}
+                  </span>
+                  <span className={activePaymentMethod === 'yape_qr' ? 'text-sm font-bold text-amber-400' : 'text-sm font-bold text-[#00ff41]'}>S/ {advanceAmount.toFixed(2)}</span>
                 </div>
                 <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">
                   Pago restante: S/ {remainingAmount.toFixed(2)} (en el local)

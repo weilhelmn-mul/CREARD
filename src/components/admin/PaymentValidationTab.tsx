@@ -5,6 +5,10 @@ import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { cachedFetch, cachedFetchFresh } from '@/lib/cache'
 
+interface PaymentValidationTabProps {
+  onValidationChange?: () => void
+}
+
 interface PendingBooking {
   id: string
   user_id: string
@@ -31,7 +35,7 @@ interface ValidationRecord {
   created_at: any
 }
 
-export default function PaymentValidationTab() {
+export default function PaymentValidationTab({ onValidationChange }: PaymentValidationTabProps) {
   const [bookings, setBookings] = useState<PendingBooking[]>([])
   const [history, setHistory] = useState<Record<string, ValidationRecord[]>>({})
   const [loading, setLoading] = useState(true)
@@ -73,6 +77,7 @@ export default function PaymentValidationTab() {
       setObsDialog(null)
       setObservation('')
       fetchData()
+      onValidationChange?.()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     } finally {

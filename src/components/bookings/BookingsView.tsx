@@ -35,9 +35,10 @@ type TabType = 'upcoming' | 'completed' | 'cancelled'
 
 /* ─── config ─── */
 const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
-  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',   icon: 'check_circle' },
-  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'verified' },
-  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400 border-red-500/30',        icon: 'cancel' },
+  reserved:       { label: 'Reservado',            color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'check_circle' },
+  payment_pending: { label: 'Pendiente de reserva', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: 'hourglass_top' },
+  completed:      { label: 'Completo',             color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',     icon: 'verified' },
+  cancelled:      { label: 'Cancelado',            color: 'bg-red-500/20 text-red-400 border-red-500/30',       icon: 'cancel' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -61,6 +62,8 @@ const sportLabels: Record<string, string> = {
 }
 
 const paymentMethodLabels: Record<string, string> = {
+  'yape qr': 'Yape QR',
+  'Yape QR': 'Yape QR',
   yape: 'Yape',
   plin: 'Plin',
   culqi: 'Culqi',
@@ -69,7 +72,7 @@ const paymentMethodLabels: Record<string, string> = {
   transfer: 'Transferencia',
 }
 
-const onlineMethods = ['culqi', 'yape', 'plin', 'card', 'tarjeta']
+const onlineMethods = ['culqi', 'yape', 'yape qr', 'plin', 'card', 'tarjeta']
 const manualMethods = ['efectivo', 'transferencia', 'cash', 'transfer']
 
 const tabs: { key: TabType; label: string }[] = [
@@ -219,7 +222,7 @@ export default function BookingsView() {
   const tabCounts = {
     upcoming: bookings.filter((b) => {
       const bd = parseLocalDate(b.date)
-      return bd >= tomorrow && b.status === 'reserved'
+      return bd >= tomorrow && ['reserved', 'payment_pending'].includes(b.status)
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,
     cancelled: bookings.filter((b) => b.status === 'cancelled').length,
@@ -384,7 +387,7 @@ export default function BookingsView() {
                       </div>
 
                       {/* Progress bar (always visible for payment statuses) */}
-                      {['reserved', 'completed'].includes(booking.status) && (
+                      {['reserved', 'payment_pending', 'completed'].includes(booking.status) && (
                         <div className="mt-3 ml-[60px]">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
@@ -457,7 +460,7 @@ export default function BookingsView() {
                             </div>
 
                             {/* Remaining payment warning */}
-                            {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+                            {['reserved', 'payment_pending'].includes(booking.status) && booking.remainingAmount > 0 && (
                               <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
                                 <span className="material-symbols-outlined text-orange-400 text-[20px]">warning</span>
                                 <p className="text-sm text-orange-300 font-[family-name:var(--font-inter)]">
@@ -468,7 +471,7 @@ export default function BookingsView() {
 
                             {/* Actions */}
                             <div className="flex gap-2 pt-1">
-                              {booking.status === 'reserved' && booking.remainingAmount > 0 && (
+                              {['reserved', 'payment_pending'].includes(booking.status) && booking.remainingAmount > 0 && (
                                 <button type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -480,7 +483,7 @@ export default function BookingsView() {
                                   Pagar Restante
                                 </button>
                               )}
-                              {booking.status === 'reserved' && (
+                              {['reserved', 'payment_pending'].includes(booking.status) && (
                                 <button type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()

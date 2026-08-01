@@ -5065,7 +5065,7 @@ export default function AdminDashboard() {
 
           {/* ─── CONFIGURACIÓN (Contacto, Redes Sociales, Legal) ─── */}
           {activeTab === 'pagos' && (
-            <PaymentValidationTab />
+            <PaymentValidationTab onValidationChange={() => { invalidateCache('bookings'); fetchData() }} />
           )}
           {activeTab === 'yape_config' && (
             <YapeConfigTab />
