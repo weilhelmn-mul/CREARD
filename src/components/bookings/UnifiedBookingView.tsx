@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
+import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
 
 /* ═══════════════════════════════════════════════════════
    CREARD — UnifiedBookingView
@@ -159,6 +160,19 @@ export default function UnifiedBookingView() {
   const [clientPhone, setClientPhone] = useState(user?.phone || '')
   const [clientEmail, setClientEmail] = useState(user?.email || '')
   const [formStep, setFormStep] = useState<'select' | 'summary' | 'payment' | 'done'>('select')
+  const [activePaymentMethod, setActivePaymentMethod] = useState<'yape_qr' | 'culqi'>('yape_qr')
+
+  // Fetch active payment methods from Firebase
+  useEffect(() => {
+    fetch('/api/payment-methods')
+      .then(r => r.json())
+      .then(data => {
+        if (data.culqi && data.yape_qr) setActivePaymentMethod('yape_qr')
+        else if (data.culqi) setActivePaymentMethod('culqi')
+        else setActivePaymentMethod('yape_qr')
+      })
+      .catch(() => setActivePaymentMethod('yape_qr'))
+  }, [])
 
   const dateScrollRef = useRef<HTMLDivElement>(null)
 
@@ -425,7 +439,7 @@ export default function UnifiedBookingView() {
           advanceAmount: adv,
           remainingAmount: rem,
           status: 'reserved',
-          paymentMethod: 'culqi',
+          paymentMethod: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'culqi',
           selectedSlots: sortedSlots,
         }),
       })
@@ -864,7 +878,7 @@ export default function UnifiedBookingView() {
                   <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50%</span>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">REQUERIDO</span>
                 </div>
-                <span className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
               </div>
               <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
                 <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago restante (en el local)</span>
@@ -932,23 +946,20 @@ export default function UnifiedBookingView() {
             </div>
           </div>
 
-          {/* Culqi Payment */}
-          <CulqiPayButton
-            bookingId={createdBookings[0].id}
-            totalAmount={totalPrice}
-            remainingAmount={remainingAmount}
-            paymentType="advance"
+          <YapeQRPayButton
+            bookingIds={createdBookings.map((b: any) => b.id)}
+            amount={advanceAmount}
             userEmail={clientEmail || user?.email || ''}
-            buttonText="Pagar Adelanto con Culqi"
-            onSuccess={handlePaymentSuccess}
-            onError={handlePaymentError}
-            onClose={() => setFormStep('summary')}
+            onPaymentMarked={() => {
+              setFormStep('done')
+            }}
+            onBack={() => setFormStep('summary')}
           />
-
-          {/* Security badge */}
           <div className="flex items-center justify-center gap-2 mt-4">
             <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/40" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
-            <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">Pagos seguros procesados por Culqi</span>
+            <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">
+              Pago seguro mediante Yape
+            </span>
           </div>
         </motion.div>
       )}
@@ -960,11 +971,11 @@ export default function UnifiedBookingView() {
           className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]">
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
             className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6">
-            <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+            <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>{activePaymentMethod === "yape_qr" ? "hourglass_top" : "check_circle"}</span>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-8">
-            <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Reserva Confirmada</h2>
-            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">Tu reserva ha sido registrada exitosamente</p>
+            <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">{activePaymentMethod === "yape_qr" ? "Pago Registrado" : "Reserva Confirmada"}</h2>
+            <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">{activePaymentMethod === "yape_qr" ? "Tu reserva queda pendiente de validación. Recibirás una notificación cuando se confirme." : "Tu reserva ha sido registrada exitosamente"}</p>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="w-full glass-card rounded-2xl p-5 mb-6">
             <div className="text-center mb-4 pb-4 border-b border-dashed border-white/10">
@@ -1001,8 +1012,8 @@ export default function UnifiedBookingView() {
               </div>
               <div className="bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold">Adelanto pagado</span>
-                  <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+                  <span className="text-xs text-cm-on-surface-variant font-medium">{activePaymentMethod === "yape_qr" ? "⏳ Pago pendiente de validación" : "✔ Adelanto pagado"}</span>
+                  <span className={activePaymentMethod === "yape_qr" ? "text-sm font-bold text-amber-400" : "text-sm font-bold text-[#00ff41]"}>S/ {advanceAmount.toFixed(2)}</span>
                 </div>
                 <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">
                   Pago restante: S/ {remainingAmount.toFixed(2)} (en el local)

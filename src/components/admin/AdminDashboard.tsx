@@ -24,6 +24,8 @@ import ExpensesTable from './tables/ExpensesTable'
 import RecurringPreviewTable from './tables/RecurringPreviewTable'
 import SeriesBookingsTable from './tables/SeriesBookingsTable'
 import TimeSlotPicker from './TimeSlotPicker'
+import PaymentValidationTab from '@/components/admin/PaymentValidationTab'
+import YapeConfigTab from '@/components/admin/YapeConfigTab'
 import {
   DndContext,
   closestCenter,
@@ -139,7 +141,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'config'
+type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'pagos' | 'yape_config' | 'config'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -148,6 +150,7 @@ const statusConfig: Record<string, { label: string; color: string; dot: string }
   reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
   completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
   cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
+  payment_pending: { label: 'Pago Pendiente',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -173,6 +176,8 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
   { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
   { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
+  { key: 'pagos',       label: 'Pagos',          icon: 'verified' },
+  { key: 'yape_config',  label: 'Pago Yape',      icon: 'qr_code_2' },
   { key: 'config',     label: 'Configuración', icon: 'settings' },
 ]
 
@@ -5059,6 +5064,12 @@ export default function AdminDashboard() {
           )}
 
           {/* ─── CONFIGURACIÓN (Contacto, Redes Sociales, Legal) ─── */}
+          {activeTab === 'pagos' && (
+            <PaymentValidationTab />
+          )}
+          {activeTab === 'yape_config' && (
+            <YapeConfigTab />
+          )}
           {activeTab === 'config' && (
             <motion.div key='config' initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
               <SiteConfigTab />
