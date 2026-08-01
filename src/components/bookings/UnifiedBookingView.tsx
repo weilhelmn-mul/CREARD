@@ -952,6 +952,7 @@ export default function UnifiedBookingView() {
             userEmail={clientEmail || user?.email || ''}
             onPaymentMarked={() => {
               setFormStep('done')
+              setSuccess(true)
             }}
             onBack={() => setFormStep('summary')}
           />
