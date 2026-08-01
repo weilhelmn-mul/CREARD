@@ -548,13 +548,13 @@ export default function UnifiedBookingView() {
               {formStep === 'select' && 'Reservar Cancha'}
               {formStep === 'summary' && 'Confirmar Reserva'}
               {formStep === 'payment' && 'Pagar Adelanto'}
-              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Pago Registrado' : 'Reserva Confirmada')}
+              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? '¡Pago Registrado!' : 'Reserva Confirmada')}
             </h1>
             <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
               {formStep === 'select' && 'Selecciona canchas y horarios en un solo lugar'}
               {formStep === 'summary' && 'Verifica los detalles antes de pagar'}
               {formStep === 'payment' && `Ref: ${bookingRefs.join(', ')}`}
-              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Espera la confirmacion del administrador' : 'Tu reserva ha sido registrada exitosamente')}
+              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Tu solicitud está siendo procesada' : 'Tu reserva ha sido registrada exitosamente')}
             </p>
           </div>
         </div>
@@ -971,41 +971,47 @@ export default function UnifiedBookingView() {
           className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]">
 
           {activePaymentMethod === 'yape_qr' ? (
-            /* ── Yape: Pendiente de validación (attractive design) ── */
+            /* ── Yape: Pago Registrado (premium design) ── */
             <>
+              {/* Icon with emerald glow + pulse */}
               <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
-                className="relative mb-6">
-                <div className="w-28 h-28 rounded-full flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(129,140,248,0.15) 100%)', border: '2px solid rgba(251,191,36,0.3)' }}>
-                  <span className="material-symbols-outlined text-amber-400 text-[52px]" style={{ fontVariationSettings: '"FILL" 1' }}>hourglass_top</span>
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-amber-400 text-[16px]">schedule</span>
+                className="relative mb-8">
+                <div className="w-24 h-24 rounded-full bg-cm-primary/20 border-2 border-cm-primary flex items-center justify-center animate-pulse"
+                  style={{ filter: 'drop-shadow(0 0 20px rgba(0,255,65,0.35))', animationDuration: '3s' }}>
+                  <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
                 </div>
               </motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-5">
-                <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Pago Registrado</h2>
-                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] leading-relaxed">
-                  Tu reserva queda <span className="text-amber-400 font-semibold">pendiente de validación</span>. El administrador verificará tu pago y actualizará el estado de tu reserva.
+
+              {/* Title + Description */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="text-center mb-8">
+                <h2 className="font-[family-name:var(--font-sora)] text-3xl font-extrabold text-cm-on-surface mb-3 tracking-tight"
+                  style={{ filter: 'drop-shadow(0 0 12px rgba(0,255,65,0.3))' }}>
+                  ¡Pago Registrado!
+                </h2>
+                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] leading-relaxed max-w-sm mx-auto">
+                  Tu solicitud está <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>siendo procesada</span>. Por favor, espera la confirmación de nuestro administrador para{' '}
+                  <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>asegurar tu turno</span>.
                 </p>
               </motion.div>
 
-              {/* Prominent call-to-action card */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
-                className="w-full rounded-2xl p-5 mb-5 overflow-hidden relative"
-                style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(129,140,248,0.08) 100%)', border: '1.5px solid rgba(251,191,36,0.25)' }}>
-                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-amber-400/5 -translate-y-1/2 translate-x-1/2" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-indigo-400/5 translate-y-1/2 -translate-x-1/2" />
+              {/* Info card: check reservations */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+                className="w-full glass-card rounded-2xl p-5 mb-5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-cm-primary/5 -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-cm-primary/5 translate-y-1/2 -translate-x-1/2" />
                 <div className="relative flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="material-symbols-outlined text-amber-400 text-[22px]">info</span>
+                  <div className="w-10 h-10 rounded-xl bg-cm-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="material-symbols-outlined text-[#00ff41] text-[22px]">info</span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-amber-300 font-[family-name:var(--font-sora)] mb-1">
+                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1.5">
                       Revisa tu bandeja de reservas
                     </p>
                     <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] leading-relaxed">
-                      Una vez que el administrador valide tu pago, tu reserva cambiará a estado <span className="text-green-400 font-semibold">"Reservado"</span>. Si el pago no puede ser verificado, aparecerá como <span className="text-red-400 font-semibold">"Rechazado"</span>.
+                      Cuando el administrador valide tu pago, tu reserva cambiará a{' '}
+                      <span className="text-green-400 font-semibold">"Reservado"</span>.{' '}
+                      Si el pago no puede ser verificado, aparecerá como{' '}
+                      <span className="text-red-400 font-semibold">"Rechazado"</span>.
                     </p>
                   </div>
                 </div>
@@ -1025,64 +1031,92 @@ export default function UnifiedBookingView() {
             </>
           )}
 
-          {/* Booking details card (shared) */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="w-full glass-card rounded-2xl p-5 mb-6">
-            <div className="text-center mb-4 pb-4 border-b border-dashed border-white/10">
-              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1">Referencia de reserva</p>
-              <p className="font-mono text-xl font-bold text-[#00ff41] tracking-wider">{bookingRefs.join(' ')}</p>
+          {/* Booking details card (shared) - Bento Glassmorphism */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+            className="w-full rounded-2xl p-6 mb-6 relative overflow-hidden"
+            style={{ background: 'rgba(30,41,59,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+
+            {/* Section label */}
+            <div className="flex items-center gap-2 mb-5 opacity-60">
+              <span className="material-symbols-outlined text-[14px] text-[#00ff41]">receipt_long</span>
+              <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-[0.15em]">Resumen de la Transacción</span>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#00ff41] text-[20px]">sports</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+
+            {/* Bento grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
+              {/* Cancha */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Cancha</span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">sports</span>
+                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
                     {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
-                  </p>
-                  <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    {totalCourts} cancha{totalCourts > 1 ? 's' : ''} · {totalSlots} hora{totalSlots > 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
-                  <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">Fecha</p>
-                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
-                    {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-                <div className="bg-cm-surface-container-highest/40 rounded-lg p-3">
-                  <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">Horario</p>
-                  <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
-                    {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : '-'}
-                  </p>
-                </div>
-              </div>
-              <div className={activePaymentMethod === 'yape_qr'
-                ? 'bg-amber-500/10 border border-amber-500/25 rounded-lg p-3'
-                : 'bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3'
-              }>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-cm-on-surface-variant font-medium">
-                    {activePaymentMethod === 'yape_qr' ? 'Pago pendiente de validación' : 'Adelanto pagado'}
                   </span>
-                  <span className={activePaymentMethod === 'yape_qr' ? 'text-sm font-bold text-amber-400' : 'text-sm font-bold text-[#00ff41]'}>S/ {advanceAmount.toFixed(2)}</span>
                 </div>
-                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">
-                  Pago restante: S/ {remainingAmount.toFixed(2)} (en el local)
+              </div>
+              {/* Fecha */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Fecha</span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">calendar_today</span>
+                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+                    {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              </div>
+              {/* Horario */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Horario</span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">schedule</span>
+                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+                    {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : '-'}
+                  </span>
+                </div>
+              </div>
+              {/* Monto */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">
+                  {activePaymentMethod === 'yape_qr' ? 'Monto Pagado' : 'Adelanto'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">payments</span>
+                  <span className="text-lg font-black text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer: status + ref */}
+            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#00ff41]" style={{ filter: 'drop-shadow(0 0 6px rgba(0,255,65,0.5))' }} />
+                <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-wider">
+                  {activePaymentMethod === 'yape_qr' ? 'Pendiente de Verificación' : 'Confirmado'}
+                </span>
+              </div>
+              <span className="text-[10px] text-cm-on-surface-variant font-mono opacity-40">#{bookingRefs.join('-')}</span>
+            </div>
+
+            {/* Restante (only for Yape) */}
+            {activePaymentMethod === 'yape_qr' && remainingAmount > 0 && (
+              <div className="mt-3 pt-3 border-t border-dashed border-white/5">
+                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                  Pago restante: <span className="font-semibold text-cm-on-surface">S/ {remainingAmount.toFixed(2)}</span> (en el local)
                 </p>
               </div>
-            </div>
+            )}
           </motion.div>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="w-full space-y-3">
+
+          {/* Action Buttons */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="w-full space-y-3">
             <button type="button" onClick={handleBack}
-              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-[20px]">bookmark</span> Ver Mis Reservas
+              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2 shadow-lg"
+              style={{ boxShadow: '0 8px 24px rgba(0,255,65,0.15)' }}>
+              <span className="material-symbols-outlined text-[20px]">event_available</span> Ver mis Reservas
             </button>
             <button type="button" onClick={() => { clearTimeSlots(); clearSelectedCourtIds(); setSelectedCourt(null); setView('home') }}
-              className="w-full py-3 text-cm-on-surface-variant text-sm font-medium font-[family-name:var(--font-inter)] hover:text-cm-on-surface transition-colors">
-              Hacer otra reserva
+              className="w-full py-3 text-cm-on-surface-variant text-sm font-medium font-[family-name:var(--font-inter)] hover:text-cm-on-surface transition-colors rounded-xl border border-white/10 hover:border-white/20 flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">home</span> Volver al Inicio
             </button>
           </motion.div>
         </motion.div>
