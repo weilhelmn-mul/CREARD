@@ -8,6 +8,7 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 import { formatTimeRange } from '@/lib/timeUtils'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
 import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
+import PaymentVoucher from '@/components/payments/PaymentVoucher'
 
 /* ─── types ─── */
 interface Booking {
@@ -101,6 +102,11 @@ const fmt = (dateStr: string) => {
 
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
 
+function getRefCode(bookingId: string): string {
+  const hash = bookingId.slice(-8).toUpperCase()
+  return `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`
+}
+
 /* ─── component ─── */
 export default function BookingsView() {
   const { user, setView } = useAppStore()
@@ -113,6 +119,8 @@ export default function BookingsView() {
   /* payment methods from admin config */
   const [paymentMethods, setPaymentMethods] = useState<{ yape_qr: boolean; culqi: boolean }>({ yape_qr: true, culqi: false })
   const [yapeRemainingPaid, setYapeRemainingPaid] = useState(false)
+  const [voucherData, setVoucherData] = useState<any>(null)
+  const [showVoucher, setShowVoucher] = useState(false)
 
   useEffect(() => {
     fetch('/api/payment-methods')
@@ -219,8 +227,10 @@ export default function BookingsView() {
       })
       if (res.ok) {
         toast({ title: 'Pago registrado', description: `Se registró el pago restante de ${fmtCurrency(payModal.remainingAmount)}` })
+        setVoucherData(constructVoucherFromBooking(payModal, paymentMethodLabels[payMethod] || payMethod))
         setPayModal(null)
         fetchBookings()
+        setTimeout(() => setShowVoucher(true), 500)
       } else {
         const err = await res.json()
         toast({ title: 'Error', description: err.error || 'No se pudo procesar el pago', variant: 'destructive' })
@@ -229,6 +239,31 @@ export default function BookingsView() {
       toast({ title: 'Error', description: 'No se pudo procesar el pago', variant: 'destructive' })
     } finally {
       setPaying(false)
+    }
+  }
+
+  const constructVoucherFromBooking = (b: any, methodDisplay?: string) => {
+    const now = new Date()
+    return {
+      payment_id: '',
+      booking_code: getRefCode(b.id),
+      user_name: user?.name || '',
+      user_email: user?.email || '',
+      user_phone: (user as any)?.phone || null,
+      user_document: null,
+      court_name: b.court?.name || '',
+      sport: b.court?.sport || '',
+      booking_date: b.date || '',
+      booking_start_time: b.startTime || '',
+      booking_end_time: b.endTime || '',
+      payment_type: 'remaining',
+      amount_paid: b.remainingAmount || 0,
+      remaining_balance: 0,
+      payment_method_display: methodDisplay || 'Yape QR',
+      payment_status: 'completed',
+      payment_date: now.toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' }),
+      payment_time: now.toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+      total_price: b.totalPrice || 0,
     }
   }
 
@@ -587,7 +622,9 @@ export default function BookingsView() {
                       paymentType="remaining"
                       onPaymentMarked={() => {
                         setYapeRemainingPaid(true)
+                        setVoucherData(constructVoucherFromBooking(payModal))
                         fetchBookings()
+                        setTimeout(() => setShowVoucher(true), 500)
                       }}
                       onBack={() => setPayModal(null)}
                     />
@@ -650,8 +687,10 @@ export default function BookingsView() {
                         buttonText={`Pagar {fmtCurrency(payModal.remainingAmount)}`}
                         onSuccess={() => {
                           toast({ title: 'Pago exitoso', description: 'Tu reserva ha sido actualizada.' })
+                          setVoucherData(constructVoucherFromBooking(payModal, 'Tarjeta'))
                           setPayModal(null)
                           fetchBookings()
+                          setTimeout(() => setShowVoucher(true), 500)
                         }}
                         onError={(error) => {
                           toast({ title: 'Error en el pago', description: error, variant: 'destructive' })
@@ -669,7 +708,9 @@ export default function BookingsView() {
                         paymentType="remaining"
                         onPaymentMarked={() => {
                           setYapeRemainingPaid(true)
+                          setVoucherData(constructVoucherFromBooking(payModal))
                           fetchBookings()
+                          setTimeout(() => setShowVoucher(true), 500)
                         }}
                         onBack={() => setPayModal(null)}
                       />
@@ -728,6 +769,9 @@ export default function BookingsView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ─── Payment Voucher Modal ─── */}
+      <PaymentVoucher data={voucherData} open={showVoucher} onClose={() => setShowVoucher(false)} />
     </div>
   )
 }

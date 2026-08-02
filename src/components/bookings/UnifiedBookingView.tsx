@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
 import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
+import PaymentVoucher from '@/components/payments/PaymentVoucher'
 
 /* ═══════════════════════════════════════════════════════
    CREARD — UnifiedBookingView
@@ -161,6 +162,10 @@ export default function UnifiedBookingView() {
   const [clientEmail, setClientEmail] = useState(user?.email || '')
   const [formStep, setFormStep] = useState<'select' | 'summary' | 'payment' | 'done'>('select')
   const [activePaymentMethod, setActivePaymentMethod] = useState<'yape_qr' | 'culqi'>('yape_qr')
+  const [paymentType, setPaymentType] = useState<'advance' | 'full_payment'>('advance')
+  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
+  const [showVoucher, setShowVoucher] = useState(false)
+  const [voucherData, setVoucherData] = useState<any>(null)
 
   // Fetch active payment methods from Firebase
   useEffect(() => {
@@ -268,6 +273,9 @@ export default function UnifiedBookingView() {
   )
   const advanceAmount = Math.round(totalPrice * 50) / 100
   const remainingAmount = Math.round((totalPrice - advanceAmount) * 100) / 100
+
+  const paymentAmount = paymentType === 'full_payment' ? totalPrice : advanceAmount
+  const paymentRemaining = paymentType === 'full_payment' ? 0 : remainingAmount
 
   const totalSlots = selectedTimeSlots.length
   const totalCourts = selectedCourtIds.length
@@ -423,8 +431,9 @@ export default function UnifiedBookingView() {
         }
       }
 
-      const adv = Math.round(calcTotal * 50) / 100
-      const rem = Math.round((calcTotal - adv) * 100) / 100
+      const isFull = paymentType === 'full_payment'
+      const adv = isFull ? calcTotal : Math.round(calcTotal * 50) / 100
+      const rem = isFull ? 0 : Math.round((calcTotal - adv) * 100) / 100
 
       const res = await fetch('/api/bookings', {
         method: 'POST',
@@ -438,6 +447,7 @@ export default function UnifiedBookingView() {
           totalPrice: calcTotal,
           advanceAmount: adv,
           remainingAmount: rem,
+          paymentType: paymentType,
           status: 'reserved',
           paymentMethod: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'culqi',
           selectedSlots: sortedSlots,
@@ -466,6 +476,30 @@ export default function UnifiedBookingView() {
       }
 
       const booking = await res.json()
+      const paymentId = booking.paymentId || null
+      setLastPaymentId(paymentId)
+      // Construct voucher data for later use
+      setVoucherData({
+        payment_id: paymentId || '',
+        booking_code: getRefCode(booking.id),
+        user_name: clientName,
+        user_email: clientEmail || user?.email || '',
+        user_phone: clientPhone || null,
+        user_document: null,
+        court_name: selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', '),
+        sport: selectedCourtIds.length > 0 ? (courts.find((c) => c.id === selectedCourtIds[0])?.sport || '') : '',
+        booking_date: selectedDate || '',
+        booking_start_time: [...selectedTimeSlots].sort()[0] || '',
+        booking_end_time: `${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00`,
+        payment_type: paymentType,
+        amount_paid: isFull ? calcTotal : adv,
+        remaining_balance: isFull ? 0 : rem,
+        payment_method_display: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'Culqi',
+        payment_status: isFull ? 'completed' : 'parcial',
+        payment_date: new Date().toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' }),
+        payment_time: new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+        total_price: calcTotal,
+      })
       setCreatedBookings([booking])
       setBookingRefs([getRefCode(booking.id)])
       setFormStep('payment')
@@ -873,16 +907,41 @@ export default function UnifiedBookingView() {
                   </div>
                 )
               })}
-              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50%</span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">REQUERIDO</span>
+
+              {/* Payment Type Selector */}
+              <div className="mb-4">
+                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 font-medium">Selecciona el monto a pagar</p>
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'advance' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+                    <input type="radio" name="paymentType" value="advance" checked={paymentType === 'advance'} onChange={() => setPaymentType('advance')} className="accent-[#00ff41] w-4 h-4" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar adelanto (50%)</p>
+                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago minimo obligatorio para confirmar la reserva</p>
+                    </div>
+                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'full_payment' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+                    <input type="radio" name="paymentType" value="full_payment" checked={paymentType === 'full_payment'} onChange={() => setPaymentType('full_payment')} className="accent-[#00ff41] w-4 h-4" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar el total (100%)</p>
+                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Tu reserva quedara completamente pagada</p>
+                    </div>
+                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+                  </label>
                 </div>
-                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
               </div>
               <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
-                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago restante (en el local)</span>
-                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {remainingAmount.toFixed(2)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">
+                    {paymentType === 'full_payment' ? 'PAGO TOTAL' : 'ADELANTO'}
+                  </span>
+                </div>
+                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+              </div>
+              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Saldo pendiente</span>
+                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {paymentRemaining.toFixed(2)}</span>
               </div>
               <div className="border-t border-white/5 pt-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
@@ -938,17 +997,21 @@ export default function UnifiedBookingView() {
                   {selectedTimeSlots.sort().map(formatHour).join(', ')}
                 </p>
               </div>
-              <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</p>
+              <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</p>
             </div>
             <div className="bg-cm-surface-container-highest/40 rounded-lg p-2.5 text-center">
-              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50% requerido</p>
-              <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante S/ {remainingAmount.toFixed(2)} se paga en el local</p>
+              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                {paymentType === 'full_payment' ? 'Pago total de la reserva' : 'Adelanto 50% requerido'}
+              </p>
+              {paymentRemaining > 0 && (
+                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante S/ {paymentRemaining.toFixed(2)} se paga en el local</p>
+              )}
             </div>
           </div>
 
           <YapeQRPayButton
             bookingIds={createdBookings.map((b: any) => b.id)}
-            amount={advanceAmount}
+            amount={paymentAmount}
             userEmail={clientEmail || user?.email || ''}
             onPaymentMarked={() => {
               setFormStep('done')
@@ -1078,11 +1141,11 @@ export default function UnifiedBookingView() {
               {/* Monto */}
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">
-                  {activePaymentMethod === 'yape_qr' ? 'Monto Pagado' : 'Adelanto'}
+                  {paymentType === 'full_payment' ? 'Monto Pagado' : (activePaymentMethod === 'yape_qr' ? 'Monto Pagado' : 'Adelanto')}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#00ff41] text-[18px]">payments</span>
-                  <span className="text-lg font-black text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+                  <span className="text-lg font-black text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -1099,10 +1162,10 @@ export default function UnifiedBookingView() {
             </div>
 
             {/* Restante (only for Yape) */}
-            {activePaymentMethod === 'yape_qr' && remainingAmount > 0 && (
+            {paymentRemaining > 0 && (
               <div className="mt-3 pt-3 border-t border-dashed border-white/5">
                 <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                  Pago restante: <span className="font-semibold text-cm-on-surface">S/ {remainingAmount.toFixed(2)}</span> (en el local)
+                  Pago restante: <span className="font-semibold text-cm-on-surface">S/ {paymentRemaining.toFixed(2)}</span> (en el local)
                 </p>
               </div>
             )}
@@ -1110,6 +1173,11 @@ export default function UnifiedBookingView() {
 
           {/* Action Buttons */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="w-full space-y-3">
+            <button type="button" onClick={() => setShowVoucher(true)}
+              className="w-full py-3 bg-white/10 text-cm-on-surface font-semibold rounded-xl hover:bg-white/15 transition-all border border-white/10 font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+              Imprimir Voucher de Pago
+            </button>
             <button type="button" onClick={handleBack}
               className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2 shadow-lg"
               style={{ boxShadow: '0 8px 24px rgba(0,255,65,0.15)' }}>
@@ -1167,8 +1235,8 @@ export default function UnifiedBookingView() {
           <div className="max-w-2xl mx-auto p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto a pagar</p>
-                <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">S/ {advanceAmount.toFixed(2)}</p>
+                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</p>
+                <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">S/ {paymentAmount.toFixed(2)}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
@@ -1191,6 +1259,7 @@ export default function UnifiedBookingView() {
           </div>
         </div>
       )}
+      <PaymentVoucher data={voucherData} open={showVoucher} onClose={() => setShowVoucher(false)} />
     </motion.div>
   )
 }

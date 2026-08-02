@@ -9,6 +9,7 @@ import {
   getBookingById,
   createPayment,
   createRetainedAdvance,
+  generatePaymentId,
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
@@ -448,6 +449,7 @@ export async function POST(request: NextRequest) {
       remainingAmount,
       status,
       paymentMethod,
+      paymentType,
       notes,
       equipmentItems,
       selectedSlots,
@@ -539,16 +541,18 @@ export async function POST(request: NextRequest) {
     const price = courtPriceTotal + equipmentSubtotal;
 
     // B4 FIX: Validate advance + remaining === total consistency
-    const adv = parseFloat(advanceAmount) || price * 0.5;
-    let rem = parseFloat(remainingAmount) || price - adv;
+    const isFullPayment = paymentType === 'full_payment';
+    const adv = isFullPayment ? price : (parseFloat(advanceAmount) || price * 0.5);
+    let rem = isFullPayment ? 0 : (parseFloat(remainingAmount) || price - adv);
     // Force consistency: remaining must equal total - advance
     rem = Math.max(0, Math.round((price - adv) * 100) / 100);
     const bookingStatus = migrateStatus(status || 'reserved');
 
     // Resolve client email for denormalized search
     let clientEmail = authUser.email;
+    let clientUser: any = null;
     try {
-      const clientUser = await getUserById(userId);
+      clientUser = await getUserById(userId);
       if (clientUser?.email) clientEmail = clientUser.email;
     } catch { /* fallback to admin email */ }
 
@@ -624,15 +628,58 @@ export async function POST(request: NextRequest) {
     // Booking was already created inside the transaction (P1-5)
     const id = bookingId;
 
-    // B5 FIX: Only create payment record if advance > 0
+    // B5 FIX: Create payment record with full audit data
+    let payId: string | undefined = undefined;
     if (adv > 0.01) {
       try {
+        const payType = isFullPayment ? 'full_payment' : 'advance';
+        const payAmount = adv;
+        const payRemaining = rem;
+        payId = await generatePaymentId();
+        const hash = id.slice(-8).toUpperCase();
+        const bookingCode = `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`;
+
+        // Current date/time in Lima timezone
+        const limaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+        const payDate = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).format(limaNow);
+        const payTime = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).format(limaNow);
+
+        // Fetch court data for audit
+        let courtData: any = null;
+        try {
+          courtData = allCourtIds.length > 0 ? await getCourtById(allCourtIds[0]) : null;
+        } catch { /* court lookup failed, proceed without it */ }
+
+        // Re-fetch clientUser if not available (should already be set above)
+        if (!clientUser) {
+          try { clientUser = await getUserById(userId); } catch { /* ignore */ }
+        }
+
         await createPayment(id, {
           user_id: userId,
-          amount: adv,
-          type: 'advance',
+          amount: payAmount,
+          type: payType,
           method: normalizedPaymentMethod || 'EFECTIVO',
           status: 'completed',
+          payment_id: payId,
+          payment_code: payId,
+          booking_code: bookingCode,
+          user_name: clientUser?.name || '',
+          user_email: clientUser?.email || '',
+          user_phone: clientUser?.phone || null,
+          user_document: clientUser?.document || null,
+          court_name: courtData?.name || '',
+          sport: courtData?.sport || '',
+          booking_date: date,
+          booking_start_time: startTime,
+          booking_end_time: endTime,
+          payment_type: payType,
+          amount_paid: payAmount,
+          remaining_balance: payRemaining,
+          payment_method_display: normalizedPaymentMethod === 'CULQI' ? 'Culqi' : normalizedPaymentMethod === 'YAPE' ? 'Yape' : normalizedPaymentMethod || 'Efectivo',
+          payment_status: payType === 'full_payment' ? 'completed' : 'parcial',
+          payment_date: payDate,
+          payment_time: payTime,
         });
       } catch (payErr) {
         console.error('[BOOKINGS] Warning: could not create payment record:', payErr);
@@ -652,6 +699,8 @@ export async function POST(request: NextRequest) {
       remainingAmount: rem,
       status: bookingStatus,
       paymentMethod: normalizedPaymentMethod || paymentMethod || null,
+      paymentId: payId,
+      paymentType: isFullPayment ? 'full_payment' : 'advance',
       success: true,
     }, { status: 201 });
   } catch (error: unknown) {
