@@ -51,10 +51,14 @@ const sportIcons: Record<string, string> = {
 }
 
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fmtDate = (d: string) => {
-  const [y, m, day] = d.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, day))
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })
+  if (!d) return '-'
+  if (d.includes('-')) {
+    const p = d.split('-').map(Number)
+    return `${p[2]} ${MONTHS_ES[p[1] - 1]}`
+  }
+  return d
 }
 
 interface BookingsTableProps {

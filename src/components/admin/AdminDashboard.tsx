@@ -184,16 +184,22 @@ const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
 /* ─── helpers ─── */
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
 const fmtHour = (h: number) => `${String(h).padStart(2, '0')}:00`
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fmtDate = (d: string) => {
-  // Bug fix #9: Use America/Lima timezone for consistent date display
-  const [y, m, day] = d.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, day))
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })
+  if (!d) return '-'
+  if (d.includes('-')) {
+    const p = d.split('-').map(Number)
+    return `${p[2]} ${MONTHS_ES[p[1] - 1]}`
+  }
+  return d
 }
 const fmtDateFull = (d: string) => {
-  const [y, m, day] = d.split('-').map(Number)
-  const date = new Date(Date.UTC(y, m - 1, day))
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Lima' })
+  if (!d) return '-'
+  if (d.includes('-')) {
+    const p = d.split('-').map(Number)
+    return `${p[2]} ${MONTHS_ES[p[1] - 1]} ${p[0]}`
+  }
+  return d
 }
 const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 

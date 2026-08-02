@@ -23,9 +23,14 @@ const expenseCategories: Record<string, { label: string; icon: string; color: st
 }
 
 const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fmtDateFull = (d: string) => {
-  const date = new Date(d + 'T00:00:00')
-  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+  if (!d) return '-'
+  if (d.includes('-')) {
+    const p = d.split('-').map(Number)
+    return `${p[2]} ${MONTHS_ES[p[1] - 1]} ${p[0]}`
+  }
+  return d
 }
 
 interface ExpensesTableProps {
