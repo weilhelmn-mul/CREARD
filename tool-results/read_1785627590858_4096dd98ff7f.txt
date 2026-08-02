@@ -1,0 +1,1086 @@
+     1→     1→// ============================================================
+     2→     2→// CREARD - Wrapper de Firestore (reemplaza a Prisma)
+     3→     3→// Firebase Admin SDK v13+
+     4→     4→// ============================================================
+     5→     5→
+     6→     6→import { getAdminDb } from './firebase-admin';
+     7→     7→import { Timestamp, FieldValue, DocumentData } from 'firebase-admin/firestore';
+     8→     8→import type { Query, DocumentReference, CollectionReference, QuerySnapshot, DocumentSnapshot, WriteResult } from 'firebase-admin/firestore';
+     9→     9→
+    10→    10→// ============================================================
+    11→    11→// Tipos
+    12→    12→// ============================================================
+    13→    13→
+    14→    14→export interface Branch {
+    15→    15→  id: string;
+    16→    16→  name: string;
+    17→    17→  address: string;
+    18→    18→  city: string;
+    19→    19→  phone: string | null;
+    20→    20→  email: string | null;
+    21→    21→  is_active: boolean;
+    22→    22→  created_at: Date;
+    23→    23→  updated_at: Date;
+    24→    24→}
+    25→    25→
+    26→    26→export interface PricingScheduleItem {
+    27→    27→  label: string;
+    28→    28→  startHour: number;
+    29→    29→  endHour: number;
+    30→    30→  pricePerHour: number;
+    31→    31→}
+    32→    32→
+    33→    33→export interface Court {
+    34→    34→  id: string;
+    35→    35→  name: string;
+    36→    36→  sport: string;
+    37→    37→  description: string | null;
+    38→    38→  branch_id: string;
+    39→    39→  images: string[];
+    40→    40→  price_per_hour: number;
+    41→    41→  pricing_schedule?: PricingScheduleItem[];
+    42→    42→  is_active: boolean;
+    43→    43→  amenities: string[];
+    44→    44→  created_at: Date;
+    45→    45→  updated_at: Date;
+    46→    46→}
+    47→    47→
+    48→    48→export interface User {
+    49→    49→  id: string;
+    50→    50→  name: string;
+    51→    51→  email: string;
+    52→    52→  phone: string | null;
+    53→    53→  role: 'user' | 'admin' | 'super_admin';
+    54→    54→  is_active: boolean;
+    55→    55→  status: 'pending' | 'approved' | 'rejected' | 'disabled';
+    56→    56→  created_at: Date;
+    57→    57→  updated_at: Date;
+    58→    58→}
+    59→    59→
+    60→    60→export type BookingStatus = 'pending' | 'reserved' | 'completed' | 'cancelled';
+    61→    61→export type SlotStatus = 'available' | 'reserved' | 'maintenance';
+    62→    62→
+    63→    63→export interface Booking {
+    64→    64→  id: string;
+    65→    65→  court_id: string;
+    66→    66→  court_ids?: string[];
+    67→    67→  user_id: string;
+    68→    68→  user_email: string | null;
+    69→    69→  date: string;
+    70→    70→  start_time: string;
+    71→    71→  end_time: string;
+    72→    72→  total_price: number;
+    73→    73→  court_subtotal?: number;
+    74→    74→  equipment_subtotal?: number;
+    75→    75→  equipment_items?: Array<{ equipment_id: string; name: string; quantity: number; unit_price: number }>;
+    76→    76→  equipment_delivered?: boolean;
+    77→    77→  equipment_returned?: boolean;
+    78→    78→  advance_amount: number;
+    79→    79→  remaining_amount: number;
+    80→    80→  status: BookingStatus;
+    81→    81→  slot_status: SlotStatus;
+    82→    82→  payment_method: string | null;
+    83→    83→  notes: string | null;
+    84→    84→  recurring_group_id?: string;
+    85→    85→  recurring_index?: number;
+    86→    86→  created_at: Date;
+    87→    87→  updated_at: Date;
+    88→    88→}
+    89→    89→
+    90→    90→export interface Payment {
+    91→    91→  id: string;
+    92→    92→  booking_id: string;
+    93→    93→  user_id: string;
+    94→    94→  amount: number;
+    95→    95→  type: string;
+    96→    96→  method: string;
+    97→    97→  status: string;
+    98→    98→  external_ref: string | null;
+    99→    99→  created_at: Date;
+   100→   100→  updated_at: Date;
+   101→   101→}
+   102→   102→
+   103→   103→export interface PaymentRecord extends Payment {
+   104→   104→  payment_id: string;           // e.g. 'PAY-000451'
+   105→   105→  payment_code: string;         // e.g. 'CRE-PAY-XXXX'
+   106→   106→  booking_code: string;         // e.g. 'CRE-XXXX-XXXX'
+   107→   107→  user_name: string;
+   108→   108→  user_email: string;
+   109→   109→  user_phone: string | null;
+   110→   110→  user_document: string | null;
+   111→   111→  court_name: string;
+   112→   112→  sport: string;
+   113→   113→  booking_date: string;         // 'YYYY-MM-DD'
+   114→   114→  booking_start_time: string;   // 'HH:00'
+   115→   115→  booking_end_time: string;     // 'HH:00'
+   116→   116→  payment_type: 'advance' | 'remaining' | 'full_payment';
+   117→   117→  amount_paid: number;
+   118→   118→  remaining_balance: number;
+   119→   119→  payment_method_display: string;  // e.g. 'Yape QR', 'Culqi'
+   120→   120→  payment_status: 'completed' | 'pending' | 'parcial' | 'failed';
+   121→   121→  payment_date: string;         // 'DD/MM/YYYY'
+   122→   122→  payment_time: string;         // 'HH:mm:ss'
+   123→   123→  sport_name: string;           // same as sport
+   124→   124→}
+   125→   125→
+   126→   126→
+   127→   127→export interface RetainedAdvance {
+   128→   128→  id: string;
+   129→   129→  booking_id: string;
+   130→   130→  user_id: string;
+   131→   131→  user_name: string;
+   132→   132→  user_email: string | null;
+   133→   133→  court_name: string;
+   134→   134→  booking_date: string;
+   135→   135→  amount: number;
+   136→   136→  original_total: number;
+   137→   137→  payment_method: string;
+   138→   138→  reason: string;
+   139→   139→  status: 'retained' | 'refunded';
+   140→   140→  created_at: Date;
+   141→   141→  updated_at: Date;
+   142→   142→}
+   143→   143→
+   144→   144→export interface Expense {
+   145→   145→  id: string;
+   146→   146→  description: string;
+   147→   147→  amount: number;
+   148→   148→  category: string;
+   149→   149→  date: string;
+   150→   150→  notes: string | null;
+   151→   151→  created_at: Date;
+   152→   152→  updated_at: Date;
+   153→   153→}
+   154→   154→
+   155→   155→export interface Review {
+   156→   156→  id: string;
+   157→   157→  court_id: string;
+   158→   158→  user_id: string;
+   159→   159→  user_name: string;
+   160→   160→  rating: number;
+   161→   161→  comment: string | null;
+   162→   162→  created_at: Date;
+   163→   163→}
+   164→   164→
+   165→   165→export interface Equipment {
+   166→   166→  id: string;
+   167→   167→  name: string;
+   168→   168→  sport: string;
+   169→   169→  price_per_rental: number;
+   170→   170→  stock: number;
+   171→   171→  active: boolean;
+   172→   172→  created_at: Date;
+   173→   173→  updated_at: Date;
+   174→   174→}
+   175→   175→
+   176→   176→export type ClaimType = 'queja' | 'reclamo';
+   177→   177→export type ClaimStatus = 'received' | 'in_process' | 'responded' | 'closed' | 'archived';
+   178→   178→export type ClaimChannel = 'presencial' | 'escrito' | 'telefono' | 'correo' | 'web';
+   179→   179→
+   180→   180→export interface ClaimAttachment {
+   181→   181→  id: string;
+   182→   182→  file_name: string;
+   183→   183→  file_type: string;
+   184→   184→  file_size: number;
+   185→   185→  storage_path: string;
+   186→   186→  url: string;
+   187→   187→}
+   188→   188→
+   189→   189→export interface ClaimAuditEntry {
+   190→   190→  id: string;
+   191→   191→  action: string;
+   192→   192→  performed_by: string;
+   193→   193→  performed_by_name: string;
+   194→   194→  performed_by_role: string;
+   195→   195→ details: string;
+   196→   196→  created_at: Date;
+   197→   197→}
+   198→   198→
+   199→   199→export interface Claim {
+   200→   200→  id: string;
+   201→   201→  // Correlative number (auto-generated, format: LR-YYYY-NNNNN)
+   202→   202→  claim_number: string;
+   203→   203→  // Claim type
+   204→   204→  claim_type: ClaimType;
+   205→   205→  status: ClaimStatus;
+   206→   206→  // Consumer info
+   207→   207→  consumer_id: string | null;
+   208→   208→  consumer_name: string;
+   209→   209→  consumer_document_type: 'DNI' | 'CE' | 'PTE' | 'RUC' | 'Pasaporte';
+   210→   210→  consumer_document_number: string;
+   211→   211→  consumer_address: string;
+   212→   212→  consumer_phone: string;
+   213→   213→  consumer_email: string;
+   214→   214→  // Product/Service info
+   215→   215→  service_type: string; // e.g. 'Reserva de cancha deportiva'
+   216→   216→  related_booking_id: string | null;
+   217→   217→  related_court_name: string | null;
+   218→   218→  related_booking_date: string | null;
+   219→   219→  related_booking_time: string | null;
+   220→   220→  related_booking_amount: number | null;
+   221→   221→  related_payment_method: string | null;
+   222→   222→  related_payment_ref: string | null;
+   223→   223→  // Claim details
+   224→   224→  description: string;
+   225→   225→  consumer_request: string;
+   226→   226→  // Channel
+   227→   227→  channel: ClaimChannel;
+   228→   228→  // Provider response
+   229→   229→  provider_response: string | null;
+   230→   230→  provider_response_date: Date | null;
+   231→   231→  // Dates
+   232→   232→  received_date: Date;
+   233→   233→  deadline_date: Date; // 15 business days
+   234→   234→  closed_date: Date | null;
+   235→   235→  // Attachments
+   236→   236→  attachments: ClaimAttachment[];
+   237→   237→  // QR code data URL (base64)
+   238→   238→  qr_code_url: string | null;
+   239→   239→  // PDF hoja URL
+   240→   240→  claim_sheet_url: string | null;
+   241→   241→  // Archival
+   242→   242→  archived: boolean;
+   243→   243→  archived_at: Date | null;
+   244→   244→  archived_by: string | null;
+   245→   245→  // Timestamps
+   246→   246→  created_at: Date;
+   247→   247→  updated_at: Date;
+   248→   248→}
+   249→   249→
+   250→   250→// ============================================================
+   251→   251→// Helpers
+   252→   252→// ============================================================
+   253→   253→
+   254→   254→function buildQuery(
+   255→   255→  collectionName: string,
+   256→   256→  constraints: Array<{ field: string; op: string; value: unknown }>
+   257→   257→): Query {
+   258→   258→  let q: Query = getAdminDb().collection(collectionName);
+   259→   259→  for (const c of constraints) {
+   260→   260→    switch (c.op) {
+   261→   261→      case '==': q = q.where(c.field, '==', c.value); break;
+   262→   262→      case '!=': q = q.where(c.field, '!=', c.value); break;
+   263→   263→      case '<': q = q.where(c.field, '<', c.value); break;
+   264→   264→      case '<=': q = q.where(c.field, '<=', c.value); break;
+   265→   265→      case '>': q = q.where(c.field, '>', c.value); break;
+   266→   266→      case '>=': q = q.where(c.field, '>=', c.value); break;
+   267→   267→      case 'in': q = q.where(c.field, 'in', c.value as unknown[]); break;
+   268→   268→      case 'not-in': q = q.where(c.field, 'not-in', c.value as unknown[]); break;
+   269→   269→      case 'array-contains': q = q.where(c.field, 'array-contains', c.value); break;
+   270→   270→    }
+   271→   271→  }
+   272→   272→  return q;
+   273→   273→}
+   274→   274→
+   275→   275→async function queryDocs(
+   276→   276→  collectionName: string,
+   277→   277→  constraints: Array<{ field: string; op: string; value: unknown }> = [],
+   278→   278→  orderField?: string,
+   279→   279→  orderDir: 'asc' | 'desc' = 'asc'
+   280→   280→): Promise<DocumentData[]> {
+   281→   281→  let q = buildQuery(collectionName, constraints);
+   282→   282→  // NEVER use Firestore orderBy — always sort client-side
+   283→   283→  // This avoids needing composite indexes (user_id+start_time, user_email+start_time, etc.)
+   284→   284→  const snapshot: QuerySnapshot = await q.get();
+   285→   285→  let docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+   286→   286→  // Client-side sort for all queries
+   287→   287→  if (orderField) {
+   288→   288→    docs.sort((a, b) => {
+   289→   289→      const va = a[orderField] ?? '';
+   290→   290→      const vb = b[orderField] ?? '';
+   291→   291→      if (va < vb) return orderDir === 'asc' ? -1 : 1;
+   292→   292→      if (va > vb) return orderDir === 'asc' ? 1 : -1;
+   293→   293→      return 0;
+   294→   294→    });
+   295→   295→  }
+   296→   296→  return docs;
+   297→   297→}
+   298→   298→
+   299→   299→async function getDocById(collectionName: string, id: string): Promise<DocumentData | null> {
+   300→   300→  const docSnap = await getAdminDb().collection(collectionName).doc(id).get();
+   301→   301→  if (!docSnap.exists) return null;
+   302→   302→  return { id: docSnap.id, ...docSnap.data() };
+   303→   303→}
+   304→   304→
+   305→   305→async function addDoc(
+   306→   306→  collectionName: string,
+   307→   307→  data: Record<string, unknown>
+   308→   308→): Promise<string> {
+   309→   309→  const now = Timestamp.now();
+   310→   310→  const docRef = await getAdminDb().collection(collectionName).add({
+   311→   311→    ...data,
+   312→   312→    created_at: now,
+   313→   313→    updated_at: now,
+   314→   314→  });
+   315→   315→  return docRef.id;
+   316→   316→}
+   317→   317→
+   318→   318→async function updateDocById(
+   319→   319→  collectionName: string,
+   320→   320→  id: string,
+   321→   321→  data: Record<string, unknown>
+   322→   322→): Promise<void> {
+   323→   323→  await getAdminDb().collection(collectionName).doc(id).update({
+   324→   324→    ...data,
+   325→   325→    updated_at: Timestamp.now(),
+   326→   326→  });
+   327→   327→}
+   328→   328→
+   329→   329→async function setDocById(
+   330→   330→  collectionName: string,
+   331→   331→  id: string,
+   332→   332→  data: Record<string, unknown>
+   333→   333→): Promise<void> {
+   334→   334→  const now = Timestamp.now();
+   335→   335→  await getAdminDb().collection(collectionName).doc(id).set({
+   336→   336→    ...data,
+   337→   337→    created_at: now,
+   338→   338→    updated_at: now,
+   339→   339→  });
+   340→   340→}
+   341→   341→
+   342→   342→export async function deleteDocById(collectionName: string, id: string): Promise<void> {
+   343→   343→  await getAdminDb().collection(collectionName).doc(id).delete();
+   344→   344→}
+   345→   345→
+   346→   346→async function getCollectionSize(collectionName: string): Promise<number> {
+   347→   347→  const snapshot = await getAdminDb().collection(collectionName).count().get();
+   348→   348→  return snapshot.data().count;
+   349→   349→}
+   350→   350→
+   351→   351→// ============================================================
+   352→   352→// CRUD Específicos de CREARD
+   353→   353→// ============================================================
+   354→   354→
+   355→   355→// --- Courts ---
+   356→   356→export async function getCourts(filters?: {
+   357→   357→  sport?: string;
+   358→   358→  branchId?: string;
+   359→   359→  active?: boolean;
+   360→   360→}): Promise<Partial<Court>[]> {
+   361→   361→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   362→   362→  if (filters?.sport && filters.sport !== 'todos') {
+   363→   363→    constraints.push({ field: 'sport', op: '==', value: filters.sport });
+   364→   364→  }
+   365→   365→  if (filters?.branchId) {
+   366→   366→    constraints.push({ field: 'branch_id', op: '==', value: filters.branchId });
+   367→   367→  }
+   368→   368→  if (filters?.active !== undefined) {
+   369→   369→    constraints.push({ field: 'is_active', op: '==', value: filters.active });
+   370→   370→  }
+   371→   371→
+   372→   372→  const docs = await queryDocs('courts', constraints, 'name');
+   373→   373→  return docs.map((d) => ({
+   374→   374→    ...d,
+   375→   375→    images: Array.isArray(d.images) ? d.images : [],
+   376→   376→    amenities: Array.isArray(d.amenities) ? d.amenities : [],
+   377→   377→  }));
+   378→   378→}
+   379→   379→
+   380→   380→export async function getCourtById(id: string): Promise<Partial<Court> | null> {
+   381→   381→  const d = await getDocById('courts', id);
+   382→   382→  if (!d) return null;
+   383→   383→  return {
+   384→   384→    ...d,
+   385→   385→    images: Array.isArray(d.images) ? d.images : [],
+   386→   386→    amenities: Array.isArray(d.amenities) ? d.amenities : [],
+   387→   387→  };
+   388→   388→}
+   389→   389→
+   390→   390→export async function createCourt(data: Partial<Court>): Promise<string> {
+   391→   391→  return addDoc('courts', {
+   392→   392→    name: data.name,
+   393→   393→    sport: data.sport,
+   394→   394→    description: data.description || null,
+   395→   395→    branch_id: data.branch_id,
+   396→   396→    images: data.images || [],
+   397→   397→    price_per_hour: data.price_per_hour || 0,
+   398→   398→    pricing_schedule: data.pricing_schedule || [],
+   399→   399→    is_active: data.is_active !== undefined ? data.is_active : true,
+   400→   400→    amenities: data.amenities || [],
+   401→   401→  });
+   402→   402→}
+   403→   403→
+   404→   404→// --- Bookings ---
+   405→   405→export async function getBookings(filters?: {
+   406→   406→  courtId?: string;
+   407→   407→  userId?: string;
+   408→   408→  userEmail?: string;
+   409→   409→  date?: string;
+   410→   410→  dateFrom?: string;
+   411→   411→  dateTo?: string;
+   412→   412→  status?: string;
+   413→   413→}): Promise<Partial<Booking>[]> {
+   414→   414→  // Build non-court constraints (shared by both queries)
+   415→   415→  const baseConstraints: Array<{ field: string; op: string; value: unknown }> = [];
+   416→   416→  if (filters?.userId) baseConstraints.push({ field: 'user_id', op: '==', value: filters.userId });
+   417→   417→  if (filters?.userEmail) baseConstraints.push({ field: 'user_email', op: '==', value: filters.userEmail });
+   418→   418→  if (filters?.date) baseConstraints.push({ field: 'date', op: '==', value: filters.date });
+   419→   419→  if (filters?.dateFrom) baseConstraints.push({ field: 'date', op: '>=', value: filters.dateFrom });
+   420→   420→  if (filters?.dateTo) baseConstraints.push({ field: 'date', op: '<=', value: filters.dateTo });
+   421→   421→  if (filters?.status) baseConstraints.push({ field: 'status', op: '==', value: filters.status });
+   422→   422→
+   423→   423→  // No court filter — single query
+   424→   424→  if (!filters?.courtId) {
+   425→   425→    return queryDocs('bookings', baseConstraints, 'start_time');
+   426→   426→  }
+   427→   427→
+   428→   428→  // Court filter present — need TWO queries:
+   429→   429→  //   1) court_id == X  (primary court)
+   430→   430→  //   2) court_ids array-contains X  (secondary court in multi-court booking)
+   431→   431→  const [byPrimary, byArray] = await Promise.all([
+   432→   432→    queryDocs('bookings', [
+   433→   433→      ...baseConstraints,
+   434→   434→      { field: 'court_id', op: '==', value: filters.courtId },
+   435→   435→    ], 'start_time'),
+   436→   436→    queryDocs('bookings', [
+   437→   437→      ...baseConstraints,
+   438→   438→      { field: 'court_ids', op: 'array-contains', value: filters.courtId },
+   439→   439→    ], 'start_time'),
+   440→   440→  ]);
+   441→   441→
+   442→   442→  // Merge & deduplicate by document ID
+   443→   443→  const seen = new Set<string>();
+   444→   444→  const merged: DocumentData[] = [];
+   445→   445→  for (const doc of [...byPrimary, ...byArray]) {
+   446→   446→    if (!seen.has(doc.id)) {
+   447→   447→      seen.add(doc.id);
+   448→   448→      merged.push(doc);
+   449→   449→    }
+   450→   450→  }
+   451→   451→
+   452→   452→  // Client-side sort (already sorted individually, but merge breaks order)
+   453→   453→  merged.sort((a, b) => {
+   454→   454→    const va = a.start_time ?? '';
+   455→   455→    const vb = b.start_time ?? '';
+   456→   456→    if (va < vb) return -1;
+   457→   457→    if (va > vb) return 1;
+   458→   458→    return 0;
+   459→   459→  });
+   460→   460→
+   461→   461→  return merged as Partial<Booking>[];
+   462→   462→}
+   463→   463→
+   464→   464→export async function createBooking(data: Record<string, unknown>): Promise<string> {
+   465→   465→  const courtIds: string[] = Array.isArray(data.court_ids) ? data.court_ids : [data.court_id];
+   466→   466→  return addDoc('bookings', {
+   467→   467→    court_id: courtIds[0] || data.court_id, // Primary court (backward compat)
+   468→   468→    court_ids: courtIds, // All courts in this booking
+   469→   469→    user_id: data.user_id,
+   470→   470→    user_email: data.user_email || null, // Denormalized for fallback search
+   471→   471→    date: data.date,
+   472→   472→    start_time: data.start_time,
+   473→   473→    end_time: data.end_time,
+   474→   474→    total_price: data.total_price || 0,
+   475→   475→    court_subtotal: data.court_subtotal || 0,
+   476→   476→    equipment_subtotal: data.equipment_subtotal || 0,
+   477→   477→    equipment_items: data.equipment_items || [],
+   478→   478→    equipment_delivered: data.equipment_delivered || false,
+   479→   479→    equipment_returned: data.equipment_returned || false,
+   480→   480→    advance_amount: data.advance_amount || 0,
+   481→   481→    remaining_amount: data.remaining_amount || 0,
+   482→   482→    status: data.status || 'reserved',
+   483→   483→    slot_status: data.slot_status || 'available',
+   484→   484→    payment_method: data.payment_method || null,
+   485→   485→    notes: data.notes || null,
+   486→   486→    recurring_group_id: data.recurring_group_id || null,
+   487→   487→    recurring_index: data.recurring_index ?? null,
+   488→   488→    selected_slots: Array.isArray(data.selected_slots) ? data.selected_slots : [],
+   489→   489→  });
+   490→   490→}
+   491→   491→
+   492→   492→export async function updateBooking(id: string, data: Partial<Booking>): Promise<void> {
+   493→   493→  await updateDocById('bookings', id, data as Record<string, unknown>);
+   494→   494→}
+   495→   495→
+   496→   496→/**
+   497→   497→ * Get a single booking by its document ID (O(1) direct lookup)
+   498→   498→ */
+   499→   499→export async function getBookingById(id: string): Promise<Partial<Booking> | null> {
+   500→   500→  return getDocById('bookings', id);
+   501→   501→}
+   502→   502→
+   503→   503→// --- Payments (subcolección + top-level) ---
+   504→   504→export async function createPayment(
+   505→   505→  bookingId: string,
+   506→   506→  data: Partial<Payment> & {
+   507→   507→    payment_id?: string;
+   508→   508→    payment_code?: string;
+   509→   509→    booking_code?: string;
+   510→   510→    user_name?: string;
+   511→   511→    user_email?: string;
+   512→   512→    user_phone?: string | null;
+   513→   513→    user_document?: string | null;
+   514→   514→    court_name?: string;
+   515→   515→    sport?: string;
+   516→   516→    booking_date?: string;
+   517→   517→    booking_start_time?: string;
+   518→   518→    booking_end_time?: string;
+   519→   519→    payment_type?: string;
+   520→   520→    amount_paid?: number;
+   521→   521→    remaining_balance?: number;
+   522→   522→    payment_method_display?: string;
+   523→   523→    payment_status?: string;
+   524→   524→    payment_date?: string;
+   525→   525→    payment_time?: string;
+   526→   526→  }
+   527→   527→): Promise<string> {
+   528→   528→  const now = Timestamp.now();
+   529→   529→  const db = await getAdminDb();
+   530→   530→
+   531→   531→  // Build the payment document data (backward compatible with existing fields)
+   532→   532→  const paymentData: Record<string, unknown> = {
+   533→   533→    booking_id: bookingId,
+   534→   534→    user_id: data.user_id,
+   535→   535→    amount: data.amount || 0,
+   536→   536→    type: data.type || 'advance',
+   537→   537→    method: data.method || 'yape',
+   538→   538→    status: data.status || 'completed',
+   539→   539→    external_ref: data.external_ref || null,
+   540→   540→    created_at: now,
+   541→   541→    updated_at: now,
+   542→   542→  };
+   543→   543→
+   544→   544→  // Add new extra fields if provided
+   545→   545→  if (data.payment_id !== undefined) paymentData.payment_id = data.payment_id;
+   546→   546→  if (data.payment_code !== undefined) paymentData.payment_code = data.payment_code;
+   547→   547→  if (data.booking_code !== undefined) paymentData.booking_code = data.booking_code;
+   548→   548→  if (data.user_name !== undefined) paymentData.user_name = data.user_name;
+   549→   549→  if (data.user_email !== undefined) paymentData.user_email = data.user_email;
+   550→   550→  if (data.user_phone !== undefined) paymentData.user_phone = data.user_phone;
+   551→   551→  if (data.user_document !== undefined) paymentData.user_document = data.user_document;
+   552→   552→  if (data.court_name !== undefined) paymentData.court_name = data.court_name;
+   553→   553→  if (data.sport !== undefined) paymentData.sport = data.sport;
+   554→   554→  if (data.booking_date !== undefined) paymentData.booking_date = data.booking_date;
+   555→   555→  if (data.booking_start_time !== undefined) paymentData.booking_start_time = data.booking_start_time;
+   556→   556→  if (data.booking_end_time !== undefined) paymentData.booking_end_time = data.booking_end_time;
+   557→   557→  if (data.payment_type !== undefined) paymentData.payment_type = data.payment_type;
+   558→   558→  if (data.amount_paid !== undefined) paymentData.amount_paid = data.amount_paid;
+   559→   559→  if (data.remaining_balance !== undefined) paymentData.remaining_balance = data.remaining_balance;
+   560→   560→  if (data.payment_method_display !== undefined) paymentData.payment_method_display = data.payment_method_display;
+   561→   561→  if (data.payment_status !== undefined) paymentData.payment_status = data.payment_status;
+   562→   562→  if (data.payment_date !== undefined) paymentData.payment_date = data.payment_date;
+   563→   563→  if (data.payment_time !== undefined) paymentData.payment_time = data.payment_time;
+   564→   564→
+   565→   565→  // Write to subcollection (bookings/{id}/payments)
+   566→   566→  const docRef = await db
+   567→   567→    .collection('bookings')
+   568→   568→    .doc(bookingId)
+   569→   569→    .collection('payments')
+   570→   570→    .add(paymentData);
+   571→   571→
+   572→   572→  // Also write to top-level payments collection for admin-wide queries
+   573→   573→  await db.collection('payments').add({
+   574→   574→    ...paymentData,
+   575→   575→    sub_payment_id: docRef.id, // reference back to the subcollection doc
+   576→   576→  });
+   577→   577→
+   578→   578→  return docRef.id;
+   579→   579→}
+   580→   580→
+   581→   581→export async function getPayments(bookingId: string): Promise<Partial<Payment>[]> {
+   582→   582→  const db = await getAdminDb();
+   583→   583→  const snapshot = await db
+   584→   584→    .collection('bookings')
+   585→   585→    .doc(bookingId)
+   586→   586→    .collection('payments')
+   587→   587→    .get();
+   588→   588→  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+   589→   589→}
+   590→   590→
+   591→   591→
+   592→   592→/**
+   593→   593→ * Get the next payment number from the counters collection (atomic increment via transaction)
+   594→   594→ */
+   595→   595→export async function getNextPaymentNumber(): Promise<number> {
+   596→   596→  const db = await getAdminDb();
+   597→   597→  const counterRef = db.collection('counters').doc('payments');
+   598→   598→
+   599→   599→  const result = await db.runTransaction(async (transaction) => {
+   600→   600→    const counterSnap = await transaction.get(counterRef);
+   601→   601→    if (!counterSnap.exists) {
+   602→   602→      // Counter doesn't exist yet, create it starting at 1
+   603→   603→      const newCounter = { value: 1, updated_at: Timestamp.now() };
+   604→   604→      transaction.set(counterRef, newCounter);
+   605→   605→      return 1;
+   606→   606→    }
+   607→   607→    const current = counterSnap.data()?.value ?? 0;
+   608→   608→    const next = current + 1;
+   609→   609→    transaction.update(counterRef, {
+   610→   610→      value: next,
+   611→   611→      updated_at: Timestamp.now(),
+   612→   612→    });
+   613→   613→    return next;
+   614→   614→  });
+   615→   615→
+   616→   616→  return result;
+   617→   617→}
+   618→   618→
+   619→   619→/**
+   620→   620→ * Generate a formatted payment ID like 'PAY-000451'
+   621→   621→ */
+   622→   622→export async function generatePaymentId(): Promise<string> {
+   623→   623→  const nextNum = await getNextPaymentNumber();
+   624→   624→  return `PAY-${String(nextNum).padStart(6, '0')}`;
+   625→   625→}
+   626→   626→
+   627→   627→/**
+   628→   628→ * Get all payments from the top-level payments collection with optional filters
+   629→   629→ * (for admin-wide queries, not subcollection)
+   630→   630→ */
+   631→   631→export async function getAllPayments(filters?: {
+   632→   632→  dateFrom?: string;
+   633→   633→  dateTo?: string;
+   634→   634→  status?: string;
+   635→   635→  userId?: string;
+   636→   636→  bookingId?: string;
+   637→   637→}): Promise<Partial<PaymentRecord>[]> {
+   638→   638→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   639→   639→  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
+   640→   640→  if (filters?.userId) constraints.push({ field: 'user_id', op: '==', value: filters.userId });
+   641→   641→  if (filters?.bookingId) constraints.push({ field: 'booking_id', op: '==', value: filters.bookingId });
+   642→   642→  if (filters?.dateFrom) constraints.push({ field: 'created_at', op: '>=', value: filters.dateFrom });
+   643→   643→  if (filters?.dateTo) constraints.push({ field: 'created_at', op: '<=', value: filters.dateTo });
+   644→   644→
+   645→   645→  const docs = await queryDocs('payments', constraints, 'created_at', 'desc');
+   646→   646→  // Limit to 500 results
+   647→   647→  return docs.slice(0, 500) as Partial<PaymentRecord>[];
+   648→   648→}
+   649→   649→
+   650→   650→/**
+   651→   651→ * Get all payments for a specific booking from the top-level payments collection
+   652→   652→ */
+   653→   653→export async function getPaymentsByBookingId(bookingId: string): Promise<Partial<PaymentRecord>[]> {
+   654→   654→  const constraints: Array<{ field: string; op: string; value: unknown }> = [
+   655→   655→    { field: 'booking_id', op: '==', value: bookingId },
+   656→   656→  ];
+   657→   657→  const docs = await queryDocs('payments', constraints, 'created_at', 'desc');
+   658→   658→  return docs as Partial<PaymentRecord>[];
+   659→   659→}
+   660→   660→
+   661→   661→/**
+   662→   662→ * Actualiza el estado de un pago existente (usado por webhooks de Culqi)
+   663→   663→ */
+   664→   664→export async function updatePaymentStatus(
+   665→   665→  bookingId: string,
+   666→   666→  paymentId: string,
+   667→   667→  status: string,
+   668→   668→  extra?: Record<string, unknown>
+   669→   669→): Promise<void> {
+   670→   670→  const updateData: Record<string, unknown> = {
+   671→   671→    status,
+   672→   672→    updated_at: Timestamp.now(),
+   673→   673→  };
+   674→   674→  if (extra) {
+   675→   675→    Object.assign(updateData, extra);
+   676→   676→  }
+   677→   677→  const db = await getAdminDb();
+   678→   678→  await db
+   679→   679→    .collection('bookings')
+   680→   680→    .doc(bookingId)
+   681→   681→    .collection('payments')
+   682→   682→    .doc(paymentId)
+   683→   683→    .update(updateData);
+   684→   684→}
+   685→   685→
+   686→   686→/**
+   687→   687→ * Busca un pago por su referencia externa (Culqi charge ID)
+   688→   688→ * Busca en todas las reservas - usar con moderación
+   689→   689→ */
+   690→   690→export async function findPaymentByExternalRef(
+   691→   691→  externalRef: string
+   692→   692→): Promise<{ bookingId: string; payment: Partial<Payment> } | null> {
+   693→   693→  // Consultar las reservas más recientes (últimas 100)
+   694→   694→  const db = await getAdminDb();
+   695→   695→  const bookingsSnapshot = await db
+   696→   696→    .collection('bookings')
+   697→   697→    .orderBy('created_at', 'desc')
+   698→   698→    .limit(100)
+   699→   699→    .get();
+   700→   700→
+   701→   701→  for (const bookingDoc of bookingsSnapshot.docs) {
+   702→   702→    const paymentsSnapshot = await db
+   703→   703→      .collection('bookings')
+   704→   704→      .doc(bookingDoc.id)
+   705→   705→      .collection('payments')
+   706→   706→      .where('external_ref', '==', externalRef)
+   707→   707→      .limit(1)
+   708→   708→      .get();
+   709→   709→
+   710→   710→    if (!paymentsSnapshot.empty) {
+   711→   711→      const payDoc = paymentsSnapshot.docs[0];
+   712→   712→      return {
+   713→   713→        bookingId: bookingDoc.id,
+   714→   714→        payment: { id: payDoc.id, ...payDoc.data() },
+   715→   715→      };
+   716→   716→    }
+   717→   717→  }
+   718→   718→
+   719→   719→  return null;
+   720→   720→}
+   721→   721→
+   722→   722→// --- Expenses ---
+   723→   723→export async function getExpenses(filters?: {
+   724→   724→  category?: string;
+   725→   725→  startDate?: string;
+   726→   726→  endDate?: string;
+   727→   727→}): Promise<Partial<Expense>[]> {
+   728→   728→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   729→   729→  if (filters?.category) constraints.push({ field: 'category', op: '==', value: filters.category });
+   730→   730→  if (filters?.startDate) constraints.push({ field: 'date', op: '>=', value: filters.startDate });
+   731→   731→  if (filters?.endDate) constraints.push({ field: 'date', op: '<=', value: filters.endDate });
+   732→   732→  return queryDocs('expenses', constraints, 'date', 'desc');
+   733→   733→}
+   734→   734→
+   735→   735→export async function createExpense(data: Partial<Expense>): Promise<string> {
+   736→   736→  return addDoc('expenses', {
+   737→   737→    description: data.description,
+   738→   738→    amount: data.amount || 0,
+   739→   739→    category: data.category,
+   740→   740→    date: data.date,
+   741→   741→    notes: data.notes || null,
+   742→   742→  });
+   743→   743→}
+   744→   744→
+   745→   745→// --- Retained Advances (adelantos retenidos por cancelación) ---
+   746→   746→export async function getRetainedAdvances(filters?: {
+   747→   747→  startDate?: string;
+   748→   748→  endDate?: string;
+   749→   749→  status?: string;
+   750→   750→  bookingId?: string;
+   751→   751→}): Promise<Partial<RetainedAdvance>[]> {
+   752→   752→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   753→   753→  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
+   754→   754→  if (filters?.bookingId) constraints.push({ field: 'booking_id', op: '==', value: filters.bookingId });
+   755→   755→  // Note: startDate/endDate filters removed — Firestore Timestamp vs string comparison
+   756→   756→  // causes unreliable results. Date filtering should be done client-side.
+   757→   757→  return queryDocs('retained_advances', constraints, 'created_at', 'desc');
+   758→   758→}
+   759→   759→
+   760→   760→export async function createRetainedAdvance(data: Partial<RetainedAdvance>): Promise<string> {
+   761→   761→  return addDoc('retained_advances', {
+   762→   762→    booking_id: data.booking_id,
+   763→   763→    user_id: data.user_id,
+   764→   764→    user_name: data.user_name || '',
+   765→   765→    user_email: data.user_email || null,
+   766→   766→    court_name: data.court_name || '',
+   767→   767→    booking_date: data.booking_date || '',
+   768→   768→    amount: data.amount || 0,
+   769→   769→    original_total: data.original_total || 0,
+   770→   770→    payment_method: data.payment_method || 'EFECTIVO',
+   771→   771→    reason: data.reason || 'Cancelación de reserva',
+   772→   772→    status: data.status || 'retained',
+   773→   773→  });
+   774→   774→}
+   775→   775→
+   776→   776→export async function updateRetainedAdvance(id: string, data: Partial<RetainedAdvance>): Promise<void> {
+   777→   777→  await updateDocById('retained_advances', id, data as Record<string, unknown>);
+   778→   778→}
+   779→   779→
+   780→   780→export async function deleteRetainedAdvance(id: string): Promise<void> {
+   781→   781→  await deleteDocById('retained_advances', id);
+   782→   782→}
+   783→   783→
+   784→   784→// --- Users ---
+   785→   785→export async function getUserById(id: string): Promise<Partial<User> | null> {
+   786→   786→  return getDocById('users', id);
+   787→   787→}
+   788→   788→
+   789→   789→export async function createUser(data: {
+   790→   790→  id: string;
+   791→   791→  name: string;
+   792→   792→  email: string;
+   793→   793→  phone?: string;
+   794→   794→  role?: string;
+   795→   795→  status?: string;
+   796→   796→}): Promise<void> {
+   797→   797→  await setDocById('users', data.id, {
+   798→   798→    id: data.id,
+   799→   799→    name: data.name,
+   800→   800→    email: data.email,
+   801→   801→    phone: data.phone || null,
+   802→   802→    role: data.role || 'user',
+   803→   803→    status: data.status || 'pending',
+   804→   804→    is_active: true,
+   805→   805→  });
+   806→   806→}
+   807→   807→
+   808→   808→export async function updateUser(id: string, data: Partial<User>): Promise<void> {
+   809→   809→  await updateDocById('users', id, data as Record<string, unknown>);
+   810→   810→}
+   811→   811→
+   812→   812→export async function getAllUsers(): Promise<DocumentData[]> {
+   813→   813→  return queryDocs('users');
+   814→   814→}
+   815→   815→
+   816→   816→// --- Reviews (subcolección de courts) ---
+   817→   817→export async function getReviews(courtId: string): Promise<Partial<Review>[]> {
+   818→   818→  const snapshot = await adminDb
+   819→   819→    .collection('courts')
+   820→   820→    .doc(courtId)
+   821→   821→    .collection('reviews')
+   822→   822→    .get();
+   823→   823→  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+   824→   824→}
+   825→   825→
+   826→   826→export async function createReview(
+   827→   827→  courtId: string,
+   828→   828→  data: Partial<Review>
+   829→   829→): Promise<string> {
+   830→   830→  const docRef = await adminDb
+   831→   831→    .collection('courts')
+   832→   832→    .doc(courtId)
+   833→   833→    .collection('reviews')
+   834→   834→    .add({
+   835→   835→      user_id: data.user_id,
+   836→   836→      user_name: data.user_name,
+   837→   837→      rating: data.rating,
+   838→   838→      comment: data.comment || null,
+   839→   839→      created_at: Timestamp.now(),
+   840→   840→    });
+   841→   841→  return docRef.id;
+   842→   842→}
+   843→   843→
+   844→   844→// --- Stats helpers ---
+   845→   845→export async function getCount(collectionName: string): Promise<number> {
+   846→   846→  try {
+   847→   847→    return await getCollectionSize(collectionName);
+   848→   848→  } catch {
+   849→   849→    // Fallback si count() no está disponible
+   850→   850→    const snapshot = await getAdminDb().collection(collectionName).get();
+   851→   851→    return snapshot.size;
+   852→   852→  }
+   853→   853→}
+   854→   854→
+   855→   855→export async function getAllFromCollection(collectionName: string): Promise<DocumentData[]> {
+   856→   856→  const snapshot = await getAdminDb().collection(collectionName).get();
+   857→   857→  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+   858→   858→}
+   859→   859→
+   860→   860→// --- News (noticias) ---
+   861→   861→export async function getNews(filters?: {
+   862→   862→  active?: boolean;
+   863→   863→  featured?: boolean;
+   864→   864→  category?: string;
+   865→   865→}): Promise<DocumentData[]> {
+   866→   866→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   867→   867→  if (filters?.active !== undefined) constraints.push({ field: 'is_active', op: '==', value: filters.active });
+   868→   868→  if (filters?.featured !== undefined) constraints.push({ field: 'is_featured', op: '==', value: filters.featured });
+   869→   869→  if (filters?.category) constraints.push({ field: 'category', op: '==', value: filters.category });
+   870→   870→  return queryDocs('news', constraints, 'published_at', 'desc');
+   871→   871→}
+   872→   872→
+   873→   873→export async function getNewsById(id: string): Promise<DocumentData | null> {
+   874→   874→  return getDocById('news', id);
+   875→   875→}
+   876→   876→
+   877→   877→export async function createNewsItem(data: Record<string, unknown>): Promise<string> {
+   878→   878→  return addDoc('news', data);
+   879→   879→}
+   880→   880→
+   881→   881→export async function updateNewsItem(id: string, data: Record<string, unknown>): Promise<void> {
+   882→   882→  await updateDocById('news', id, data);
+   883→   883→}
+   884→   884→
+   885→   885→export async function deleteNewsItem(id: string): Promise<void> {
+   886→   886→  await deleteDocById('news', id);
+   887→   887→}
+   888→   888→
+   889→   889→// --- Gallery (imágenes) ---
+   890→   890→export async function getGalleryImages(filters?: {
+   891→   891→  active?: boolean;
+   892→   892→  category?: string;
+   893→   893→}): Promise<DocumentData[]> {
+   894→   894→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   895→   895→  if (filters?.active !== undefined) constraints.push({ field: 'is_active', op: '==', value: filters.active });
+   896→   896→  if (filters?.category) constraints.push({ field: 'category', op: '==', value: filters.category });
+   897→   897→  return queryDocs('gallery', constraints, 'display_order', 'asc');
+   898→   898→}
+   899→   899→
+   900→   900→export async function getGalleryImageById(id: string): Promise<DocumentData | null> {
+   901→   901→  return getDocById('gallery', id);
+   902→   902→}
+   903→   903→
+   904→   904→export async function createGalleryImage(data: Record<string, unknown>): Promise<string> {
+   905→   905→  return addDoc('gallery', data);
+   906→   906→}
+   907→   907→
+   908→   908→export async function updateGalleryImage(id: string, data: Record<string, unknown>): Promise<void> {
+   909→   909→  await updateDocById('gallery', id, data);
+   910→   910→}
+   911→   911→
+   912→   912→export async function deleteGalleryImage(id: string): Promise<void> {
+   913→   913→  await deleteDocById('gallery', id);
+   914→   914→}
+   915→   915→
+   916→   916→// --- Site Settings ---
+   917→   917→export async function getSiteSettings(): Promise<DocumentData | null> {
+   918→   918→  return getDocById('site_settings', 'main');
+   919→   919→}
+   920→   920→
+   921→   921→export async function updateSiteSettings(data: Record<string, unknown>): Promise<void> {
+   922→   922→  const now = Timestamp.now();
+   923→   923→  try {
+   924→   924→    await getAdminDb().collection('site_settings').doc('main').update({
+   925→   925→      ...data,
+   926→   926→      updated_at: now,
+   927→   927→    });
+   928→   928→  } catch {
+   929→   929→    // Si no existe, crearlo
+   930→   930→    await getAdminDb().collection('site_settings').doc('main').set({
+   931→   931→      ...data,
+   932→   932→      created_at: now,
+   933→   933→      updated_at: now,
+   934→   934→    });
+   935→   935→  }
+   936→   936→}
+   937→   937→
+   938→   938→// --- Court update/delete (admin) ---
+   939→   939→export async function updateCourt(id: string, data: Record<string, unknown>): Promise<void> {
+   940→   940→  await updateDocById('courts', id, data);
+   941→   941→}
+   942→   942→
+   943→   943→export async function deleteCourt(id: string): Promise<void> {
+   944→   944→  await deleteDocById('courts', id);
+   945→   945→}
+   946→   946→
+   947→   947→// --- Equipment CRUD ---
+   948→   948→export async function getEquipments(filters?: { active?: boolean }): Promise<Partial<Equipment>[]> {
+   949→   949→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+   950→   950→  if (filters?.active !== undefined) constraints.push({ field: 'active', op: '==', value: filters.active });
+   951→   951→  return queryDocs('equipment', constraints, 'name');
+   952→   952→}
+   953→   953→
+   954→   954→export async function getEquipmentById(id: string): Promise<Partial<Equipment> | null> {
+   955→   955→  return getDocById('equipment', id);
+   956→   956→}
+   957→   957→
+   958→   958→export async function createEquipment(data: Record<string, unknown>): Promise<string> {
+   959→   959→  return addDoc('equipment', {
+   960→   960→    name: data.name,
+   961→   961→    sport: data.sport || 'general',
+   962→   962→    price_per_rental: data.price_per_rental || 0,
+   963→   963→    stock: data.stock || 0,
+   964→   964→    active: data.active !== false,
+   965→   965→  });
+   966→   966→}
+   967→   967→
+   968→   968→export async function updateEquipment(id: string, data: Record<string, unknown>): Promise<void> {
+   969→   969→  await updateDocById('equipment', id, data);
+   970→   970→}
+   971→   971→
+   972→   972→export async function deleteEquipment(id: string): Promise<void> {
+   973→   973→  await deleteDocById('equipment', id);
+   974→   974→}
+   975→   975→
+   976→   976→// ============================================================
+   977→   977→// Claims (Libro de Reclamaciones) CRUD
+   978→   978→// ============================================================
+   979→   979→
+   980→   980→/** Get total count of claims (for correlative number generation) */
+   981→   981→export async function getClaimsCount(): Promise<number> {
+   982→   982→  try {
+   983→   983→    return await getCollectionSize('claims');
+   984→   984→  } catch {
+   985→   985→    return 0;
+   986→   986→  }
+   987→   987→}
+   988→   988→
+   989→   989→/** Generate next correlative number: LR-YYYY-NNNNN */
+   990→   990→export async function generateClaimNumber(): Promise<string> {
+   991→   991→  const year = new Date().getFullYear();
+   992→   992→  const count = await getClaimsCount();
+   993→   993→  const sequential = String(count + 1).padStart(5, '0');
+   994→   994→  return `LR-${year}-${sequential}`;
+   995→   995→}
+   996→   996→
+   997→   997→/** Get all claims with optional filters */
+   998→   998→export async function getClaims(filters?: {
+   999→   999→  status?: ClaimStatus;
+  1000→  1000→  claim_type?: ClaimType;
+  1001→  1001→  consumer_id?: string;
+  1002→  1002→  archived?: boolean;
+  1003→  1003→}): Promise<Partial<Claim>[]> {
+  1004→  1004→  const constraints: Array<{ field: string; op: string; value: unknown }> = [];
+  1005→  1005→  if (filters?.status) constraints.push({ field: 'status', op: '==', value: filters.status });
+  1006→  1006→  if (filters?.claim_type) constraints.push({ field: 'claim_type', op: '==', value: filters.claim_type });
+  1007→  1007→  if (filters?.consumer_id) constraints.push({ field: 'consumer_id', op: '==', value: filters.consumer_id });
+  1008→  1008→  if (filters?.archived !== undefined) constraints.push({ field: 'archived', op: '==', value: filters.archived });
+  1009→  1009→  return queryDocs('claims', constraints, 'created_at', 'desc');
+  1010→  1010→}
+  1011→  1011→
+  1012→  1012→/** Get a single claim by ID */
+  1013→  1013→export async function getClaimById(id: string): Promise<Partial<Claim> | null> {
+  1014→  1014→  return getDocById('claims', id);
+  1015→  1015→}
+  1016→  1016→
+  1017→  1017→/** Create a new claim */
+  1018→  1018→export async function createClaim(data: Record<string, unknown>): Promise<string> {
+  1019→  1019→  return addDoc('claims', data);
+  1020→  1020→}
+  1021→  1021→
+  1022→  1022→/** Update a claim */
+  1023→  1023→export async function updateClaim(id: string, data: Record<string, unknown>): Promise<void> {
+  1024→  1024→  await updateDocById('claims', id, data);
+  1025→  1025→}
+  1026→  1026→
+  1027→  1027→/** Archive a claim (soft delete) */
+  1028→  1028→export async function archiveClaim(id: string, archivedBy: string): Promise<void> {
+  1029→  1029→  await updateDocById('claims', id, {
+  1030→  1030→    archived: true,
+  1031→  1031→    archived_at: Timestamp.now(),
+  1032→  1032→    archived_by: archivedBy,
+  1033→  1033→    status: 'archived',
+  1034→  1034→  });
+  1035→  1035→}
+  1036→  1036→
+  1037→  1037→/** Unarchive a claim */
+  1038→  1038→export async function unarchiveClaim(id: string): Promise<void> {
+  1039→  1039→  await updateDocById('claims', id, {
+  1040→  1040→    archived: false,
+  1041→  1041→    archived_at: null,
+  1042→  1042→    archived_by: null,
+  1043→  1043→    status: 'received',
+  1044→  1044→  });
+  1045→  1045→}
+  1046→  1046→
+  1047→  1047→/** Get claims that are approaching or past deadline */
+  1048→  1048→export async function getClaimsNearDeadline(daysThreshold: number = 2): Promise<Partial<Claim>[]> {
+  1049→  1049→  const allClaims = await getClaims();
+  1050→  1050→  const now = new Date();
+  1051→  1051→  const threshold = new Date(now.getTime() + daysThreshold * 24 * 60 * 60 * 1000);
+  1052→  1052→  return allClaims.filter((c) => {
+  1053→  1053→    if (c.status === 'closed' || c.status === 'archived' || !c.deadline_date) return false;
+  1054→  1054→    const deadline = c.deadline_date instanceof Date ? c.deadline_date : new Date(c.deadline_date);
+  1055→  1055→    return deadline <= threshold;
+  1056→  1056→  });
+  1057→  1057→}
+  1058→  1058→
+  1059→  1059→/** Add audit entry to a claim */
+  1060→  1060→export async function addClaimAuditEntry(
+  1061→  1061→  claimId: string,
+  1062→  1062→  action: string,
+  1063→  1063→  performedBy: string,
+  1064→  1064→  performedByName: string,
+  1065→  1065→  performedByRole: string,
+  1066→  1066→  details: string
+  1067→  1067→): Promise<void> {
+  1068→  1068→  const entry = {
+  1069→  1069→    id: claimId + '_' + Date.now(),
+  1070→  1070→    action,
+  1071→  1071→    performed_by: performedBy,
+  1072→  1072→    performed_by_name: performedByName,
+  1073→  1073→    performed_by_role: performedByRole,
+  1074→  1074→    details,
+  1075→  1075→    created_at: Timestamp.now(),
+  1076→  1076→  };
+  1077→  1077→  // Store audit entries as a sub-collection
+  1078→  1078→  await getAdminDb().collection('claims').doc(claimId).collection('audit_log').add(entry);
+  1079→  1079→}
+  1080→  1080→
+  1081→  1081→/** Get audit log for a claim */
+  1082→  1082→export async function getClaimAuditLog(claimId: string): Promise<Partial<ClaimAuditEntry>[]> {
+  1083→  1083→  const snapshot = await getAdminDb().collection('claims').doc(claimId).collection('audit_log').orderBy('created_at', 'asc').get();
+  1084→  1084→  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  1085→  1085→}
+  1086→  1086→

@@ -3,39 +3,25 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Auditoría completa del flujo de reservas + rediseño single-screen booking
+Task: Complete payment system overhaul with audit trail, vouchers, and 50/100% selection
 
 Work Log:
-- Auditoría completa de todos los archivos del flujo de reservas: BookingForm.tsx (910 líneas), CourtDetail.tsx (1168 líneas), bookings/route.ts (1070 líneas), useAppStore.ts, page.tsx, CulqiPayButton.tsx
-- Identificado bug crítico: UnifiedBookingView.tsx importado en page.tsx pero NO EXISTÍA en disco (causaba build error)
-- Identificado flujo actual: usuario debe ir a CourtDetail individual → seleccionar horario → BookingForm (múltiples pasos, no multi-cancha)
-- Identificado CourtDetail usa intervalos de 30 min (generateTimeSlots con minuteIntervals=[0,30])
-- Identificado que la API bookings ya soporta court_ids[] y selectedSlots[]
-
-- Creado UnifiedBookingView.tsx (1063 líneas) — pantalla única de reservas con:
-  - Date picker horizontal (14 días)
-  - Court selector con checkboxes (6 canchas agrupadas por deporte)
-  - Time slot grid con bloques de 1 hora SOLAMENTE (07:00-22:00)
-  - Horarios pasados ocultos (basado en hora actual para hoy)
-  - Disponibilidad en tiempo real via Firebase (🟢 disponible, 🔴 ocupado, 🔵 seleccionado)
-  - Selección por rango automático (click primer slot → click último → llena medio)
-  - Deselección individual (click en slot seleccionado)
-  - Cálculo de precio por court × slot con pricing schedule (mañana/noche)
-  - 4 pasos: select → summary → payment (Culqi) → done
-  - Barra inferior fija con total dinámico
-  - Validación de datos de contacto antes de enviar
-  - Conflict detection con re-verify y refresh de disponibilidad
-  - Responsive mobile-first
-
-- Actualizado useAppStore.ts:
-  - Nuevo campo: selectedTimeSlots: string[]
-  - Nuevas acciones: setSelectedTimeSlots, toggleTimeSlot, clearTimeSlots
-  - clearTimeSlots limpia tanto selectedTimeSlots como selectedTimeSlot (legacy)
-
-- NO se modificó: panel admin, superadmin, API de bookings (ya compatible), CourtDetail (aún funciona), BookingForm (aún funciona para flujo legacy desde CourtDetail)
+- Enhanced db.ts: Added PaymentRecord interface (18 new fields), enhanced createPayment with top-level payments collection, added generatePaymentId (atomic counter), getAllPayments, getPaymentsByBookingId
+- Created /api/payments-list route (admin-only, fetches from top-level payments collection with filters)
+- Enhanced /api/bookings POST: now accepts paymentType (advance/full_payment), generates PAY-NNNNNN IDs, stores full audit data (date, time, user, court, sport, etc.)
+- Enhanced /api/payments POST: remaining payments now also generate PAY-NNNNNN IDs with full audit trail
+- Modified UnifiedBookingView: Added 50%/100% radio selector in summary step, dynamic amounts, paymentType passed to API, voucher button on success screen
+- Created PaymentVoucher component: professional modal with company branding, all payment details, print/PDF/download support with @media print styles
+- Enhanced BookingsView: voucher shown after remaining payment (Yape, Culqi, manual), with getRefCode helper and constructVoucherFromBooking function
+- Enhanced PaymentValidationTab: added full "Historial de Pagos" table with 11 columns (ID Pago, Reserva, Usuario, Cancha, Tipo, Monto, Saldo, Metodo, Estado, Fecha, Hora), search/filter, pagination
+- Fixed critical bug: generatePaymentId() returned Promise but was called without await in bookings API
+- Build verified successful, deployed to creard.vercel.app
 
 Stage Summary:
-- Build exitoso, sin errores
-- Archivos creados/modificados: UnifiedBookingView.tsx (nuevo), useAppStore.ts (modificado)
-- Compatibilidad admin 100% mantenida
-- Listo para deploy
+- 8 source files modified/created
+- New: payments-list API, PaymentVoucher component, PaymentRecord interface
+- Full audit trail: every payment now has unique PAY-NNNNNN ID, date/time in Lima timezone, user/court/sport info
+- 50%/100% payment selection in booking flow
+- Voucher available after both initial and remaining payments
+- Admin can view complete payment history with search and filters
+- Each payment (advance, remaining, full) creates an independent, immutable record
