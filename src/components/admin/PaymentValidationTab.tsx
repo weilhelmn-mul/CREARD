@@ -116,6 +116,7 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
       setObsDialog(null)
       setObservation('')
       fetchData()
+      fetchPayments()
       onValidationChange?.()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -145,9 +146,21 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
   const fmtMoney = (n: number) => `S/ ${n?.toFixed(2) ?? '0.00'}`
   const fmtPayDate = (d: string) => {
     if (!d) return '-'
+    // payment_date comes in DD/MM/YYYY format from toLocaleDateString
+    if (d.includes('/')) {
+      // Already in DD/MM/YYYY format - return as-is or normalize
+      const parts = d.split('/')
+      if (parts.length === 3) {
+        const [day, month, year] = parts
+        return `${day.padStart(2,'0')}/${month.padStart(2,'0')}/${year}`
+      }
+    }
+    // Fallback: might be YYYY-MM-DD
     const [y, m, day] = d.split('-').map(Number)
-    const date = new Date(Date.UTC(y, m - 1, day))
-    return date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' })
+    if (y && m && day) {
+      return `${String(day).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`
+    }
+    return d
   }
   const fmtPayTime = (t: string) => t || '-'
 

@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Types
@@ -123,13 +124,17 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
   const typeLabel = paymentTypeLabel[data.payment_type] ?? data.payment_type;
   const handlePrint = () => window.print();
 
-  return (
+  return createPortal(
     <>
       {/* Print Styles */}
-      <style jsx global>{`
+      <style>{`
         @media print {
           body > *:not(#voucher-root) {
             display: none !important;
+          }
+          #voucher-root > div {
+            opacity: 1 !important;
+            transform: none !important;
           }
           #voucher-root {
             position: static !important;
@@ -173,9 +178,16 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
             color: #000 !important;
             border-color: #ddd !important;
           }
+          #voucher-content .text-cm-on-surface,
+          #voucher-content .text-cm-on-surface-variant {
+            color: #000 !important;
+          }
           #voucher-content .text-cm-primary,
           #voucher-content .text-\[\#00ff41\] {
             color: #00802b !important;
+          }
+          #voucher-content .border-dashed {
+            border-color: #ccc !important;
           }
           @page {
             margin: 10mm;
@@ -443,6 +455,7 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body
   );
 }

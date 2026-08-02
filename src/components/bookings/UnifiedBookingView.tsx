@@ -496,8 +496,8 @@ export default function UnifiedBookingView() {
         remaining_balance: isFull ? 0 : rem,
         payment_method_display: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'Culqi',
         payment_status: isFull ? 'completed' : 'parcial',
-        payment_date: new Date().toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' }),
-        payment_time: new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+        payment_date: (() => { const p = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(new Date()); return `${p.find(x => x.type === 'day')?.value}/${p.find(x => x.type === 'month')?.value}/${p.find(x => x.type === 'year')?.value}`; })(),
+        payment_time: (() => { const p = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(new Date()); return `${p.find(x => x.type === 'hour')?.value}:${p.find(x => x.type === 'minute')?.value}:${p.find(x => x.type === 'second')?.value}`; })(),
         total_price: calcTotal,
       })
       setCreatedBookings([booking])
