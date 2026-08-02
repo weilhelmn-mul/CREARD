@@ -10,6 +10,7 @@ import {
   createPayment,
   createRetainedAdvance,
   generatePaymentId,
+  logPaymentAudit,
 } from '@/lib/db';
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
@@ -682,7 +683,24 @@ export async function POST(request: NextRequest) {
           payment_status: payType === 'full_payment' ? 'completed' : 'parcial',
           payment_date: payDate,
           payment_time: payTime,
+          total_price: price,
         });
+
+        // Log payment creation audit trail
+        try {
+          await logPaymentAudit({
+            booking_id: id,
+            payment_id: payId,
+            action: 'created',
+            new_status: payType === 'full_payment' ? 'completed' : 'parcial',
+            performed_by: userId,
+            performed_by_name: clientUser?.name || clientUser?.email || userId,
+            performed_by_role: 'user',
+            details: `Pago ${payType === 'full_payment' ? 'total' : 'adelanto'} de S/ ${payAmount?.toFixed(2)} registrado para reserva ${bookingCode}. Metodo: ${normalizedPaymentMethod || 'Efectivo'}`,
+          });
+        } catch (auditErr) {
+          console.warn('[BOOKINGS] Warning: could not log payment audit:', auditErr);
+        }
       } catch (payErr) {
         console.error('[BOOKINGS] Warning: could not create payment record:', payErr);
       }

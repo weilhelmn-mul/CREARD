@@ -1,0 +1,627 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback } from 'react'
+     4→import { toast } from '@/hooks/use-toast'
+     5→import { getAuthHeaders } from '@/lib/auth-helpers'
+     6→
+     7→interface PaymentValidationTabProps {
+     8→  onValidationChange?: () => void
+     9→}
+    10→
+    11→interface PendingBooking {
+    12→  id: string
+    13→  user_id: string
+    14→  user_email: string | null
+    15→  court_id: string
+    16→  court_ids?: string[]
+    17→  date: string
+    18→  start_time: string
+    19→  end_time: string
+    20→  total_price: number
+    21→  advance_amount: number
+    22→  remaining_amount?: number
+    23→  payment_method: string
+    24→  status: string
+    25→  remaining_payment_status?: string
+    26→  created_at: any
+    27→}
+    28→
+    29→interface ValidationRecord {
+    30→  id: string
+    31→  booking_id: string
+    32→  action: string
+    33→  observation: string
+    34→  validated_by_name: string
+    35→  validated_by_role: string
+    36→  payment_type?: string
+    37→  booking_code?: string
+    38→  court_name?: string
+    39→  created_at: any
+    40→}
+    41→
+    42→interface AuditLog {
+    43→  id: string
+    44→  action: string
+    45→  previous_status?: string
+    46→  new_status?: string
+    47→  performed_by_name: string
+    48→  performed_by_role: string
+    49→  details?: string
+    50→  observation?: string
+    51→  created_at: any
+    52→}
+    53→
+    54→interface PaymentRecord {
+    55→  id: string
+    56→  payment_id?: string
+    57→  booking_id: string
+    58→  booking_code?: string
+    59→  user_name?: string
+    60→  user_email?: string
+    61→  user_phone?: string | null
+    62→  user_document?: string | null
+    63→  court_name?: string
+    64→  sport?: string
+    65→  booking_date?: string
+    66→  booking_start_time?: string
+    67→  booking_end_time?: string
+    68→  payment_type?: string
+    69→  amount_paid?: number
+    70→  remaining_balance?: number
+    71→  total_price?: number
+    72→  payment_method_display?: string
+    73→  payment_method?: string
+    74→  payment_status?: string
+    75→  payment_date?: string
+    76→  payment_time?: string
+    77→  status?: string
+    78→  external_ref?: string | null
+    79→  created_at?: any
+    80→  validated_by?: string
+    81→  validated_by_name?: string
+    82→  validated_at?: any
+    83→  validationRecords?: ValidationRecord[]
+    84→  auditLogs?: AuditLog[]
+    85→}
+    86→
+    87→// Helpers
+    88→const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    89→const fmtDate = (d: string) => {
+    90→  if (!d) return '-'
+    91→  if (d.includes('-')) {
+    92→    const p = d.split('-').map(Number)
+    93→    return `${p[2]} ${MONTHS_ES[p[1] - 1]} ${p[0]}`
+    94→  }
+    95→  return d
+    96→}
+    97→const fmtDateShort = (d: string) => {
+    98→  if (!d) return '-'
+    99→  if (d.includes('-')) {
+   100→    const p = d.split('-').map(Number)
+   101→    return `${p[2]} ${MONTHS_ES[p[1] - 1]}`
+   102→  }
+   103→  return d
+   104→}
+   105→const fmtTimestamp = (t: any) => {
+   106→  if (!t) return '-'
+   107→  const ms = t._seconds ? t._seconds * 1000 : (typeof t === 'number' ? t : new Date(t).getTime())
+   108→  return new Date(ms).toLocaleString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+   109→}
+   110→const fmtMoney = (n: number) => `S/ ${(n ?? 0).toFixed(2)}`
+   111→const fmtPayDate = (d: string) => {
+   112→  if (!d) return '-'
+   113→  if (d.includes('/')) {
+   114→    const parts = d.split('/')
+   115→    if (parts.length === 3) return `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`
+   116→  }
+   117→  if (d.includes('-')) {
+   118→    const [y, m, day] = d.split('-')
+   119→    return `${day}/${m}/${y}`
+   120→  }
+   121→  return d
+   122→}
+   123→
+   124→const getTypeLabel = (t: string) => {
+   125→  switch (t) {
+   126→    case 'advance': return 'Adelanto (50%)'
+   127→    case 'remaining': return 'Pago Restante'
+   128→    case 'full_payment': return 'Pago Total (100%)'
+   129→    default: return t || '-'
+   130→  }
+   131→}
+   132→const getTypeBadge = (t: string) => {
+   133→  switch (t) {
+   134→    case 'advance': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400">Adelanto</span>
+   135→    case 'remaining': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-400">Restante</span>
+   136→    case 'full_payment': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400">Total</span>
+   137→    default: return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/20 text-gray-400">{t}</span>
+   138→  }
+   139→}
+   140→const getStatusBadge = (s: string) => {
+   141→  switch (s) {
+   142→    case 'completed': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400">Pagado</span>
+   143→    case 'parcial': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400">Parcial</span>
+   144→    case 'rejected': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400">Rechazado</span>
+   145→    case 'pending': return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/20 text-yellow-400">Pendiente</span>
+   146→    default: return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/20 text-gray-400">{s || '-'}</span>
+   147→  }
+   148→}
+   149→
+   150→const getMethodIcon = (m: string) => {
+   151→  const method = (m || '').toUpperCase()
+   152→  if (method.includes('YAPE')) return <span className="material-symbols-outlined text-purple-400 text-[16px]" style={{fontVariationSettings:'"FILL" 1'}}>phone_iphone</span>
+   153→  if (method.includes('PLIN')) return <span className="material-symbols-outlined text-violet-400 text-[16px]">payments</span>
+   154→  if (method.includes('CULQI') || method.includes('TARJETA') || method.includes('CARD')) return <span className="material-symbols-outlined text-blue-400 text-[16px]">credit_card</span>
+   155→  if (method.includes('EFECTIVO')) return <span className="material-symbols-outlined text-green-400 text-[16px]" style={{fontVariationSettings:'"FILL" 1'}}>paid</span>
+   156→  return <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">payment</span>
+   157→}
+   158→
+   159→const calcDuration = (start?: string, end?: string) => {
+   160→  if (!start || !end) return '-'
+   161→  const [sh] = start.split(':').map(Number)
+   162→  const [eh] = end.split(':').map(Number)
+   163→  const diff = eh - sh
+   164→  return diff > 0 ? `${diff}h` : '-'
+   165→}
+   166→
+   167→const getFinancialStatus = (p: PaymentRecord) => {
+   168→  const total = p.total_price || 0
+   169→  const paid = p.amount_paid || 0
+   170→  const remaining = p.remaining_balance || 0
+   171→  if (p.payment_status === 'rejected') return { label: 'Rechazado', color: 'text-red-400', bg: 'bg-red-500/10' }
+   172→  if (total > 0 && remaining <= 0.01) return { label: 'Pagado totalmente', color: 'text-green-400', bg: 'bg-green-500/10' }
+   173→  if (paid > 0 && remaining > 0) return { label: 'Pagado parcialmente', color: 'text-amber-400', bg: 'bg-amber-500/10' }
+   174→  if (p.payment_type === 'advance') return { label: 'Adelanto registrado', color: 'text-blue-400', bg: 'bg-blue-500/10' }
+   175→  return { label: 'Pendiente', color: 'text-cm-on-surface-variant', bg: 'bg-white/5' }
+   176→}
+   177→
+   178→export default function PaymentValidationTab({ onValidationChange }: PaymentValidationTabProps) {
+   179→  const [advanceBookings, setAdvanceBookings] = useState<PendingBooking[]>([])
+   180→  const [remainingBookings, setRemainingBookings] = useState<PendingBooking[]>([])
+   181→  const [history, setHistory] = useState<Record<string, ValidationRecord[]>>({})
+   182→  const [loading, setLoading] = useState(true)
+   183→  const [processing, setProcessing] = useState<string | null>(null)
+   184→  const [obsDialog, setObsDialog] = useState<{ bookingId: string; action: string } | null>(null)
+   185→  const [observation, setObservation] = useState('')
+   186→
+   187→  const [payments, setPayments] = useState<PaymentRecord[]>([])
+   188→  const [paymentsLoading, setPaymentsLoading] = useState(false)
+   189→  const [paymentsSearch, setPaymentsSearch] = useState('')
+   190→  const [paymentsStatusFilter, setPaymentsStatusFilter] = useState('all')
+   191→  const [paymentsTypeFilter, setPaymentsTypeFilter] = useState('all')
+   192→  const [paymentsCount, setPaymentsCount] = useState(20)
+   193→  const [expandedPayment, setExpandedPayment] = useState<string | null>(null)
+   194→  const [evidenceModal, setEvidenceModal] = useState<string | null>(null)
+   195→
+   196→  const fetchData = useCallback(async () => {
+   197→    try {
+   198→      const headers = await getAuthHeaders()
+   199→      const res = await fetch('/api/payment-validation', { headers })
+   200→      const data = await res.json()
+   201→      const allBookings: PendingBooking[] = data.bookings || []
+   202→      setHistory(data.validationHistory || {})
+   203→      const allRes = await fetch('/api/bookings?dateFrom=2020-01-01&dateTo=2030-12-31', { headers })
+   204→      let allUserBookings: any[] = []
+   205→      if (allRes.ok) {
+   206→        const allData = await allRes.json()
+   207→        allUserBookings = Array.isArray(allData) ? allData : []
+   208→      }
+   209→      setAdvanceBookings(allBookings.filter((b: any) => b.status === 'payment_pending'))
+   210→      setRemainingBookings(allUserBookings.filter((b: any) => b.remaining_payment_status === 'pending' && b.status === 'reserved'))
+   211→    } catch {
+   212→      toast({ title: 'Error', description: 'No se pudo cargar las validaciones', variant: 'destructive' })
+   213→    } finally {
+   214→      setLoading(false)
+   215→    }
+   216→  }, [])
+   217→
+   218→  const fetchPayments = useCallback(async () => {
+   219→    setPaymentsLoading(true)
+   220→    try {
+   221→      const headers = await getAuthHeaders()
+   222→      const res = await fetch('/api/payments-list', { headers })
+   223→      if (res.ok) {
+   224→        const data = await res.json()
+   225→        setPayments(Array.isArray(data) ? data : [])
+   226→      }
+   227→    } catch {
+   228→      toast({ title: 'Error', description: 'No se pudieron cargar los pagos', variant: 'destructive' })
+   229→    } finally {
+   230→      setPaymentsLoading(false)
+   231→    }
+   232→  }, [])
+   233→
+   234→  useEffect(() => { fetchData() }, [fetchData])
+   235→  useEffect(() => { fetchPayments() }, [fetchPayments])
+   236→
+   237→  const handleAction = async (bookingId: string, action: string, obs?: string) => {
+   238→    setProcessing(bookingId)
+   239→    try {
+   240→      const headers = await getAuthHeaders()
+   241→      const res = await fetch('/api/payment-validation', {
+   242→        method: 'PATCH',
+   243→        headers: { ...headers, 'Content-Type': 'application/json' },
+   244→        body: JSON.stringify({ bookingId, action, observation: obs || '' }),
+   245→      })
+   246→      const data = await res.json()
+   247→      if (!res.ok) throw new Error(data.error)
+   248→      toast({
+   249→        title: action === 'validate' ? 'Pago validado' : 'Pago rechazado',
+   250→        description: data.message,
+   251→      })
+   252→      setObsDialog(null)
+   253→      setObservation('')
+   254→      fetchData()
+   255→      fetchPayments()
+   256→      onValidationChange?.()
+   257→    } catch (e: any) {
+   258→      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+   259→    } finally {
+   260→      setProcessing(null)
+   261→    }
+   262→  }
+   263→
+   264→  if (loading) return <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-[#00ff41]/30 border-t-[#00ff41] rounded-full animate-spin" /></div>
+   265→
+   266→  const totalPending = advanceBookings.length + remainingBookings.length
+   267→  const filteredPayments = payments.filter((p) => {
+   268→    const search = paymentsSearch.toLowerCase()
+   269→    const matchSearch = !search
+   270→      || (p.payment_id || '').toLowerCase().includes(search)
+   271→      || (p.booking_code || '').toLowerCase().includes(search)
+   272→      || (p.user_name || '').toLowerCase().includes(search)
+   273→      || (p.user_email || '').toLowerCase().includes(search)
+   274→    const matchStatus = paymentsStatusFilter === 'all' || p.payment_status === paymentsStatusFilter
+   275→    const matchType = paymentsTypeFilter === 'all' || p.payment_type === paymentsTypeFilter
+   276→    return matchSearch && matchStatus && matchType
+   277→  })
+   278→  const visiblePayments = filteredPayments.slice(0, paymentsCount)
+   279→
+   280→  const renderPendingCard = (b: PendingBooking, isRemaining: boolean) => (
+   281→    <div key={b.id} className="glass-card rounded-xl p-4">
+   282→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   283→        <div className="flex-1 min-w-0 space-y-1.5">
+   284→          <div className="flex items-center gap-2">
+   285→            <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{b.court_ids?.length ? `${b.court_ids.length} cancha(s)` : 'Cancha'}</span>
+   286→            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isRemaining ? 'bg-orange-500/20 text-orange-400' : 'bg-amber-500/20 text-amber-400'}`}>{isRemaining ? 'Restante' : 'Adelanto'}</span>
+   287→          </div>
+   288→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+   289→            <div><span className="text-cm-on-surface-variant">Usuario: </span><span className="text-cm-on-surface font-medium">{b.user_email || b.user_id?.substring(0, 8)}</span></div>
+   290→            <div><span className="text-cm-on-surface-variant">Fecha: </span><span className="text-cm-on-surface font-medium">{fmtDateShort(b.date)}</span></div>
+   291→            <div><span className="text-cm-on-surface-variant">Hora: </span><span className="text-cm-on-surface font-medium">{b.start_time} - {b.end_time}</span></div>
+   292→            <div><span className="text-cm-on-surface-variant">Monto: </span><span className="text-[#00ff41] font-bold">S/ {(isRemaining ? b.remaining_amount : b.advance_amount || b.total_price)?.toFixed(2)}</span></div>
+   293→          </div>
+   294→          <p className="text-[10px] text-cm-on-surface-variant">Metodo: {b.payment_method || 'Yape QR'}</p>
+   295→          {history[b.id] && history[b.id].length > 0 && (
+   296→            <div className="mt-2 pt-2 border-t border-white/5 space-y-1">
+   297→              <p className="text-[10px] text-cm-on-surface-variant font-medium">Historial:</p>
+   298→              {history[b.id].slice(0, 3).map((h) => (
+   299→                <div key={h.id} className="text-[10px] text-cm-on-surface-variant flex items-center gap-2">
+   300→                  <span className={h.action === 'validate' ? 'text-green-400' : 'text-red-400'}>{h.action === 'validate' ? 'Validado' : 'Rechazado'}</span>
+   301→                  <span>por {h.validated_by_name}</span>
+   302→                  <span>{fmtTimestamp(h.created_at)}</span>
+   303→                  {h.observation && <span className="italic">- {h.observation}</span>}
+   304→                </div>
+   305→              ))}
+   306→            </div>
+   307→          )}
+   308→        </div>
+   309→        <div className="flex items-center gap-2 shrink-0">
+   310→          <button onClick={() => handleAction(b.id, 'validate')} disabled={processing === b.id} className="px-3 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
+   311→            {processing === b.id ? <div className="w-3.5 h-3.5 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" /> : <span className="material-symbols-outlined text-[14px]">check</span>}
+   312→            Validar
+   313→          </button>
+   314→          <button onClick={() => { setObsDialog({ bookingId: b.id, action: 'reject' }); setObservation('') }} disabled={processing === b.id} className="px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
+   315→            <span className="material-symbols-outlined text-[14px]">close</span>
+   316→            Rechazar
+   317→          </button>
+   318→        </div>
+   319→      </div>
+   320→    </div>
+   321→  )
+   322→
+   323→  // Detail section component for expanded payment
+   324→  const PaymentDetail = ({ p }: { p: PaymentRecord }) => {
+   325→    const fin = getFinancialStatus(p)
+   326→    const validations = p.validationRecords || []
+   327→    const audits = p.auditLogs || []
+   328→    const isYapeOrPlin = (p.payment_method || '').toUpperCase().includes('YAPE') || (p.payment_method || '').toUpperCase().includes('PLIN')
+   329→    const method = (p.payment_method || '').toUpperCase()
+   330→    const methodDisplay = method.includes('YAPE') ? 'Yape' : method.includes('PLIN') ? 'Plin' : method.includes('CULQI') ? 'Culqi' : method.includes('TARJETA') || method.includes('CARD') ? 'Tarjeta' : method.includes('EFECTIVO') ? 'Efectivo' : p.payment_method_display || p.payment_method || '-'
+   331→
+   332→    return (
+   333→      <div className="border-t border-white/10 bg-cm-surface-container/30 p-4 space-y-4">
+   334→        {/* Section: Payment Info */}
+   335→        <div>
+   336→          <div className="flex items-center gap-1.5 mb-3">
+   337→            <span className="material-symbols-outlined text-[#00ff41] text-[14px]" style={{fontVariationSettings:'"FILL" 1'}}>receipt_long</span>
+   338→            <span className="text-[11px] font-bold text-[#00ff41] uppercase tracking-wider font-[family-name:var(--font-sora)]">Informacion del Pago</span>
+   339→          </div>
+   340→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   341→            <InfoItem label="ID Pago" value={p.payment_id || '-'} mono />
+   342→            <InfoItem label="Estado del Pago" value={getStatusBadge(p.payment_status || '')} />
+   343→            <InfoItem label="Fecha del Pago" value={fmtPayDate(p.payment_date || '')} />
+   344→            <InfoItem label="Hora del Pago" value={p.payment_time || '-'} mono />
+   345→            <InfoItem label="Fecha Registro Sistema" value={fmtTimestamp(p.created_at)} />
+   346→            <InfoItem label="Metodo de Pago" value={<span className="flex items-center gap-1.5">{getMethodIcon(p.payment_method || '')}<span>{methodDisplay}</span></span>} />
+   347→            <InfoItem label="N. Operacion" value={p.external_ref || '-'} mono />
+   348→            <InfoItem label="Monto Pagado" value={<span className="text-[#00ff41] font-bold text-sm">{fmtMoney(p.amount_paid || 0)}</span>} />
+   349→            <InfoItem label="Moneda" value="PEN (Soles)" />
+   350→          </div>
+   351→        </div>
+   352→
+   353→        <Separator />
+   354→
+   355→        {/* Section: Booking Info */}
+   356→        <div>
+   357→          <div className="flex items-center gap-1.5 mb-3">
+   358→            <span className="material-symbols-outlined text-blue-400 text-[14px]">calendar_month</span>
+   359→            <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider font-[family-name:var(--font-sora)]">Informacion de la Reserva</span>
+   360→          </div>
+   361→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   362→            <InfoItem label="Codigo Reserva" value={p.booking_code || '-'} mono />
+   363→            <InfoItem label="ID Reserva" value={p.booking_id?.substring(0, 16) + '...' || '-'} mono small />
+   364→            <InfoItem label="Fecha Creacion" value={fmtTimestamp(p.created_at)} />
+   365→            <InfoItem label="Fecha Alquiler" value={fmtDate(p.booking_date || '')} />
+   366→            <InfoItem label="Hora Inicio" value={p.booking_start_time || '-'} mono />
+   367→            <InfoItem label="Hora Fin" value={p.booking_end_time || '-'} mono />
+   368→            <InfoItem label="Duracion" value={calcDuration(p.booking_start_time, p.booking_end_time)} />
+   369→            <InfoItem label="Deporte" value={p.sport || '-'} />
+   370→            <InfoItem label="Cancha" value={p.court_name || '-'} />
+   371→            <InfoItem label="Precio Total Reserva" value={<span className="font-bold text-sm">{fmtMoney(p.total_price || 0)}</span>} />
+   372→          </div>
+   373→        </div>
+   374→
+   375→        <Separator />
+   376→
+   377→        {/* Section: Financial Status */}
+   378→        <div>
+   379→          <div className="flex items-center gap-1.5 mb-3">
+   380→            <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{fontVariationSettings:'"FILL" 1'}}>account_balance_wallet</span>
+   381→            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider font-[family-name:var(--font-sora)]">Estado Financiero</span>
+   382→          </div>
+   383→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+   384→            <InfoItem label="Tipo de Pago" value={getTypeBadge(p.payment_type || '')} />
+   385→            <InfoItem label="Total Reserva" value={fmtMoney(p.total_price || 0)} />
+   386→            <InfoItem label="Total Pagado" value={<span className="text-green-400 font-semibold">{fmtMoney(p.amount_paid || 0)}</span>} />
+   387→            <InfoItem label="Saldo Pendiente" value={<span className={(p.remaining_balance || 0) > 0 ? 'text-orange-400' : 'text-green-400'}>{fmtMoney(p.remaining_balance || 0)}</span>} />
+   388→          </div>
+   389→          <div className="mt-3">
+   390→            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${fin.color} ${fin.bg}`}>
+   391→              <span className="material-symbols-outlined text-[14px]">{fin.label.includes('total') ? 'check_circle' : fin.label.includes('parcial') ? 'pending' : fin.label.includes('Rechaz') ? 'cancel' : 'schedule'}</span>
+   392→              {fin.label}
+   393→            </span>
+   394→          </div>
+   395→        </div>
+   396→
+   397→        <Separator />
+   398→
+   399→        {/* Section: Client Info */}
+   400→        <div>
+   401→          <div className="flex items-center gap-1.5 mb-3">
+   402→            <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px]">person</span>
+   403→            <span className="text-[11px] font-bold text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-sora)]">Informacion del Cliente</span>
+   404→          </div>
+   405→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+   406→            <InfoItem label="Nombre" value={p.user_name || '-'} />
+   407→            <InfoItem label="Documento" value={p.user_document || 'No registrado'} />
+   408→            <InfoItem label="Correo" value={p.user_email || '-'} />
+   409→            <InfoItem label="Telefono" value={p.user_phone || '-'} />
+   410→          </div>
+   411→        </div>
+   412→
+   413→        <Separator />
+   414→
+   415→        {/* Section: Validation Info */}
+   416→        <div>
+   417→          <div className="flex items-center gap-1.5 mb-3">
+   418→            <span className="material-symbols-outlined text-cyan-400 text-[14px]">verified</span>
+   419→            <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider font-[family-name:var(--font-sora)]">Informacion de Validacion</span>
+   420→          </div>
+   421→          {validations.length > 0 ? validations.map((v) => (
+   422→            <div key={v.id} className="glass-card rounded-lg p-3 mb-2">
+   423→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+   424→                <div><span className="text-cm-on-surface-variant">Estado: </span><span className={v.action === 'validate' ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>{v.action === 'validate' ? 'Validado' : 'Rechazado'}</span></div>
+   425→                <div><span className="text-cm-on-surface-variant">Validador: </span><span className="text-cm-on-surface font-medium">{v.validated_by_name} ({v.validated_by_role})</span></div>
+   426→                <div><span className="text-cm-on-surface-variant">Fecha: </span><span className="text-cm-on-surface">{fmtTimestamp(v.created_at)}</span></div>
+   427→                {v.booking_code && <div><span className="text-cm-on-surface-variant">Cod. Reserva: </span><span className="text-cm-on-surface font-mono">{v.booking_code}</span></div>}
+   428→                {v.court_name && <div><span className="text-cm-on-surface-variant">Cancha: </span><span className="text-cm-on-surface">{v.court_name}</span></div>}
+   429→              </div>
+   430→              {v.observation && <div className="mt-2 pt-2 border-t border-white/5 text-xs"><span className="text-cm-on-surface-variant">Observacion: </span><span className="text-cm-on-surface italic">{v.observation}</span></div>}
+   431→            </div>
+   432→          )) : <p className="text-xs text-cm-on-surface-variant">Sin registros de validacion.</p>}
+   433→          {p.validated_by_name && <p className="text-[10px] text-cm-on-surface-variant mt-2">Validado por: {p.validated_by_name} - {p.validated_at ? fmtTimestamp(p.validated_at) : '-'}</p>}
+   434→        </div>
+   435→
+   436→        {/* Section: Evidence (Yape/Plin) */}
+   437→        {isYapeOrPlin && (
+   438→          <>
+   439→            <Separator />
+   440→            <div>
+   441→              <div className="flex items-center gap-1.5 mb-3">
+   442→                <span className="material-symbols-outlined text-purple-400 text-[14px]" style={{fontVariationSettings:'"FILL" 1'}}>photo_camera</span>
+   443→                <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider font-[family-name:var(--font-sora)]">Evidencia del Pago</span>
+   444→              </div>
+   445→              <div className="rounded-xl border border-dashed border-white/10 p-6 text-center">
+   446→                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-1">image</span>
+   447→                <p className="text-xs text-cm-on-surface-variant">No se ha adjuntado comprobante de {methodDisplay}.</p>
+   448→                <p className="text-[10px] text-cm-on-surface-variant/50 mt-1">El comprobante se valida via WhatsApp u otro canal.</p>
+   449→              </div>
+   450→            </div>
+   451→          </>
+   452→        )}
+   453→
+   454→        {/* Section: Audit Trail */}
+   455→        {audits.length > 0 && (
+   456→          <>
+   457→            <Separator />
+   458→            <div>
+   459→              <div className="flex items-center gap-1.5 mb-3">
+   460→                <span className="material-symbols-outlined text-emerald-400 text-[14px]">history</span>
+   461→                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider font-[family-name:var(--font-sora)]">Auditoria y Trazabilidad</span>
+   462→              </div>
+   463→              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+   464→                {audits.map((a) => {
+   465→                  const actionLabel = a.action === 'validate' ? 'Validacion' : a.action === 'reject' ? 'Rechazo' : a.action === 'created' ? 'Creacion' : a.action === 'status_change' ? 'Cambio Estado' : a.action
+   466→                  const actionColor = a.action === 'validate' ? 'text-green-400' : a.action === 'reject' ? 'text-red-400' : 'text-cm-on-surface-variant'
+   467→                  return (
+   468→                    <div key={a.id} className="flex items-start gap-2 text-[11px]">
+   469→                      <span className={`material-symbols-outlined text-[14px] mt-0.5 ${actionColor}`}>{a.action === 'validate' ? 'check_circle' : a.action === 'reject' ? 'cancel' : 'info'}</span>
+   470→                      <div className="flex-1 min-w-0">
+   471→                        <div className="flex items-center gap-2 flex-wrap">
+   472→                          <span className={`font-semibold ${actionColor}`}>{actionLabel}</span>
+   473→                          {a.previous_status && <span className="text-cm-on-surface-variant">{a.previous_status} → {a.new_status}</span>}
+   474→                          <span className="text-cm-on-surface-variant">·</span>
+   475→                          <span className="text-cm-on-surface-variant">{a.performed_by_name} ({a.performed_by_role})</span>
+   476→                        </div>
+   477→                        {a.details && <p className="text-cm-on-surface-variant/70 mt-0.5">{a.details}</p>}
+   478→                        {(a.observation || (a.action === 'reject')) && <p className="text-cm-on-surface-variant/70 italic mt-0.5">{a.observation || ''}</p>}
+   479→                        <p className="text-cm-on-surface-variant/50 mt-0.5">{fmtTimestamp(a.created_at)}</p>
+   480→                      </div>
+   481→                    </div>
+   482→                  )
+   483→                })}
+   484→              </div>
+   485→            </div>
+   486→          </>
+   487→        )}
+   488→      </div>
+   489→    )
+   490→  }
+   491→
+   492→  return (
+   493→    <div className="space-y-6">
+   494→      <div className="flex items-center justify-between">
+   495→        <h3 className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Validacion de Pagos</h3>
+   496→        <span className="text-xs bg-amber-500/20 text-amber-400 px-2.5 py-1 rounded-full font-medium">{totalPending} pendiente{totalPending !== 1 ? 's' : ''}</span>
+   497→      </div>
+   498→
+   499→      {totalPending === 0 ? (
+   500→        <div className="glass-card rounded-xl p-8 text-center">
+   501→          <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 mb-2 block">check_circle</span>
+   502→          <p className="text-cm-on-surface-variant text-sm">No hay pagos pendientes de validacion.</p>
+   503→        </div>
+   504→      ) : (
+   505→        <>
+   506→          {advanceBookings.length > 0 && (
+   507→            <div className="space-y-3">
+   508→              {advanceBookings.length > 0 && remainingBookings.length > 0 && (
+   509→                <div className="flex items-center gap-2"><span className="text-xs font-semibold text-amber-400 font-[family-name:var(--font-inter)] uppercase tracking-wider">Adelantos ({advanceBookings.length})</span><div className="flex-1 h-px bg-amber-500/20" /></div>
+   510→              )}
+   511→              {advanceBookings.map((b) => renderPendingCard(b, false))}
+   512→            </div>
+   513→          )}
+   514→          {remainingBookings.length > 0 && (
+   515→            <div className="space-y-3">
+   516→              {advanceBookings.length > 0 && remainingBookings.length > 0 && (
+   517→                <div className="flex items-center gap-2"><span className="text-xs font-semibold text-orange-400 font-[family-name:var(--font-inter)] uppercase tracking-wider">Pagos Restantes ({remainingBookings.length})</span><div className="flex-1 h-px bg-orange-500/20" /></div>
+   518→              )}
+   519→              {remainingBookings.map((b) => renderPendingCard(b, true))}
+   520→            </div>
+   521→          )}
+   522→        </>
+   523→      )}
+   524→
+   525→      {/* Payment History Section */}
+   526→      <div className="space-y-4">
+   527→        <div className="flex items-center justify-between">
+   528→          <div className="flex items-center gap-2">
+   529→            <h3 className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Historial de Pagos</h3>
+   530→            <span className="text-xs bg-[#00ff41]/20 text-[#00ff41] px-2.5 py-1 rounded-full font-medium">{filteredPayments.length} registro{filteredPayments.length !== 1 ? 's' : ''}</span>
+   531→          </div>
+   532→          {paymentsLoading && <div className="w-4 h-4 border-2 border-[#00ff41]/30 border-t-[#00ff41] rounded-full animate-spin" />}
+   533→        </div>
+   534→
+   535→        {/* Search and filter bar */}
+   536→        <div className="flex flex-col sm:flex-row gap-2">
+   537→          <div className="relative flex-1">
+   538→            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-sm">search</span>
+   539→            <input type="text" value={paymentsSearch} onChange={e => setPaymentsSearch(e.target.value)} placeholder="Buscar por ID pago, reserva, nombre o correo..." className="w-full pl-9 pr-3 py-2 bg-cm-surface-container-highest/60 border border-white/10 rounded-lg text-cm-on-surface text-xs placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-[#00ff41]/50 font-[family-name:var(--font-inter)]" />
+   540→          </div>
+   541→          <select value={paymentsStatusFilter} onChange={e => setPaymentsStatusFilter(e.target.value)} className="px-3 py-2 bg-cm-surface-container-highest/60 border border-white/10 rounded-lg text-cm-on-surface text-xs focus:outline-none focus:border-[#00ff41]/50 font-[family-name:var(--font-inter)]">
+   542→            <option value="all" className="bg-[#1a1a2e] text-white">Todos los estados</option>
+   543→            <option value="completed" className="bg-[#1a1a2e] text-white">Pagado</option>
+   544→            <option value="parcial" className="bg-[#1a1a2e] text-white">Parcial</option>
+   545→            <option value="rejected" className="bg-[#1a1a2e] text-white">Rechazado</option>
+   546→            <option value="pending" className="bg-[#1a1a2e] text-white">Pendiente</option>
+   547→          </select>
+   548→          <select value={paymentsTypeFilter} onChange={e => setPaymentsTypeFilter(e.target.value)} className="px-3 py-2 bg-cm-surface-container-highest/60 border border-white/10 rounded-lg text-cm-on-surface text-xs focus:outline-none focus:border-[#00ff41]/50 font-[family-name:var(--font-inter)]">
+   549→            <option value="all" className="bg-[#1a1a2e] text-white">Todos los tipos</option>
+   550→            <option value="advance" className="bg-[#1a1a2e] text-white">Adelanto</option>
+   551→            <option value="remaining" className="bg-[#1a1a2e] text-white">Restante</option>
+   552→            <option value="full_payment" className="bg-[#1a1a2e] text-white">Pago Total</option>
+   553→          </select>
+   554→        </div>
+   555→
+   556→        {/* Payments list */}
+   557→        <div className="glass-card rounded-xl overflow-hidden">
+   558→          {paymentsLoading ? (
+   559→            <div className="p-12 text-center text-cm-on-surface-variant"><div className="flex items-center justify-center gap-2"><div className="w-5 h-5 border-2 border-[#00ff41]/30 border-t-[#00ff41] rounded-full animate-spin" />Cargando pagos...</div></div>
+   560→          ) : visiblePayments.length === 0 ? (
+   561→            <div className="p-12 text-center text-cm-on-surface-variant text-sm">No se encontraron pagos.</div>
+   562→          ) : (
+   563→            <div>
+   564→              {visiblePayments.map((p) => {
+   565→                const isExpanded = expandedPayment === p.id
+   566→                const fin = getFinancialStatus(p)
+   567→                return (
+   568→                  <div key={p.id} className={isExpanded ? 'bg-[#00ff41]/[0.03]' : ''}>
+   569→                    <button onClick={() => setExpandedPayment(isExpanded ? null : p.id)} className="w-full text-left p-3 sm:p-4 hover:bg-white/5 transition-colors border-b border-white/5">
+   570→                      <div className="flex items-center gap-3">
+   571→                        <span className={`material-symbols-outlined text-[16px] text-cm-on-surface-variant transition-transform ${isExpanded ? 'rotate-90' : ''}`}>chevron_right</span>
+   572→                        <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-1">
+   573→                          <div className="min-w-0"><p className="text-[10px] text-cm-on-surface-variant">ID Pago</p><p className="text-xs text-cm-on-surface font-mono font-medium truncate">{p.payment_id || '-'}</p></div>
+   574→                          <div className="min-w-0"><p className="text-[10px] text-cm-on-surface-variant">Reserva</p><p className="text-xs text-cm-on-surface font-mono truncate">{p.booking_code || '-'}</p></div>
+   575→                          <div className="min-w-0 hidden sm:block"><p className="text-[10px] text-cm-on-surface-variant">Usuario</p><p className="text-xs text-cm-on-surface truncate">{p.user_name || p.user_email || '-'}</p></div>
+   576→                          <div className="min-w-0 hidden lg:block"><p className="text-[10px] text-cm-on-surface-variant">Cancha</p><p className="text-xs text-cm-on-surface truncate">{p.court_name || '-'}</p></div>
+   577→                          <div className="hidden sm:flex items-center gap-2"><div><p className="text-[10px] text-cm-on-surface-variant">Tipo</p><div className="flex items-center gap-1">{getTypeBadge(p.payment_type || '')}{getStatusBadge(p.payment_status || '')}</div></div></div>
+   578→                          <div className="text-right"><p className="text-[10px] text-cm-on-surface-variant">Monto</p><p className="text-xs text-[#00ff41] font-bold">{fmtMoney(p.amount_paid || 0)}</p></div>
+   579→                        </div>
+   580→                      </div>
+   581→                    </button>
+   582→                    {isExpanded && <PaymentDetail p={p} />}
+   583→                  </div>
+   584→                )
+   585→              })}
+   586→            </div>
+   587→          )}
+   588→          {filteredPayments.length > paymentsCount && (
+   589→            <div className="p-3 border-t border-white/10 text-center">
+   590→              <button onClick={() => setPaymentsCount(prev => prev + 20)} className="px-4 py-2 bg-[#00ff41]/10 text-[#00ff41] border border-[#00ff41]/20 rounded-lg text-xs font-semibold hover:bg-[#00ff41]/20 transition-colors font-[family-name:var(--font-inter)]">Cargar mas ({filteredPayments.length - paymentsCount} restantes)</button>
+   591→            </div>
+   592→          )}
+   593→        </div>
+   594→      </div>
+   595→
+   596→      {/* Reject observation dialog */}
+   597→      {obsDialog && (
+   598→        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setObsDialog(null)}>
+   599→          <div className="glass-card rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+   600→            <h4 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-3">Rechazar Pago</h4>
+   601→            <p className="text-sm text-cm-on-surface-variant mb-3 font-[family-name:var(--font-inter)]">Agrega una observacion opcional:</p>
+   602→            <textarea value={observation} onChange={e => setObservation(e.target.value)} className="w-full h-24 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm p-3 resize-none focus:outline-none focus:border-red-500/50 font-[family-name:var(--font-inter)]" placeholder="Motivo del rechazo..." />
+   603→            <div className="flex justify-end gap-2 mt-4">
+   604→              <button onClick={() => setObsDialog(null)} className="px-4 py-2 text-cm-on-surface-variant text-sm hover:text-cm-on-surface transition-colors font-[family-name:var(--font-inter)]">Cancelar</button>
+   605→              <button onClick={() => handleAction(obsDialog.bookingId, obsDialog.action, observation)} className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-colors font-[family-name:var(--font-inter)]">Confirmar Rechazo</button>
+   606→            </div>
+   607→          </div>
+   608→        </div>
+   609→      )}
+   610→    </div>
+   611→  )
+   612→}
+   613→
+   614→// Sub-components
+   615→function Separator() {
+   616→  return <div className="border-t border-dashed border-white/10 my-1" />
+   617→}
+   618→
+   619→function InfoItem({ label, value, mono, small }: { label: string; value: React.ReactNode; mono?: boolean; small?: boolean }) {
+   620→  return (
+   621→    <div>
+   622→      <p className="text-[10px] text-cm-on-surface-variant mb-0.5 font-[family-name:var(--font-inter)]">{label}</p>
+   623→      <p className={`text-xs text-cm-on-surface ${mono ? 'font-mono' : ''} ${small ? 'text-[10px]' : ''} font-[family-name:var(--font-inter)]`}>{value}</p>
+   624→    </div>
+   625→  )
+   626→}
+   627→

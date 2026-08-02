@@ -1,4 +1,11 @@
-'use client'
+#!/usr/bin/env python3
+"""Rewrite PaymentValidationTab.tsx with comprehensive info per the user's spec."""
+
+import os
+
+TARGET = "/home/z/my-project/src/components/admin/PaymentValidationTab.tsx"
+
+CONTENT = r"""'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from '@/hooks/use-toast'
@@ -824,3 +831,9 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
     </div>
   )
 }
+"""
+
+with open(TARGET, 'w', encoding='utf-8') as f:
+    f.write(CONTENT)
+
+print(f"Written {len(CONTENT)} bytes to {TARGET}")

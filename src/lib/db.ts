@@ -523,6 +523,7 @@ export async function createPayment(
     payment_status?: string;
     payment_date?: string;
     payment_time?: string;
+    total_price?: number;
   }
 ): Promise<string> {
   const now = Timestamp.now();
@@ -561,6 +562,7 @@ export async function createPayment(
   if (data.payment_status !== undefined) paymentData.payment_status = data.payment_status;
   if (data.payment_date !== undefined) paymentData.payment_date = data.payment_date;
   if (data.payment_time !== undefined) paymentData.payment_time = data.payment_time;
+  if (data.total_price !== undefined) paymentData.total_price = data.total_price;
 
   // Write to subcollection (bookings/{id}/payments)
   const docRef = await db

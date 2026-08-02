@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPayment, updateBooking, getBookingById, generatePaymentId, getCourtById, getUserById } from '@/lib/db';
+import { createPayment, updateBooking, getBookingById, generatePaymentId, getCourtById, getUserById, logPaymentAudit } from '@/lib/db';
 import { requireAnyAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
@@ -135,7 +135,24 @@ export async function POST(request: NextRequest) {
       payment_status: status || 'completed',
       payment_date: payDateParts,
       payment_time: payTimeParts,
+      total_price: totalPrice,
     });
+
+    // Log payment creation audit trail
+    try {
+      await logPaymentAudit({
+        booking_id: bookingId,
+        payment_id: payId,
+        action: 'created',
+        new_status: status || 'completed',
+        performed_by: effectiveUserId,
+        performed_by_name: userName || userEmail || effectiveUserId,
+        performed_by_role: authUser.role || 'user',
+        details: `Pago ${type === 'remaining' ? 'del saldo' : type === 'advance' ? 'adelanto' : type} de S/ ${(parseFloat(amount) || 0).toFixed(2)} registrado para reserva ${bookingCode}. Metodo: ${paymentMethodDisplay}`,
+      });
+    } catch (auditErr) {
+      console.warn('[PAYMENTS] Warning: could not log payment audit:', auditErr);
+    }
 
     // Si es pago restante, actualizar la reserva
     if (type === 'remaining' && booking) {
