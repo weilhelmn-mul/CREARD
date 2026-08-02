@@ -58,3 +58,28 @@ Work Log:
 Stage Summary:
 - Deployed to https://creard.vercel.app/
 - Build passes, 8 files changed, +2602/-292 lines
+---
+Task ID: 1
+Agent: main
+Task: Mejorar informacion mostrada en Info de Validacion de Pagos
+
+Work Log:
+- Leido PaymentValidationTab.tsx (627 lineas), payments-list/route.ts, payment-validation/route.ts, db.ts
+- Identificados campos faltantes: total_price no se almacenaba en payments, no habia porcentaje pagado, court_names para multi-cancha
+- API payments-list mejorada: batch-fetch de bookings (chunks de 30), validaciones y audit logs en bulk, calculo de percentage_paid, court_names, booking_created_at, rejection_reason
+- db.ts: agregado campo total_price a createPayment
+- bookings/route.ts: pasar total_price y log de auditoria (logPaymentAudit) al crear pago
+- payments/route.ts: pasar total_price y log de auditoria al crear pago
+- PaymentValidationTab.tsx reescrito completamente (826 lineas) con:
+  - Tabla de 11 columnas: ID Pago, ID Reserva, Usuario, Cancha(s), Tipo Pago, Monto Pagado, Saldo Pendiente, Metodo, Estado, Fecha Pago, Hora Pago
+  - 8 secciones de detalle expandido: Informacion General, Usuario, Reserva, Pago Realizado, Estado Financiero (con barra de progreso), Validacion Administrativa, Evidencia, Auditoria
+  - Filtros por estado, tipo y metodo de pago
+  - Busqueda por ID, reserva, nombre, correo, DNI, operacion
+  - Layout responsive (desktop grid + mobile card)
+- Build exitoso, git push exitoso, deploy automatico via Vercel-GitHub
+
+Stage Summary:
+- Panel de Validacion de Pagos completamente rediseado con toda la informacion requerida
+- Toda la auditoria usa Firebase Server Timestamp
+- Archivos modificados: payments-list/route.ts, db.ts, bookings/route.ts, payments/route.ts, PaymentValidationTab.tsx
+- Deploy: https://creard.vercel.app (auto-deploy via git push)
