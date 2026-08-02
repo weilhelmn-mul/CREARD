@@ -659,6 +659,40 @@ export async function getPaymentsByBookingId(bookingId: string): Promise<Partial
 }
 
 /**
+ * Log a detailed audit entry to the payment_audit_logs collection.
+ * Used by payment-validation and other payment workflows.
+ */
+export async function logPaymentAudit(data: {
+  booking_id: string;
+  payment_id?: string;
+  action: string;
+  previous_status?: string;
+  new_status?: string;
+  performed_by: string;
+  performed_by_name: string;
+  performed_by_role: string;
+  details?: string;
+  observation?: string;
+}): Promise<string> {
+  const db = await getAdminDb();
+  const docRef = await db.collection('payment_audit_logs').add({
+    booking_id: data.booking_id,
+    payment_id: data.payment_id || null,
+    action: data.action,
+    previous_status: data.previous_status || null,
+    new_status: data.new_status || null,
+    performed_by: data.performed_by,
+    performed_by_name: data.performed_by_name,
+    performed_by_role: data.performed_by_role,
+    details: data.details || '',
+    observation: data.observation || '',
+    rejection_reason: data.action === 'reject' ? (data.details || data.observation || '') : null,
+    created_at: Timestamp.now(),
+  });
+  return docRef.id;
+}
+
+/**
  * Actualiza el estado de un pago existente (usado por webhooks de Culqi)
  */
 export async function updatePaymentStatus(

@@ -1,4 +1,8 @@
-'use client'
+#!/usr/bin/env python3
+"""Rewrite PaymentValidationTab with full payment details, audit trail, evidence support."""
+import os
+
+content = r"""'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from '@/hooks/use-toast'
@@ -624,3 +628,10 @@ function InfoItem({ label, value, mono, small }: { label: string; value: React.R
     </div>
   )
 }
+"""
+
+filepath = '/home/z/my-project/src/components/admin/PaymentValidationTab.tsx'
+with open(filepath, 'w', encoding='utf-8') as f:
+    f.write(content)
+print(f'Written: {filepath}')
+print(f'Size: {len(content)} bytes, {content.count(chr(10))} lines')

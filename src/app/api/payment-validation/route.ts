@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-middleware';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
+import { logPaymentAudit } from '@/lib/db';
 
 // GET /api/payment-validation - Admin: list pending validations
 export async function GET(request: NextRequest) {
@@ -137,8 +138,14 @@ export async function PATCH(request: NextRequest) {
     // Determine if this is a remaining payment validation
     const isRemainingPayment = booking.remaining_payment_status === 'pending';
 
+    // Track previous status for audit
+    const previousStatus = isRemainingPayment
+      ? (booking.remaining_payment_status || 'pending')
+      : (booking.status || 'payment_pending');
+
     // Build update object
     const updateData: Record<string, any> = { updated_at: now };
+    let newStatus: string;
 
     if (isRemainingPayment) {
       // Remaining payment validation
@@ -148,27 +155,33 @@ export async function PATCH(request: NextRequest) {
         updateData.remaining_amount = 0;
         updateData.advance_amount = booking.total_price;
         // Keep booking as reserved
+        newStatus = 'validated';
       } else {
         // Reject remaining payment - keep the amount owed
         updateData.remaining_payment_status = 'rejected';
+        newStatus = 'rejected';
       }
     } else {
       // Advance payment validation
       if (action === 'validate') {
         updateData.status = 'reserved';
         updateData.slot_status = 'reserved';
+        newStatus = 'reserved';
       } else {
         // Reject: free up the slot
         updateData.status = 'cancelled';
         updateData.slot_status = 'available';
+        newStatus = 'cancelled';
       }
     }
 
     await bookingRef.update(updateData);
 
-    // Create payment validation record (audit log)
-    await db.collection('payment_validations').add({
+    // Create payment validation record (audit log) with booking_code and court_name
+    const validationRecord: Record<string, any> = {
       booking_id: bookingId,
+      booking_code: booking.booking_code || '',
+      court_name: booking.court_name || '',
       user_id: booking.user_id,
       user_email: booking.user_email || '',
       court_id: booking.court_id,
@@ -186,6 +199,49 @@ export async function PATCH(request: NextRequest) {
       validated_by_name: authUser.name || authUser.email || '',
       validated_by_role: authUser.role,
       created_at: now,
+    };
+    await db.collection('payment_validations').add(validationRecord);
+
+    // Try to find related payment in top-level payments collection and update its status
+    const paymentStatusForTopLevel = action === 'validate' ? 'completed' : 'rejected';
+    let foundPaymentId: string | null = null;
+    try {
+      const paymentSnap = await db
+        .collection('payments')
+        .where('booking_id', '==', bookingId)
+        .limit(1)
+        .get();
+
+      if (!paymentSnap.empty) {
+        const paymentDoc = paymentSnap.docs[0];
+        foundPaymentId = paymentDoc.id;
+        await paymentDoc.ref.update({
+          payment_status: paymentStatusForTopLevel,
+          status: paymentStatusForTopLevel,
+          validated_by: authUser.id,
+          validated_by_name: authUser.name || authUser.email || '',
+          validated_at: now,
+          updated_at: now,
+        });
+      }
+    } catch (payErr: any) {
+      console.warn('[PAYMENT-VALIDATION] Could not update top-level payment:', payErr.message);
+    }
+
+    // Write detailed audit log to payment_audit_logs collection
+    const auditAction = action === 'validate' ? 'validate' : 'reject';
+    const paymentTypeLabel = isRemainingPayment ? 'pago restante' : 'adelanto';
+    await logPaymentAudit({
+      booking_id: bookingId,
+      payment_id: foundPaymentId || undefined,
+      action: auditAction,
+      previous_status: previousStatus,
+      new_status: newStatus,
+      performed_by: authUser.id,
+      performed_by_name: authUser.name || authUser.email || '',
+      performed_by_role: authUser.role,
+      details: `Pago de ${paymentTypeLabel} ${action === 'validate' ? 'validado' : 'rechazado'} para reserva ${booking.booking_code || bookingId}. Monto: S/ ${booking.total_price || 0}`,
+      observation: observation || '',
     });
 
     return NextResponse.json({

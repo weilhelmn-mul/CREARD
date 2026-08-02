@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAnyAuth } from '@/lib/auth-middleware';
 import { getAllPayments } from '@/lib/db';
+import { getAdminDb } from '@/lib/firebase-admin';
 
 export async function GET(request: NextRequest) {
   // Authenticate — requireAnyAuth accepts any role;
@@ -48,7 +49,51 @@ export async function GET(request: NextRequest) {
 
     const payments = await getAllPayments(filters);
 
-    return NextResponse.json(payments);
+    // Enrich each payment with validation records and audit logs
+    const db = getAdminDb();
+    const enrichedPayments = await Promise.all(
+      payments.map(async (payment) => {
+        const bId = payment.booking_id;
+        if (!bId) {
+          return { ...payment, validationRecords: [], auditLogs: [] };
+        }
+
+        let validationRecords: any[] = [];
+        let auditLogs: any[] = [];
+
+        try {
+          // Fetch validation records for this booking
+          const valSnap = await db
+            .collection('payment_validations')
+            .where('booking_id', '==', bId)
+            .orderBy('created_at', 'desc')
+            .get();
+          validationRecords = valSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (err: any) {
+          console.warn('[PAYMENTS-LIST] Error fetching validations for', bId, err.message);
+        }
+
+        try {
+          // Fetch audit logs for this booking
+          const auditSnap = await db
+            .collection('payment_audit_logs')
+            .where('booking_id', '==', bId)
+            .orderBy('created_at', 'desc')
+            .get();
+          auditLogs = auditSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (err: any) {
+          console.warn('[PAYMENTS-LIST] Error fetching audit logs for', bId, err.message);
+        }
+
+        return {
+          ...payment,
+          validationRecords,
+          auditLogs,
+        };
+      })
+    );
+
+    return NextResponse.json(enrichedPayments);
   } catch (error: any) {
     console.error('[PAYMENTS-LIST] Error:', error.message);
     return NextResponse.json(

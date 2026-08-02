@@ -1,4 +1,11 @@
-'use client';
+#!/usr/bin/env python3
+"""Fix PaymentVoucher print/PDF: replace @media print + window.print() with new-window approach."""
+
+import os
+
+TARGET = os.path.join(os.path.dirname(__file__), '..', 'src', 'components', 'payments', 'PaymentVoucher.tsx')
+
+FILE_CONTENT = r"""'use client';
 
 // ============================================================
 // CREARD - PaymentVoucher
@@ -622,3 +629,9 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
     document.body
   );
 }
+"""
+
+with open(TARGET, 'w', encoding='utf-8') as f:
+    f.write(FILE_CONTENT)
+
+print(f'OK: wrote {TARGET}')
