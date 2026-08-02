@@ -25,3 +25,19 @@ Stage Summary:
 - Voucher available after both initial and remaining payments
 - Admin can view complete payment history with search and filters
 - Each payment (advance, remaining, full) creates an independent, immutable record
+---
+Task ID: 1
+Agent: main
+Task: Deploy date fix to creard.vercel.app
+
+Work Log:
+- Fixed date offset bug in 6 files (BookingsTable, PaymentValidationTab, AdminDashboard, RecurringPreviewTable, ExpensesTable, SeriesBookingsTable)
+- Root cause: Date.UTC(y,m-1,day) created midnight UTC, displayed as previous day in Lima (UTC-5)
+- Fix: Direct string parsing without Date constructor
+- Built successfully with next build
+- Pushed to GitHub main branch
+
+Stage Summary:
+- Deployed date fix to https://creard.vercel.app/
+- 6 component files fixed
+- Build passed, git push completed
