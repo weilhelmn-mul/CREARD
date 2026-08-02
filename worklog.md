@@ -41,3 +41,20 @@ Stage Summary:
 - Deployed date fix to https://creard.vercel.app/
 - 6 component files fixed
 - Build passed, git push completed
+---
+Task ID: 2-5
+Agent: main
+Task: Panel validacion mejorado, voucher fix, audit trail
+
+Work Log:
+- Rewrote PaymentValidationTab.tsx (626 lines) with expandable payment detail cards
+- Each payment shows: payment info, booking info, financial status, client info, validation info, evidence section, audit trail
+- Fixed PaymentVoucher print/PDF blank: replaced window.print() + @media print CSS with new window approach (buildPrintHTML)
+- Added logPaymentAudit() to db.ts for payment_audit_logs collection
+- Enhanced payment-validation PATCH to write audit logs and update payment status in top-level payments
+- Enhanced payments-list GET to include validationRecords and auditLogs per payment
+- Filters by status AND payment type added to search bar
+
+Stage Summary:
+- Deployed to https://creard.vercel.app/
+- Build passes, 8 files changed, +2602/-292 lines
