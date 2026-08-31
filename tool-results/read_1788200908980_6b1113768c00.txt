@@ -1,0 +1,655 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import { getAuthHeaders } from '@/lib/auth-helpers'
+     6→import { useAppStore } from '@/store/useAppStore'
+     7→
+     8→// Helper: add auth headers to fetch calls
+     9→function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    10→  const headers = new Headers(options.headers || {})
+    11→  const authHeaders = getAuthHeaders()
+    12→  for (const [key, value] of Object.entries(authHeaders)) {
+    13→    if (value) headers.set(key, value)
+    14→  }
+    15→  if (!headers.has('Content-Type')) {
+    16→    headers.set('Content-Type', 'application/json')
+    17→  }
+    18→  return fetch(url, { ...options, headers })
+    19→}
+    20→
+    21→interface ManagedUser {
+    22→  id: string
+    23→  name: string
+    24→  email: string
+    25→  phone: string | null
+    26→  role: string
+    27→  status: string
+    28→  is_active: boolean
+    29→  created_at: string | { seconds: number }
+    30→  updated_at: string | { seconds: number }
+    31→  metadata?: {
+    32→    creationTime?: string
+    33→    lastSignInTime?: string
+    34→  }
+    35→  firebaseExists?: boolean
+    36→}
+    37→
+    38→const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+    39→  pending: { label: 'Pendiente', color: 'text-amber-400', bgColor: 'bg-amber-500/10 border-amber-500/20', icon: 'schedule' },
+    40→  approved: { label: 'Aprobado', color: 'text-green-400', bgColor: 'bg-green-500/10 border-green-500/20', icon: 'check_circle' },
+    41→  rejected: { label: 'Rechazado', color: 'text-red-400', bgColor: 'bg-red-500/10 border-red-500/20', icon: 'cancel' },
+    42→  disabled: { label: 'Deshabilitado', color: 'text-gray-400', bgColor: 'bg-gray-500/10 border-gray-500/20', icon: 'block' },
+    43→}
+    44→
+    45→const roleConfig: Record<string, { label: string; color: string }> = {
+    46→  user: { label: 'Usuario', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    47→  admin: { label: 'Admin', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+    48→  super_admin: { label: 'Super Admin', color: 'bg-cm-primary/10 text-cm-primary border-cm-primary/20' },
+    49→}
+    50→
+    51→export default function UsersTab() {
+    52→  const { user: loggedInUser } = useAppStore()
+    53→  const isSuperAdmin = loggedInUser?.role === 'super_admin'
+    54→  const availableRoles = isSuperAdmin ? ['user', 'admin', 'super_admin'] as const : ['user', 'admin'] as const
+    55→
+    56→  const [users, setUsers] = useState<ManagedUser[]>([])
+    57→  const [loading, setLoading] = useState(true)
+    58→  const [search, setSearch] = useState('')
+    59→  const [statusFilter, setStatusFilter] = useState<string>('all')
+    60→  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null)
+    61→  const [actionLoading, setActionLoading] = useState<string | null>(null)
+    62→  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    63→  const [showCreateForm, setShowCreateForm] = useState(false)
+    64→  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', phone: '', role: 'user' })
+    65→  const [creating, setCreating] = useState(false)
+    66→  const [deletingUser, setDeletingUser] = useState<string | null>(null)
+    67→
+    68→  const handleDeleteUser = async (userId: string) => {
+    69→    setDeletingUser(userId)
+    70→    try {
+    71→      const res = await authFetch(`/api/admin/users?userId=${userId}`, { method: 'DELETE' })
+    72→      const data = await res.json()
+    73→      if (!res.ok) {
+    74→        showToast(data.error || 'Error al eliminar usuario', 'error')
+    75→        return
+    76→      }
+    77→      showToast('Usuario eliminado permanentemente')
+    78→      fetchUsers()
+    79→      setSelectedUser(null)
+    80→    } catch {
+    81→      showToast('Error de conexion', 'error')
+    82→    } finally {
+    83→      setDeletingUser(null)
+    84→    }
+    85→  }
+    86→
+    87→  const fetchUsers = useCallback(async () => {
+    88→    try {
+    89→      const res = await authFetch('/api/admin/users')
+    90→      if (res.ok) {
+    91→        const data = await res.json()
+    92→        setUsers(data)
+    93→      }
+    94→    } catch (err) {
+    95→      console.error('[UsersTab] Error fetching users:', err)
+    96→    } finally {
+    97→      setLoading(false)
+    98→    }
+    99→  }, [])
+   100→
+   101→  useEffect(() => { fetchUsers() }, [fetchUsers])
+   102→
+   103→  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+   104→    setToast({ message, type })
+   105→    setTimeout(() => setToast(null), 3000)
+   106→  }
+   107→
+   108→  const handleAction = async (userId: string, action: string, extra?: Record<string, unknown>) => {
+   109→    setActionLoading(userId)
+   110→    try {
+   111→      const res = await authFetch('/api/admin/users', {
+   112→        method: 'PUT',
+   113→        body: JSON.stringify({ userId, action, ...extra }),
+   114→      })
+   115→      const data = await res.json()
+   116→
+   117→      if (!res.ok) {
+   118→        showToast(data.error || 'Error al realizar accion', 'error')
+   119→        return
+   120→      }
+   121→
+   122→      showToast(data.message || 'Accion realizada')
+   123→      fetchUsers()
+   124→      setSelectedUser(null)
+   125→    } catch (err) {
+   126→      showToast('Error de conexion', 'error')
+   127→    } finally {
+   128→      setActionLoading(null)
+   129→    }
+   130→  }
+   131→
+   132→  const handleCreateUser = async () => {
+   133→    const { name, email, password, phone, role } = createForm
+   134→    if (!name.trim() || !email.trim() || !password.trim()) {
+   135→      showToast('Nombre, correo y contraseña son requeridos', 'error')
+   136→      return
+   137→    }
+   138→    if (password.length < 6) {
+   139→      showToast('La contraseña debe tener al menos 6 caracteres', 'error')
+   140→      return
+   141→    }
+   142→    setCreating(true)
+   143→    try {
+   144→      const res = await authFetch('/api/admin/users', {
+   145→        method: 'POST',
+   146→        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, phone: phone.trim() || null, role }),
+   147→      })
+   148→      const data = await res.json()
+   149→      if (!res.ok) {
+   150→        showToast(data.error || 'Error al crear usuario', 'error')
+   151→        return
+   152→      }
+   153→      showToast(data.message || 'Usuario creado')
+   154→      setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' })
+   155→      setShowCreateForm(false)
+   156→      fetchUsers()
+   157→    } catch {
+   158→      showToast('Error de conexion', 'error')
+   159→    } finally {
+   160→      setCreating(false)
+   161→    }
+   162→  }
+   163→
+   164→  const filteredUsers = users.filter((u) => {
+   165→    const matchesSearch = search === '' ||
+   166→      u.name.toLowerCase().includes(search.toLowerCase()) ||
+   167→      u.email.toLowerCase().includes(search.toLowerCase())
+   168→    const matchesStatus = statusFilter === 'all' || u.status === statusFilter
+   169→    return matchesSearch && matchesStatus
+   170→  })
+   171→
+   172→  const pendingCount = users.filter((u) => u.status === 'pending').length
+   173→
+   174→  const formatDate = (dateStr: string | { seconds: number } | undefined) => {
+   175→    if (!dateStr) return '-'
+   176→    try {
+   177→      const date = typeof dateStr === 'string' ? new Date(dateStr) : new Date(dateStr.seconds * 1000)
+   178→      return date.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+   179→    } catch {
+   180→      return '-'
+   181→    }
+   182→  }
+   183→
+   184→  if (loading) {
+   185→    return (
+   186→      <div className="flex items-center justify-center py-16">
+   187→        <span className="material-symbols-outlined animate-spin text-cm-primary text-[32px]">progress_activity</span>
+   188→      </div>
+   189→    )
+   190→  }
+   191→
+   192→  return (
+   193→    <div className="space-y-4">
+   194→      {/* Toast */}
+   195→      <AnimatePresence>
+   196→        {toast && (
+   197→          <motion.div
+   198→            initial={{ opacity: 0, y: -20 }}
+   199→            animate={{ opacity: 1, y: 0 }}
+   200→            exit={{ opacity: 0, y: -20 }}
+   201→            className={`fixed top-20 right-4 z-[100] px-4 py-3 rounded-xl shadow-lg border text-sm font-[family-name:var(--font-inter)] ${
+   202→              toast.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'
+   203→            }`}
+   204→          >
+   205→            <div className="flex items-center gap-2">
+   206→              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   207→                {toast.type === 'success' ? 'check_circle' : 'error'}
+   208→              </span>
+   209→              {toast.message}
+   210→            </div>
+   211→          </motion.div>
+   212→        )}
+   213→      </AnimatePresence>
+   214→
+   215→      {/* Header */}
+   216→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   217→        <div>
+   218→          <h2 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestion de Usuarios</h2>
+   219→          <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   220→            {users.length} usuarios registrados
+   221→            {pendingCount > 0 && (
+   222→              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
+   223→                {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
+   224→              </span>
+   225→            )}
+   226→          </p>
+   227→        </div>
+   228→        <div className="flex items-center gap-2">
+   229→          <button
+   230→            onClick={() => { setCreateForm({ name: '', email: '', password: '', phone: '', role: 'user' }); setShowCreateForm(true) }}
+   231→            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#00ff41]/10 text-[#00ff41] hover:bg-[#00ff41]/20 border border-[#00ff41]/30 transition-all text-sm font-semibold font-[family-name:var(--font-sora)]"
+   232→          >
+   233→            <span className="material-symbols-outlined text-[18px]">person_add</span>
+   234→            Nuevo Usuario
+   235→          </button>
+   236→          <button onClick={fetchUsers} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-cm-on-surface-variant hover:text-cm-on-surface hover:bg-white/10 transition-all text-sm font-[family-name:var(--font-inter)]">
+   237→            <span className="material-symbols-outlined text-[18px]">refresh</span>
+   238→            Actualizar
+   239→          </button>
+   240→        </div>
+   241→      </div>
+   242→
+   243→      {/* Filters */}
+   244→      <div className="flex flex-col sm:flex-row gap-3">
+   245→        <div className="relative flex-1">
+   246→          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant/50 text-[20px]">search</span>
+   247→          <input
+   248→            type="text"
+   249→            placeholder="Buscar por nombre o email..."
+   250→            value={search}
+   251→            onChange={(e) => setSearch(e.target.value)}
+   252→            className="w-full pl-10 pr-4 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm focus:outline-none focus:border-cm-primary/50 font-[family-name:var(--font-inter)]"
+   253→          />
+   254→        </div>
+   255→        <div className="flex gap-1.5 overflow-x-auto pb-1">
+   256→          {[
+   257→            { key: 'all', label: 'Todos' },
+   258→            { key: 'pending', label: 'Pendientes' },
+   259→            { key: 'approved', label: 'Aprobados' },
+   260→            { key: 'rejected', label: 'Rechazados' },
+   261→            { key: 'disabled', label: 'Deshabilitados' },
+   262→          ].map((filter) => (
+   263→            <button
+   264→              key={filter.key}
+   265→              onClick={() => setStatusFilter(filter.key)}
+   266→              className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all font-[family-name:var(--font-inter)] ${
+   267→                statusFilter === filter.key
+   268→                  ? 'bg-cm-primary/15 text-cm-primary border border-cm-primary/30'
+   269→                  : 'bg-white/5 text-cm-on-surface-variant hover:bg-white/10 border border-transparent'
+   270→              }`}
+   271→            >
+   272→              {filter.label}
+   273→            </button>
+   274→          ))}
+   275→        </div>
+   276→      </div>
+   277→
+   278→      {/* Users List */}
+   279→      <div className="space-y-2">
+   280→        {filteredUsers.length === 0 ? (
+   281→          <div className="text-center py-12 text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
+   282→            <span className="material-symbols-outlined text-[40px] mb-2 block opacity-50">group_off</span>
+   283→            No se encontraron usuarios
+   284→          </div>
+   285→        ) : (
+   286→          filteredUsers.map((user) => {
+   287→            const status = statusConfig[user.status] || statusConfig.approved
+   288→            const role = roleConfig[user.role] || roleConfig.user
+   289→            const isActive = actionLoading === user.id
+   290→
+   291→            return (
+   292→              <motion.div
+   293→                key={user.id}
+   294→                layout
+   295→                className={`glass-card rounded-xl p-4 transition-all ${
+   296→                  user.status === 'pending' ? 'border-amber-500/20' : ''
+   297→                }`}
+   298→              >
+   299→                <div className="flex items-center gap-3">
+   300→                  {/* Avatar */}
+   301→                  <div className="w-10 h-10 rounded-full bg-cm-primary/15 border border-cm-primary/20 flex items-center justify-center flex-shrink-0">
+   302→                    <span className="text-cm-primary text-sm font-bold font-[family-name:var(--font-sora)]">
+   303→                      {user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+   304→                    </span>
+   305→                  </div>
+   306→
+   307→                  {/* Info */}
+   308→                  <div className="flex-1 min-w-0">
+   309→                    <div className="flex items-center gap-2 flex-wrap">
+   310→                      <p className="text-sm font-semibold text-cm-on-surface truncate font-[family-name:var(--font-sora)]">
+   311→                        {user.name}
+   312→                      </p>
+   313→                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${status.bgColor} ${status.color}`}>
+   314→                        {status.label}
+   315→                      </span>
+   316→                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${role.color}`}>
+   317→                        {role.label}
+   318→                      </span>
+   319→                    </div>
+   320→                    <div className="flex items-center gap-3 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   321→                      <span className="flex items-center gap-1">
+   322→                        <span className="material-symbols-outlined text-[14px]">mail</span>
+   323→                        {user.email}
+   324→                      </span>
+   325→                      {user.phone && (
+   326→                        <span className="flex items-center gap-1">
+   327→                          <span className="material-symbols-outlined text-[14px]">phone</span>
+   328→                          {user.phone}
+   329→                        </span>
+   330→                      )}
+   331→                      <span className="flex items-center gap-1">
+   332→                        <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+   333→                        {formatDate(user.created_at)}
+   334→                      </span>
+   335→                    </div>
+   336→                  </div>
+   337→
+   338→                  {/* Actions */}
+   339→                  <div className="flex items-center gap-1.5 flex-shrink-0">
+   340→                    {user.status === 'pending' && (
+   341→                      <>
+   342→                        <button
+   343→                          onClick={() => handleAction(user.id, 'approve')}
+   344→                          disabled={isActive}
+   345→                          className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50"
+   346→                          title="Aprobar usuario"
+   347→                        >
+   348→                          <span className="material-symbols-outlined text-[18px]">check</span>
+   349→                        </button>
+   350→                        <button
+   351→                          onClick={() => handleAction(user.id, 'reject')}
+   352→                          disabled={isActive}
+   353→                          className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+   354→                          title="Rechazar usuario"
+   355→                        >
+   356→                          <span className="material-symbols-outlined text-[18px]">close</span>
+   357→                        </button>
+   358→                      </>
+   359→                    )}
+   360→
+   361→                    {(user.status === 'approved' || user.status === 'rejected') && user.status !== 'disabled' && (
+   362→                      <button
+   363→                        onClick={() => handleAction(user.id, 'disable')}
+   364→                        disabled={isActive}
+   365→                        className="p-2 rounded-lg bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 transition-all disabled:opacity-50"
+   366→                        title="Deshabilitar"
+   367→                      >
+   368→                        <span className="material-symbols-outlined text-[18px]">block</span>
+   369→                      </button>
+   370→                    )}
+   371→
+   372→                    {user.status === 'disabled' && (
+   373→                      <button
+   374→                        onClick={() => handleAction(user.id, 'enable')}
+   375→                        disabled={isActive}
+   376→                        className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50"
+   377→                        title="Habilitar"
+   378→                      >
+   379→                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+   380→                      </button>
+   381→                    )}
+   382→
+   383→                    <button
+   384→                      onClick={() => setSelectedUser(user)}
+   385→                      className="p-2 rounded-lg bg-white/5 text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-all"
+   386→                      title="Mas opciones"
+   387→                    >
+   388→                      <span className="material-symbols-outlined text-[18px]">more_vert</span>
+   389→                    </button>
+   390→                  </div>
+   391→                </div>
+   392→              </motion.div>
+   393→            )
+   394→          })
+   395→        )}
+   396→      </div>
+   397→
+   398→      {/* Create User Modal */}
+   399→      <AnimatePresence>
+   400→        {showCreateForm && (
+   401→          <motion.div
+   402→            initial={{ opacity: 0 }}
+   403→            animate={{ opacity: 1 }}
+   404→            exit={{ opacity: 0 }}
+   405→            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   406→            onClick={() => !creating && setShowCreateForm(false)}
+   407→          >
+   408→            <motion.div
+   409→              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   410→              animate={{ opacity: 1, y: 0, scale: 1 }}
+   411→              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   412→              onClick={(e) => e.stopPropagation()}
+   413→              className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl"
+   414→            >
+   415→              <div className="flex items-center justify-between mb-5">
+   416→                <div className="flex items-center gap-2">
+   417→                  <div className="w-8 h-8 rounded-lg bg-[#00ff41]/10 flex items-center justify-center">
+   418→                    <span className="material-symbols-outlined text-[#00ff41] text-[18px]">person_add</span>
+   419→                  </div>
+   420→                  <h3 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Nuevo Usuario</h3>
+   421→                </div>
+   422→                <button onClick={() => setShowCreateForm(false)} className="p-1 rounded-lg hover:bg-white/10 text-cm-on-surface-variant">
+   423→                  <span className="material-symbols-outlined text-[20px]">close</span>
+   424→                </button>
+   425→              </div>
+   426→
+   427→              <div className="space-y-3">
+   428→                <div>
+   429→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Nombre Completo *</label>
+   430→                  <input
+   431→                    type="text"
+   432→                    value={createForm.name}
+   433→                    onChange={(e) => setCreateForm(p => ({ ...p, name: e.target.value }))}
+   434→                    placeholder="Juan Perez"
+   435→                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+   436→                  />
+   437→                </div>
+   438→
+   439→                <div>
+   440→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Correo Electronico *</label>
+   441→                  <input
+   442→                    type="email"
+   443→                    value={createForm.email}
+   444→                    onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))}
+   445→                    placeholder="juan@ejemplo.com"
+   446→                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+   447→                  />
+   448→                </div>
+   449→
+   450→                <div>
+   451→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Contraseña Inicial *</label>
+   452→                  <input
+   453→                    type="password"
+   454→                    value={createForm.password}
+   455→                    onChange={(e) => setCreateForm(p => ({ ...p, password: e.target.value }))}
+   456→                    placeholder="Minimo 6 caracteres"
+   457→                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+   458→                  />
+   459→                </div>
+   460→
+   461→                <div>
+   462→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Telefono (opcional)</label>
+   463→                  <input
+   464→                    type="tel"
+   465→                    value={createForm.phone}
+   466→                    onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))}
+   467→                    placeholder="+51 999 888 777"
+   468→                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+   469→                  />
+   470→                </div>
+   471→
+   472→                <div>
+   473→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">Rol</label>
+   474→                  <div className="flex gap-2">
+   475→                    {availableRoles.map((r) => (
+   476→                      <button
+   477→                        key={r}
+   478→                        onClick={() => setCreateForm(p => ({ ...p, role: r }))}
+   479→                        className={`flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all font-[family-name:var(--font-inter)] ${
+   480→                          createForm.role === r
+   481→                            ? roleConfig[r].color + ' border'
+   482→                            : 'bg-white/5 text-cm-on-surface-variant hover:bg-white/10 border border-transparent'
+   483→                        }`}
+   484→                      >
+   485→                        {roleConfig[r].label}
+   486→                      </button>
+   487→                    ))}
+   488→                  </div>
+   489→                </div>
+   490→              </div>
+   491→
+   492→              <div className="flex gap-2 justify-end mt-5">
+   493→                <button
+   494→                  onClick={() => setShowCreateForm(false)}
+   495→                  disabled={creating}
+   496→                  className="px-4 py-2 text-xs text-cm-on-surface-variant hover:text-cm-on-surface border border-white/10 rounded-lg transition-all font-[family-name:var(--font-inter)]"
+   497→                >
+   498→                  Cancelar
+   499→                </button>
+   500→                <button
+   501→                  onClick={handleCreateUser}
+   502→                  disabled={creating || !createForm.name.trim() || !createForm.email.trim() || !createForm.password.trim()}
+   503→                  className="px-5 py-2 bg-[#00ff41] text-[#003907] text-xs font-semibold rounded-lg hover:bg-[#00e639] disabled:opacity-50 flex items-center gap-1.5 transition-all font-[family-name:var(--font-sora)]"
+   504→                >
+   505→                  {creating ? (
+   506→                    <span className="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
+   507→                  ) : (
+   508→                    <span className="material-symbols-outlined text-[14px]">check</span>
+   509→                  )}
+   510→                  Crear Usuario
+   511→                </button>
+   512→              </div>
+   513→            </motion.div>
+   514→          </motion.div>
+   515→        )}
+   516→      </AnimatePresence>
+   517→
+   518→      {/* User Detail Modal */}
+   519→      <AnimatePresence>
+   520→        {selectedUser && (
+   521→          <motion.div
+   522→            initial={{ opacity: 0 }}
+   523→            animate={{ opacity: 1 }}
+   524→            exit={{ opacity: 0 }}
+   525→            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   526→            onClick={() => setSelectedUser(null)}
+   527→          >
+   528→            <motion.div
+   529→              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   530→              animate={{ opacity: 1, y: 0, scale: 1 }}
+   531→              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   532→              onClick={(e) => e.stopPropagation()}
+   533→              className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl"
+   534→            >
+   535→              {/* Header */}
+   536→              <div className="flex items-center justify-between mb-5">
+   537→                <h3 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestionar Usuario</h3>
+   538→                <button onClick={() => setSelectedUser(null)} className="p-1 rounded-lg hover:bg-white/10 text-cm-on-surface-variant">
+   539→                  <span className="material-symbols-outlined text-[20px]">close</span>
+   540→                </button>
+   541→              </div>
+   542→
+   543→              {/* User Info */}
+   544→              <div className="flex items-center gap-3 mb-5 pb-5 border-b border-white/10">
+   545→                <div className="w-12 h-12 rounded-full bg-cm-primary/15 border border-cm-primary/20 flex items-center justify-center">
+   546→                  <span className="text-cm-primary text-base font-bold font-[family-name:var(--font-sora)]">
+   547→                    {selectedUser.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+   548→                  </span>
+   549→                </div>
+   550→                <div>
+   551→                  <p className="font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{selectedUser.name}</p>
+   552→                  <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{selectedUser.email}</p>
+   553→                </div>
+   554→              </div>
+   555→
+   556→              {/* Current Status */}
+   557→              <div className="grid grid-cols-2 gap-3 mb-5">
+   558→                <div className="p-3 rounded-xl bg-cm-surface-container-highest/40">
+   559→                  <p className="text-[10px] text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">Estado</p>
+   560→                  <p className="text-sm font-semibold mt-1 capitalize text-cm-on-surface">
+   561→                    {statusConfig[selectedUser.status]?.label || selectedUser.status}
+   562→                  </p>
+   563→                </div>
+   564→                <div className="p-3 rounded-xl bg-cm-surface-container-highest/40">
+   565→                  <p className="text-[10px] text-cm-on-surface-variant uppercase tracking-wider font-[family-name:var(--font-inter)]">Rol</p>
+   566→                  <p className="text-sm font-semibold mt-1 text-cm-on-surface">
+   567→                    {roleConfig[selectedUser.role]?.label || selectedUser.role}
+   568→                  </p>
+   569→                </div>
+   570→              </div>
+   571→
+   572→              {/* Role Change */}
+   573→              <div className="mb-5">
+   574→                <p className="text-xs text-cm-on-surface-variant mb-2 font-semibold font-[family-name:var(--font-inter)]">Cambiar Rol</p>
+   575→                <div className="flex gap-2">
+   576→                  {availableRoles.map((r) => (
+   577→                    <button
+   578→                      key={r}
+   579→                      onClick={() => handleAction(selectedUser.id, 'set_role', { role: r })}
+   580→                      disabled={actionLoading === selectedUser.id || selectedUser.role === r}
+   581→                      className={`flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all font-[family-name:var(--font-inter)] disabled:opacity-40 ${
+   582→                        selectedUser.role === r
+   583→                          ? roleConfig[r].color + ' border'
+   584→                          : 'bg-white/5 text-cm-on-surface-variant hover:bg-white/10 border border-transparent'
+   585→                      }`}
+   586→                    >
+   587→                      {roleConfig[r].label}
+   588→                    </button>
+   589→                  ))}
+   590→                </div>
+   591→              </div>
+   592→
+   593→              {/* Quick Actions */}
+   594→              <div className="mb-4">
+   595→                <p className="text-xs text-cm-on-surface-variant mb-2 font-semibold font-[family-name:var(--font-inter)]">Acciones Rapidas</p>
+   596→                <div className="grid grid-cols-2 gap-2">
+   597→                  {selectedUser.status === 'pending' && (
+   598→                    <>
+   599→                      <button onClick={() => handleAction(selectedUser.id, 'approve')} disabled={!!actionLoading}
+   600→                        className="py-2.5 px-3 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]">
+   601→                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
+   602→                        Aprobar
+   603→                      </button>
+   604→                      <button onClick={() => handleAction(selectedUser.id, 'reject')} disabled={!!actionLoading}
+   605→                        className="py-2.5 px-3 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]">
+   606→                        <span className="material-symbols-outlined text-[16px]">cancel</span>
+   607→                        Rechazar
+   608→                      </button>
+   609→                    </>
+   610→                  )}
+   611→                  {selectedUser.status !== 'disabled' && (
+   612→                    <button onClick={() => handleAction(selectedUser.id, 'disable')} disabled={!!actionLoading}
+   613→                      className="py-2.5 px-3 rounded-lg bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 border border-gray-500/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]">
+   614→                      <span className="material-symbols-outlined text-[16px]">block</span>
+   615→                      Deshabilitar
+   616→                    </button>
+   617→                  )}
+   618→                  {selectedUser.status === 'disabled' && (
+   619→                    <button onClick={() => handleAction(selectedUser.id, 'enable')} disabled={!!actionLoading}
+   620→                      className="py-2.5 px-3 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]">
+   621→                      <span className="material-symbols-outlined text-[16px]">check_circle</span>
+   622→                      Habilitar
+   623→                    </button>
+   624→                  )}
+   625→                  {isSuperAdmin && selectedUser.id !== loggedInUser?.id && (
+   626→                    <button
+   627→                      onClick={() => {
+   628→                        if (confirm(`Eliminar permanentemente a ${selectedUser.name}? Esta accion no se puede deshacer.`)) {
+   629→                          handleDeleteUser(selectedUser.id)
+   630→                        }
+   631→                      }}
+   632→                      disabled={!!deletingUser}
+   633→                      className="py-2.5 px-3 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 border border-red-600/20 text-xs font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 font-[family-name:var(--font-inter)]"
+   634→                    >
+   635→                      <span className="material-symbols-outlined text-[16px]">{deletingUser === selectedUser.id ? 'progress_activity' : 'delete_forever'}</span>
+   636→                      {deletingUser === selectedUser.id ? 'Eliminando...' : 'Eliminar Cuenta'}
+   637→                    </button>
+   638→                  )}
+   639→                </div>
+   640→              </div>
+   641→
+   642→              {/* Last Sign In Info */}
+   643→              {selectedUser.metadata?.lastSignInTime && (
+   644→                <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-4">
+   645→                  Ultimo acceso: {new Date(selectedUser.metadata.lastSignInTime).toLocaleString('es')}
+   646→                </p>
+   647→              )}
+   648→            </motion.div>
+   649→          </motion.div>
+   650→        )}
+   651→      </AnimatePresence>
+   652→    </div>
+   653→  )
+   654→}
+   655→

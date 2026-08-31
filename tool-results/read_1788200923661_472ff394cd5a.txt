@@ -1,0 +1,549 @@
+     1→'use client'
+     2→
+     3→// ═══════════════════════════════════════════════════════════════
+     4→// SiteConfigTab — Panel de Configuración del Sitio (Admin)
+     5→// Permite editar: datos de contacto, redes sociales y contenido legal
+     6→// Accesible para roles: admin y super_admin
+     7→// ═══════════════════════════════════════════════════════════════
+     8→
+     9→import { useState, useEffect, useCallback } from 'react'
+    10→import { useSiteSettings, type LegalSection, type ContactPhone } from '@/context/SiteSettingsContext'
+    11→import { toast } from '@/hooks/use-toast'
+    12→
+    13→const SOCIAL_FIELDS = [
+    14→  { key: 'social_facebook', label: 'Facebook', placeholder: 'https://facebook.com/creard.cusco', icon: 'public' },
+    15→  { key: 'social_instagram', label: 'Instagram', placeholder: 'https://instagram.com/creard.cusco', icon: 'photo_camera' },
+    16→  { key: 'social_tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@creard.cusco', icon: 'videocam' },
+    17→] as const
+    18→
+    19→type SubTab = 'contacto' | 'redes' | 'terminos' | 'devoluciones'
+    20→
+    21→const subTabs: { key: SubTab; label: string; icon: string }[] = [
+    22→  { key: 'contacto', label: 'Contacto', icon: 'call' },
+    23→  { key: 'redes', label: 'Redes Sociales', icon: 'share' },
+    24→  { key: 'terminos', label: 'Términos y Cond.', icon: 'description' },
+    25→  { key: 'devoluciones', label: 'Política Devoluciones', icon: 'swap_horiz' },
+    26→]
+    27→
+    28→export default function SiteConfigTab() {
+    29→  const { settings, saveFullSettings } = useSiteSettings()
+    30→  const [activeSubTab, setActiveSubTab] = useState<SubTab>('contacto')
+    31→  const [saving, setSaving] = useState(false)
+    32→
+    33→  // ── Contact phones (array) ──
+    34→  const [phones, setPhones] = useState<ContactPhone[]>([])
+    35→  const [whatsapp, setWhatsapp] = useState('')
+    36→  const [email, setEmail] = useState('')
+    37→  const [address, setAddress] = useState('')
+    38→  const [businessHours, setBusinessHours] = useState('')
+    39→
+    40→  // ── Social form state ──
+    41→  const [socialForm, setSocialForm] = useState<Record<string, string>>({})
+    42→
+    43→  // ── Legal form state ──
+    44→  const [termsSections, setTermsSections] = useState<LegalSection[]>([])
+    45→  const [refundSections, setRefundSections] = useState<LegalSection[]>([])
+    46→  const [editingLegalIdx, setEditingLegalIdx] = useState<number | null>(null)
+    47→  const [legalEditForm, setLegalEditForm] = useState<{ title: string; content: string }>({ title: '', content: '' })
+    48→
+    49→  // Initialize forms from settings
+    50→  useEffect(() => {
+    51→    if (!settings) return
+    52→    const s = settings as Record<string, unknown>
+    53→    // Phones array (backward compat with old contact_phone string)
+    54→    const rawPhones = s.contact_phones
+    55→    if (Array.isArray(rawPhones) && rawPhones.length > 0) {
+    56→      setPhones(rawPhones as ContactPhone[])
+    57→    } else if (s.contact_phone && typeof s.contact_phone === 'string') {
+    58→      setPhones([{ label: '', number: s.contact_phone }])
+    59→    } else {
+    60→      setPhones([{ label: '', number: '' }])
+    61→    }
+    62→    setWhatsapp((s.contact_whatsapp as string) || '')
+    63→    setEmail((s.contact_email as string) || '')
+    64→    setAddress((s.contact_address as string) || '')
+    65→    setBusinessHours((s.business_hours as string) || '')
+    66→    // Social
+    67→    setSocialForm({
+    68→      social_facebook: (s.social_facebook as string) || '',
+    69→      social_instagram: (s.social_instagram as string) || '',
+    70→      social_tiktok: (s.social_tiktok as string) || '',
+    71→    })
+    72→    // Legal
+    73→    if (settings.legal_terms?.length) setTermsSections([...settings.legal_terms])
+    74→    if (settings.legal_refund?.length) setRefundSections([...settings.legal_refund])
+    75→  }, [settings])
+    76→
+    77→  const handleSaveContact = useCallback(async () => {
+    78→    if (!settings) return
+    79→    setSaving(true)
+    80→    const updated = {
+    81→      ...settings,
+    82→      contact_phones: phones,
+    83→      contact_whatsapp: whatsapp,
+    84→      contact_email: email,
+    85→      contact_address: address,
+    86→      business_hours: businessHours,
+    87→    }
+    88→    const ok = await saveFullSettings(updated)
+    89→    setSaving(false)
+    90→    if (ok) toast({ title: 'Datos de contacto guardados' })
+    91→    else toast({ title: 'Error al guardar', variant: 'destructive' })
+    92→  }, [settings, phones, whatsapp, email, address, businessHours, saveFullSettings])
+    93→
+    94→  const handleSaveSocial = useCallback(async () => {
+    95→    if (!settings) return
+    96→    setSaving(true)
+    97→    const updated = { ...settings, ...socialForm }
+    98→    const ok = await saveFullSettings(updated)
+    99→    setSaving(false)
+   100→    if (ok) toast({ title: 'Redes sociales guardadas' })
+   101→    else toast({ title: 'Error al guardar', variant: 'destructive' })
+   102→  }, [settings, socialForm, saveFullSettings])
+   103→
+   104→  // Phone management
+   105→  const addPhone = () => setPhones([...phones, { label: '', number: '' }])
+   106→  const removePhone = (idx: number) => setPhones(phones.filter((_, i) => i !== idx))
+   107→  const updatePhone = (idx: number, field: 'label' | 'number', value: string) => {
+   108→    const updated = [...phones]
+   109→    updated[idx] = { ...updated[idx], [field]: value }
+   110→    setPhones(updated)
+   111→  }
+   112→
+   113→  const handleSaveLegal = useCallback(async (key: 'legal_terms' | 'legal_refund', sections: LegalSection[]) => {
+   114→    if (!settings) return
+   115→    setSaving(true)
+   116→    const updated = { ...settings, [key]: sections }
+   117→    const ok = await saveFullSettings(updated)
+   118→    setSaving(false)
+   119→    if (ok) toast({ title: 'Contenido legal guardado' })
+   120→    else toast({ title: 'Error al guardar', variant: 'destructive' })
+   121→  }, [settings, saveFullSettings])
+   122→
+   123→  const handleEditSection = (idx: number, sections: LegalSection[], setSections: (s: LegalSection[]) => void) => {
+   124→    setEditingLegalIdx(idx)
+   125→    setLegalEditForm({ title: sections[idx].title, content: sections[idx].content })
+   126→  }
+   127→
+   128→  const handleSaveSection = (sections: LegalSection[], setSections: (s: LegalSection[]) => void) => {
+   129→    if (editingLegalIdx === null) return
+   130→    const updated = [...sections]
+   131→    updated[editingLegalIdx] = { ...legalEditForm }
+   132→    setSections(updated)
+   133→    setEditingLegalIdx(null)
+   134→  }
+   135→
+   136→  const handleCancelEdit = () => {
+   137→    setEditingLegalIdx(null)
+   138→    setLegalEditForm({ title: '', content: '' })
+   139→  }
+   140→
+   141→  const handleAddSection = (sections: LegalSection[], setSections: (s: LegalSection[]) => void, label: string) => {
+   142→    const num = sections.length + 1
+   143→    setSections([...sections, { title: `${num}. ${label}`, content: '' }])
+   144→  }
+   145→
+   146→  const handleDeleteSection = (idx: number, sections: LegalSection[], setSections: (s: LegalSection[]) => void) => {
+   147→    setSections(sections.filter((_, i) => i !== idx))
+   148→    if (editingLegalIdx === idx) handleCancelEdit()
+   149→  }
+   150→
+   151→  const handleMoveSection = (idx: number, dir: -1 | 1, sections: LegalSection[], setSections: (s: LegalSection[]) => void) => {
+   152→    const newIdx = idx + dir
+   153→    if (newIdx < 0 || newIdx >= sections.length) return
+   154→    const updated = [...sections]
+   155→    ;[updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]]
+   156→    setSections(updated)
+   157→  }
+   158→
+   159→  return (
+   160→    <div className="space-y-6">
+   161→      {/* Sub-tabs */}
+   162→      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+   163→        {subTabs.map((tab) => (
+   164→          <button
+   165→            key={tab.key}
+   166→            onClick={() => setActiveSubTab(tab.key)}
+   167→            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+   168→              activeSubTab === tab.key
+   169→                ? 'bg-cm-primary text-cm-on-primary'
+   170→                : 'bg-cm-surface-container-highest text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'
+   171→            }`}
+   172→          >
+   173→            <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+   174→            {tab.label}
+   175→          </button>
+   176→        ))}
+   177→      </div>
+   178→
+   179→      {/* ═══ CONTACTO ═══ */}
+   180→      {activeSubTab === 'contacto' && (
+   181→        <div className="space-y-4">
+   182→          <div className="flex items-center justify-between">
+   183→            <div>
+   184→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-base text-cm-on-surface">
+   185→                Datos de Contacto
+   186→              </h3>
+   187→              <p className="text-xs text-cm-on-surface-variant mt-1">
+   188→                Información visible en el footer de la aplicación
+   189→              </p>
+   190→            </div>
+   191→          </div>
+   192→
+   193→          {/* ── Múltiples Teléfonos ── */}
+   194→          <div className="space-y-3">
+   195→            <div className="flex items-center justify-between">
+   196→              <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant">
+   197→                <span className="material-symbols-outlined text-[14px]">call</span>
+   198→                Teléfonos
+   199→              </label>
+   200→              <button
+   201→                onClick={addPhone}
+   202→                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-cm-primary hover:bg-cm-primary/10 transition-all"
+   203→              >
+   204→                <span className="material-symbols-outlined text-[14px]">add</span>
+   205→                Agregar teléfono
+   206→              </button>
+   207→            </div>
+   208→            {phones.map((phone, idx) => (
+   209→              <div key={idx} className="flex gap-2 items-start">
+   210→                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+   211→                  <input
+   212→                    type="text"
+   213→                    value={phone.label}
+   214→                    onChange={(e) => updatePhone(idx, 'label', e.target.value)}
+   215→                    placeholder="Etiqueta (ej: Reservas, Admin)"
+   216→                    className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   217→                  />
+   218→                  <input
+   219→                    type="text"
+   220→                    value={phone.number}
+   221→                    onChange={(e) => updatePhone(idx, 'number', e.target.value)}
+   222→                    placeholder="+51 984 000 000"
+   223→                    className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   224→                  />
+   225→                </div>
+   226→                {phones.length > 1 && (
+   227→                  <button
+   228→                    onClick={() => removePhone(idx)}
+   229→                    className="mt-2 w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition-all shrink-0"
+   230→                    title="Eliminar teléfono"
+   231→                  >
+   232→                    <span className="material-symbols-outlined text-[18px]">delete</span>
+   233→                  </button>
+   234→                )}
+   235→              </div>
+   236→            ))}
+   237→          </div>
+   238→
+   239→          {/* ── WhatsApp ── */}
+   240→          <div>
+   241→            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+   242→              <span className="material-symbols-outlined text-[14px]">chat</span>
+   243→              WhatsApp (número sin +)
+   244→            </label>
+   245→            <input
+   246→              type="text"
+   247→              value={whatsapp}
+   248→              onChange={(e) => setWhatsapp(e.target.value)}
+   249→              placeholder="51984000000"
+   250→              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   251→            />
+   252→          </div>
+   253→
+   254→          {/* ── Email ── */}
+   255→          <div>
+   256→            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+   257→              <span className="material-symbols-outlined text-[14px]">mail</span>
+   258→              Correo electrónico
+   259→            </label>
+   260→            <input
+   261→              type="email"
+   262→              value={email}
+   263→              onChange={(e) => setEmail(e.target.value)}
+   264→              placeholder="contacto@creard.com"
+   265→              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   266→            />
+   267→          </div>
+   268→
+   269→          {/* ── Dirección ── */}
+   270→          <div>
+   271→            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+   272→              <span className="material-symbols-outlined text-[14px]">location_on</span>
+   273→              Dirección física
+   274→            </label>
+   275→            <input
+   276→              type="text"
+   277→              value={address}
+   278→              onChange={(e) => setAddress(e.target.value)}
+   279→              placeholder="San Sebastián, Cusco, Perú"
+   280→              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   281→            />
+   282→          </div>
+   283→
+   284→          {/* ── Horario ── */}
+   285→          <div>
+   286→            <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+   287→              <span className="material-symbols-outlined text-[14px]">schedule</span>
+   288→              Horario de atención
+   289→            </label>
+   290→            <input
+   291→              type="text"
+   292→              value={businessHours}
+   293→              onChange={(e) => setBusinessHours(e.target.value)}
+   294→              placeholder="Lun-Dom 7:00 AM - 11:00 PM"
+   295→              className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   296→            />
+   297→          </div>
+   298→
+   299→          <div className="flex justify-end">
+   300→            <button
+   301→              onClick={handleSaveContact}
+   302→              disabled={saving}
+   303→              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cm-primary text-cm-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+   304→            >
+   305→              {saving ? (
+   306→                <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+   307→              ) : (
+   308→                <span className="material-symbols-outlined text-[18px]">save</span>
+   309→              )}
+   310→              Guardar Contacto
+   311→            </button>
+   312→          </div>
+   313→        </div>
+   314→      )}
+   315→
+   316→      {/* ═══ REDES SOCIALES ═══ */}
+   317→      {activeSubTab === 'redes' && (
+   318→        <div className="space-y-4">
+   319→          <div className="flex items-center justify-between">
+   320→            <div>
+   321→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-base text-cm-on-surface">
+   322→                Redes Sociales
+   323→              </h3>
+   324→              <p className="text-xs text-cm-on-surface-variant mt-1">
+   325→                URLs de redes sociales visibles en el footer
+   326→              </p>
+   327→            </div>
+   328→          </div>
+   329→          <div className="space-y-4">
+   330→            {SOCIAL_FIELDS.map((field) => (
+   331→              <div key={field.key}>
+   332→                <label className="flex items-center gap-1.5 text-xs font-medium text-cm-on-surface-variant mb-1.5">
+   333→                  <span className="material-symbols-outlined text-[14px]">{field.icon}</span>
+   334→                  {field.label}
+   335→                </label>
+   336→                <input
+   337→                  type="url"
+   338→                  value={socialForm[field.key] || ''}
+   339→                  onChange={(e) => setSocialForm((f) => ({ ...f, [field.key]: e.target.value }))}
+   340→                  placeholder={field.placeholder}
+   341→                  className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all font-[family-name:var(--font-inter)]"
+   342→                />
+   343→              </div>
+   344→            ))}
+   345→          </div>
+   346→          <div className="flex justify-end">
+   347→            <button
+   348→              onClick={handleSaveSocial}
+   349→              disabled={saving}
+   350→              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cm-primary text-cm-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+   351→            >
+   352→              {saving ? (
+   353→                <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+   354→              ) : (
+   355→                <span className="material-symbols-outlined text-[18px]">save</span>
+   356→              )}
+   357→              Guardar Redes Sociales
+   358→            </button>
+   359→          </div>
+   360→        </div>
+   361→      )}
+   362→
+   363→      {/* ═══ TÉRMINOS Y CONDICIONES ═══ */}
+   364→      {activeSubTab === 'terminos' && (
+   365→        <LegalEditor
+   366→          title="Términos y Condiciones"
+   367→          description="Contenido legal de los Términos y Condiciones. Soporta HTML básico (&lt;p&gt;, &lt;strong&gt;, etc.)"
+   368→          sections={termsSections}
+   369→          setSections={setTermsSections}
+   370→          editingIdx={editingLegalIdx}
+   371→          setEditingIdx={setEditingLegalIdx}
+   372→          editForm={legalEditForm}
+   373→          setEditForm={setLegalEditForm}
+   374→          onSave={() => handleSaveLegal('legal_terms', termsSections)}
+   375→          saving={saving}
+   376→          onAdd={() => handleAddSection(termsSections, setTermsSections, 'Nueva sección')}
+   377→          onDelete={(idx) => handleDeleteSection(idx, termsSections, setTermsSections)}
+   378→          onMove={(idx, dir) => handleMoveSection(idx, dir, termsSections, setTermsSections)}
+   379→          onEdit={(idx) => handleEditSection(idx, termsSections, setTermsSections)}
+   380→          onSaveSection={() => handleSaveSection(termsSections, setTermsSections)}
+   381→          onCancelEdit={handleCancelEdit}
+   382→        />
+   383→      )}
+   384→
+   385→      {/* ═══ POLÍTICA DE DEVOLUCIONES ═══ */}
+   386→      {activeSubTab === 'devoluciones' && (
+   387→        <LegalEditor
+   388→          title="Política de Cambios y Devoluciones"
+   389→          description="Contenido legal de la política de cambios y devoluciones. Soporta HTML básico."
+   390→          sections={refundSections}
+   391→          setSections={setRefundSections}
+   392→          editingIdx={editingLegalIdx}
+   393→          setEditingIdx={setEditingLegalIdx}
+   394→          editForm={legalEditForm}
+   395→          setEditForm={setLegalEditForm}
+   396→          onSave={() => handleSaveLegal('legal_refund', refundSections)}
+   397→          saving={saving}
+   398→          onAdd={() => handleAddSection(refundSections, setRefundSections, 'Nueva sección')}
+   399→          onDelete={(idx) => handleDeleteSection(idx, refundSections, setRefundSections)}
+   400→          onMove={(idx, dir) => handleMoveSection(idx, dir, refundSections, setRefundSections)}
+   401→          onEdit={(idx) => handleEditSection(idx, refundSections, setRefundSections)}
+   402→          onSaveSection={() => handleSaveSection(refundSections, setRefundSections)}
+   403→          onCancelEdit={handleCancelEdit}
+   404→        />
+   405→      )}
+   406→    </div>
+   407→  )
+   408→}
+   409→
+   410→// ═══════════════════════════════════════════════════════════════
+   411→// LegalEditor — Sub-componente para editar secciones legales
+   412→// ═══════════════════════════════════════════════════════════════
+   413→function LegalEditor({
+   414→  title,
+   415→  description,
+   416→  sections,
+   417→  setSections,
+   418→  editingIdx,
+   419→  setEditingIdx,
+   420→  editForm,
+   421→  setEditForm,
+   422→  onSave,
+   423→  saving,
+   424→  onAdd,
+   425→  onDelete,
+   426→  onMove,
+   427→  onEdit,
+   428→  onSaveSection,
+   429→  onCancelEdit,
+   430→}: {
+   431→  title: string
+   432→  description: string
+   433→  sections: LegalSection[]
+   434→  setSections: (s: LegalSection[]) => void
+   435→  editingIdx: number | null
+   436→  setEditingIdx: (i: number | null) => void
+   437→  editForm: { title: string; content: string }
+   438→  setEditForm: (f: { title: string; content: string }) => void
+   439→  onSave: () => void
+   440→  saving: boolean
+   441→  onAdd: () => void
+   442→  onDelete: (idx: number) => void
+   443→  onMove: (idx: number, dir: -1 | 1) => void
+   444→  onEdit: (idx: number) => void
+   445→  onSaveSection: () => void
+   446→  onCancelEdit: () => void
+   447→}) {
+   448→  return (
+   449→    <div className="space-y-4">
+   450→      <div className="flex items-center justify-between">
+   451→        <div>
+   452→          <h3 className="font-[family-name:var(--font-sora)] font-semibold text-base text-cm-on-surface">
+   453→            {title}
+   454→          </h3>
+   455→          <p className="text-xs text-cm-on-surface-variant mt-1">{description}</p>
+   456→        </div>
+   457→        <button
+   458→          onClick={onAdd}
+   459→          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-xs font-medium text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all"
+   460→        >
+   461→          <span className="material-symbols-outlined text-[16px]">add</span>
+   462→          Agregar sección
+   463→        </button>
+   464→      </div>
+   465→
+   466→      <div className="space-y-3">
+   467→        {sections.map((section, idx) => (
+   468→          <div key={idx} className="rounded-xl border border-cm-border/50 bg-cm-surface-container overflow-hidden">
+   469→            <div className="flex items-center justify-between px-4 py-3">
+   470→              <div className="flex items-center gap-2 flex-1 min-w-0">
+   471→                <span className="text-xs font-mono text-cm-on-surface-variant/60 shrink-0">{String(idx + 1).padStart(2, '0')}</span>
+   472→                {editingIdx === idx ? (
+   473→                  <input
+   474→                    type="text"
+   475→                    value={editForm.title}
+   476→                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+   477→                    className="flex-1 px-2 py-1 rounded-lg bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/50 font-[family-name:var(--font-sora)] font-semibold"
+   478→                  />
+   479→                ) : (
+   480→                  <span className="text-sm font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface truncate">
+   481→                    {section.title}
+   482→                  </span>
+   483→                )}
+   484→              </div>
+   485→              <div className="flex items-center gap-1 shrink-0">
+   486→                <button onClick={() => onMove(idx, -1)} disabled={idx === 0} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all" title="Mover arriba">
+   487→                  <span className="material-symbols-outlined text-[16px]">expand_less</span>
+   488→                </button>
+   489→                <button onClick={() => onMove(idx, 1)} disabled={idx === sections.length - 1} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 disabled:opacity-30 transition-all" title="Mover abajo">
+   490→                  <span className="material-symbols-outlined text-[16px]">expand_more</span>
+   491→                </button>
+   492→                {editingIdx === idx ? (
+   493→                  <>
+   494→                    <button onClick={onSaveSection} className="w-7 h-7 rounded-lg flex items-center justify-center text-green-400 hover:bg-green-400/10 transition-all" title="Guardar sección">
+   495→                      <span className="material-symbols-outlined text-[16px]">check</span>
+   496→                    </button>
+   497→                    <button onClick={onCancelEdit} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-400/10 transition-all" title="Cancelar">
+   498→                      <span className="material-symbols-outlined text-[16px]">close</span>
+   499→                    </button>
+   500→                  </>
+   501→                ) : (
+   502→                  <>
+   503→                    <button onClick={() => onEdit(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-all" title="Editar sección">
+   504→                      <span className="material-symbols-outlined text-[16px]">edit</span>
+   505→                    </button>
+   506→                    <button onClick={() => onDelete(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-cm-on-surface-variant hover:text-red-400 hover:bg-red-400/10 transition-all" title="Eliminar sección">
+   507→                      <span className="material-symbols-outlined text-[16px]">delete</span>
+   508→                    </button>
+   509→                  </>
+   510→                )}
+   511→              </div>
+   512→            </div>
+   513→            {editingIdx === idx && (
+   514→              <div className="px-4 pb-4">
+   515→                <textarea
+   516→                  value={editForm.content}
+   517→                  onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+   518→                  rows={6}
+   519→                  placeholder="Escribe el contenido aquí. Soporta HTML: <p>, <strong>, <br>, etc."
+   520→                  className="w-full px-3 py-2.5 rounded-xl bg-cm-surface-container-highest border border-cm-border/50 text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/30 transition-all resize-y font-[family-name:var(--font-inter)] leading-relaxed"
+   521→                />
+   522→                <p className="text-[11px] text-cm-on-surface-variant/60 mt-1.5">
+   523→                  Usa etiquetas HTML básicas: &lt;p&gt;, &lt;strong&gt;, &lt;br&gt;, class=&quot;mb-2&quot;
+   524→                </p>
+   525→              </div>
+   526→            )}
+   527→            {editingIdx !== idx && section.content && (
+   528→              <div className="px-4 pb-3">
+   529→                <div className="text-xs text-cm-on-surface-variant/80 line-clamp-3 leading-relaxed [&_strong]:text-cm-on-surface/80" dangerouslySetInnerHTML={{ __html: section.content }} />
+   530→              </div>
+   531→            )}
+   532→          </div>
+   533→        ))}
+   534→      </div>
+   535→
+   536→      <div className="flex justify-end">
+   537→        <button onClick={onSave} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cm-primary text-cm-on-primary text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
+   538→          {saving ? (
+   539→            <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+   540→          ) : (
+   541→            <span className="material-symbols-outlined text-[18px]">save</span>
+   542→          )}
+   543→          Guardar {title}
+   544→        </button>
+   545→      </div>
+   546→    </div>
+   547→  )
+   548→}
+   549→

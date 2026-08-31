@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+     4→import { useAppStore } from '@/store/useAppStore'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner, type NewsItem } from '@/context/SiteSettingsContext'
+     8→import { getAuthHeaders } from '@/lib/auth-helpers'
+     9→import { cachedFetch, cachedFetchFresh, invalidateCache, invalidateAllCaches } from '@/lib/cache'
+    10→import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
+    11→import UsersTab from '@/components/admin/UsersTab'
+    12→import ClaimsAdminTab from '@/components/claims/ClaimsAdminTab'
+    13→import EquipmentManager from '@/components/admin/EquipmentManager'
+    14→import { useBookingAlarm, NotificationBanner, DEFAULT_SETTINGS, type NotificationSettings } from '@/components/admin/NotificationMonitor'
+    15→import NotificationSettingsPanel from '@/components/admin/NotificationSettings'
+    16→import SiteConfigTab from '@/components/admin/SiteConfigTab'
+    17→import { formatTime12, formatTime24, formatTimeRange, generateTimeSlots } from '@/lib/timeUtils'
+    18→import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+    19→import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
+    20→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+    21→import { Plus, UserPlus, Loader2, Check } from 'lucide-react'
+    22→import BookingsTable from './tables/BookingsTable'
+    23→import ExpensesTable from './tables/ExpensesTable'
+    24→import RecurringPreviewTable from './tables/RecurringPreviewTable'
+    25→import SeriesBookingsTable from './tables/SeriesBookingsTable'
+    26→import TimeSlotPicker from './TimeSlotPicker'
+    27→import PaymentValidationTab from '@/components/admin/PaymentValidationTab'
+    28→import YapeConfigTab from '@/components/admin/YapeConfigTab'
+    29→import {
+    30→  DndContext,
+    31→  closestCenter,
+    32→  KeyboardSensor,
+    33→  PointerSensor,
+    34→  useSensor,
+    35→  useSensors,
+    36→  type DragEndEvent,
+    37→} from '@dnd-kit/core'
+    38→import {
+    39→  arrayMove,
+    40→  SortableContext,
+    41→  sortableKeyboardCoordinates,
+    42→  useSortable,
+    43→  verticalListSortingStrategy,
+    44→} from '@dnd-kit/sortable'
+    45→import { CSS } from '@dnd-kit/utilities'
+    46→// v2-tables-extracted-1781314356
+    47→
+    48→/* ═══════════════════════════════════════════════════
+    49→   TYPES
+    50→   ═══════════════════════════════════════════════════ */
+    51→interface PricingScheduleItem {
+    52→  label: string;
+    53→  startHour: number;
+    54→  endHour: number;
+    55→  pricePerHour: number;
+    56→}
+    57→
+    58→interface EquipmentItem {
+    59→  equipmentId: string
+    60→  name: string
+    61→  quantity: number
+    62→  unitPrice: number
+    63→  subtotal: number
+    64→}
+    65→
+    66→interface Equipment {
+    67→  id: string
+    68→  name: string
+    69→  sport: string
+    70→  pricePerRental: number
+    71→  stock: number
+    72→  active: boolean
+    73→}
+    74→
+    75→interface Booking {
+    76→  id: string
+    77→  courtId: string
+    78→  courtIds?: string[]
+    79→  userId: string
+    80→  date: string
+    81→  startTime: string
+    82→  endTime: string
+    83→  totalPrice: number
+    84→  courtSubtotal?: number
+    85→  equipmentSubtotal?: number
+    86→  equipmentItems?: EquipmentItem[]
+    87→  advanceAmount: number
+    88→  remainingAmount: number
+    89→  status: string
+    90→  paymentMethod: string | null
+    91→  createdAt?: unknown
+    92→  recurringGroupId?: string
+    93→  recurringIndex?: number
+    94→  equipmentDelivered?: boolean
+    95→  equipmentReturned?: boolean
+    96→  court: { id: string; name: string; sport: string; branch?: { name: string } } | null
+    97→  courts: Array<{ id: string; name: string; sport: string; branch?: { name: string } }>
+    98→  user: { id: string; name: string; email: string; phone?: string } | null
+    99→}
+   100→
+   101→interface Expense {
+   102→  id: string
+   103→  description: string
+   104→  amount: number
+   105→  category: string
+   106→  date: string
+   107→  notes: string | null
+   108→  createdAt?: string
+   109→  created_at?: string
+   110→}
+   111→
+   112→interface RetainedAdvance {
+   113→  id: string
+   114→  bookingId: string
+   115→  userId: string
+   116→  userName: string
+   117→  userEmail: string | null
+   118→  courtName: string
+   119→  bookingDate: string
+   120→  amount: number
+   121→  originalTotal: number
+   122→  paymentMethod: string
+   123→  reason: string
+   124→  status: 'retained' | 'refunded'
+   125→  createdAt: string
+   126→  updatedAt: string
+   127→}
+   128→
+   129→interface Stats {
+   130→  totalBookings: number
+   131→  activeBookings: number
+   132→  totalRevenue: number
+   133→  monthRevenue: number
+   134→  activeClients: number
+   135→  totalClients: number
+   136→  occupancyRate: number
+   137→  bookingsBySport: Record<string, number>
+   138→  revenueByMonth: { month: string; revenue: number }[]
+   139→  recentBookings: Booking[]
+   140→  topCourts: Array<{ id: string; name: string; sport: string; totalRevenue: number; bookingCount: number; branch: { name: string } }>
+   141→  dailyBookings: { day: string; bookings: number; revenue: number }[]
+   142→}
+   143→
+   144→type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'pagos' | 'yape_config' | 'config'
+   145→
+   146→/* ═══════════════════════════════════════════════════
+   147→   CONFIG
+   148→   ═══════════════════════════════════════════════════ */
+   149→const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
+   150→  reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
+   151→  completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
+   152→  cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
+   153→  payment_pending: { label: 'Pago Pendiente',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
+   154→}
+   155→
+   156→const sportIcons: Record<string, string> = {
+   157→  futbol: 'sports_soccer', voley: 'sports_volleyball', basket: 'sports_basketball',
+   158→  tenis: 'sports_tennis', eventos: 'celebration',
+   159→}
+   160→
+   161→const expenseCategories: Record<string, { label: string; icon: string; color: string }> = {
+   162→  mantenimiento: { label: 'Mantenimiento', icon: 'build',       color: 'text-blue-400' },
+   163→  servicios:     { label: 'Servicios',     icon: 'bolt',        color: 'text-yellow-400' },
+   164→  personal:      { label: 'Personal',      icon: 'group',       color: 'text-purple-400' },
+   165→  alquiler:      { label: 'Alquiler',      icon: 'home',        color: 'text-cyan-400' },
+   166→  otros:         { label: 'Otros',         icon: 'more_horiz',  color: 'text-gray-400' },
+   167→}
+   168→
+   169→const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
+   170→  { key: 'reservas',  label: 'Reservas',  icon: 'calendar_month' },
+   171→  { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
+   172→  { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
+   173→  { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
+   174→  { key: 'alarmas',   label: 'Alarmas',   icon: 'notifications_active' },
+   175→  { key: 'reclamaciones', label: 'Reclamaciones', icon: 'gavel' },
+   176→  { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
+   177→  { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
+   178→  { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
+   179→  { key: 'pagos',       label: 'Pagos',          icon: 'verified' },
+   180→  { key: 'yape_config',  label: 'Pago Yape',      icon: 'qr_code_2' },
+   181→  { key: 'config',     label: 'Configuración', icon: 'settings' },
+   182→]
+   183→
+   184→/* ─── helpers ─── */
+   185→const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+   186→const fmtHour = (h: number) => `${String(h).padStart(2, '0')}:00`
+   187→const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+   188→const fmtDate = (d: string) => {
+   189→  if (!d) return '-'
+   190→  if (d.includes('-')) {
+   191→    const p = d.split('-').map(Number)
+   192→    return `${p[2]} ${MONTHS_ES[p[1] - 1]}`
+   193→  }
+   194→  return d
+   195→}
+   196→const fmtDateFull = (d: string) => {
+   197→  if (!d) return '-'
+   198→  if (d.includes('-')) {
+   199→    const p = d.split('-').map(Number)
+   200→    return `${p[2]} ${MONTHS_ES[p[1] - 1]} ${p[0]}`
+   201→  }
+   202→  return d
+   203→}
+   204→const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+   205→
+   206→/** Compare Firestore Timestamps (seconds) or ISO strings for sorting */
+   207→function compareTimestamps(a: unknown, b: unknown): number {
+   208→  const toMs = (t: unknown): number => {
+   209→    if (!t) return 0
+   210→    if (typeof t === 'number') return t * 1000 // Firestore seconds
+   211→    if (typeof t === 'object' && t !== null && '_seconds' in (t as Record<string, unknown>)) return (t as Record<string, unknown>)._seconds as number * 1000
+   212→    if (typeof t === 'string') return new Date(t).getTime()
+   213→    return 0
+   214→  }
+   215→  return toMs(a) - toMs(b)
+   216→}
+   217→
+   218→/* ═══════════════════════════════════════════════════
+   219→   CMS CONTENT EDITOR TAB
+   220→   ═══════════════════════════════════════════════════ */
+   221→
+   222→/* ─── Sortable Section Card ─── */
+   223→function SortableSectionCard({
+   224→  id,
+   225→  label,
+   226→  icon,
+   227→  color,
+   228→  isCustom,
+   229→  visible,
+   230→  onToggle,
+   231→  onEdit,
+   232→  onDelete,
+   233→}: {
+   234→  id: string
+   235→  label: string
+   236→  icon: string
+   237→  color: string
+   238→  isCustom: boolean
+   239→  visible: boolean
+   240→  onToggle: () => void
+   241→  onEdit: () => void
+   242→  onDelete?: () => void
+   243→}) {
+   244→  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+   245→  const style = { transform: CSS.Transform.toString(transform), transition }
+   246→
+   247→  return (
+   248→    <div
+   249→      ref={setNodeRef}
+   250→      style={style}
+   251→      className={`glass-card rounded-xl p-3 flex items-center gap-3 transition-all ${isDragging ? 'opacity-60 shadow-xl z-50' : ''} ${!visible ? 'opacity-40' : ''}`}
+   252→    >
+   253→      {/* Drag handle */}
+   254→      <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-cm-on-surface-variant/40 hover:text-cm-on-surface-variant p-1">
+   255→        <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
+   256→      </button>
+   257→
+   258→      {/* Icon */}
+   259→      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+   260→        <span className="material-symbols-outlined text-[18px] text-white" style={{ fontVariationSettings: '"FILL" 1' }}>
+   261→          {icon}
+   262→        </span>
+   263→      </div>
+   264→
+   265→      {/* Label */}
+   266→      <span className="flex-1 text-sm font-semibold text-cm-on-surface truncate font-[family-name:var(--font-sora)]">
+   267→        {label}
+   268→      </span>
+   269→
+   270→      {/* Actions */}
+   271→      <div className="flex items-center gap-1.5 flex-shrink-0">
+   272→        <button type="button" onClick={onToggle} className={`p-1.5 rounded-lg transition-colors ${visible ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40 hover:bg-white/5'}`} title={visible ? 'Ocultar' : 'Mostrar'}>
+   273→          <span className="material-symbols-outlined text-[16px]">{visible ? 'visibility' : 'visibility_off'}</span>
+   274→        </button>
+   275→        <button type="button" onClick={onEdit} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Editar">
+   276→          <span className="material-symbols-outlined text-[16px]">edit</span>
+   277→        </button>
+   278→        {isCustom && onDelete && (
+   279→          <button type="button" onClick={onDelete} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
+   280→            <span className="material-symbols-outlined text-[16px]">delete</span>
+   281→          </button>
+   282→        )}
+   283→      </div>
+   284→    </div>
+   285→  )
+   286→}
+   287→
+   288→/* ─── Main ContentTab ─── */
+   289→function ContentTab() {
+   290→  const { settings, saveSection, saveFullSettings, toggleSectionVisibility, reorderSections, saveCustomSection, removeCustomSection } = useSiteSettings()
+   291→  const [activeSubTab, setActiveSubTab] = useState<'secciones' | 'promociones' | 'banners' | 'noticias'>('secciones')
+   292→  const [editSection, setEditSection] = useState<string | null>(null)
+   293→  const [editForm, setEditForm] = useState<Record<string, unknown> | null>(null)
+   294→  const [saving, setSaving] = useState(false)
+   295→  const [uploading, setUploading] = useState<string | null>(null)
+   296→
+   297→  // Custom section editing
+   298→  const [editingCustom, setEditingCustom] = useState<CustomSection | null>(null)
+   299→  const [customForm, setCustomForm] = useState<CustomSection | null>(null)
+   300→  const [savingCustom, setSavingCustom] = useState(false)
+   301→
+   302→  // Promotions editing
+   303→  const [editingPromo, setEditingPromo] = useState<ActivePromotion | null>(null)
+   304→  const [promoForm, setPromoForm] = useState<ActivePromotion | null>(null)
+   305→  const [savingPromo, setSavingPromo] = useState(false)
+   306→
+   307→  // Hero banners editing
+   308→  const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null)
+   309→  const [bannerForm, setBannerForm] = useState<HeroBanner | null>(null)
+   310→  const [savingBanner, setSavingBanner] = useState(false)
+   311→
+   312→  // News editing
+   313→  const [editingNews, setEditingNews] = useState<NewsItem | null>(null)
+   314→  const [newsForm, setNewsForm] = useState<NewsItem | null>(null)
+   315→  const [savingNews, setSavingNews] = useState(false)
+   316→
+   317→  // Preview modal
+   318→  const [showPreview, setShowPreview] = useState(false)
+   319→
+   320→  const sensors = useSensors(
+   321→    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+   322→    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+   323→  )
+   324→
+   325→  // Section metadata map
+   326→  const sectionMeta: Record<string, { label: string; icon: string; color: string; isCustom: boolean }> = {
+   327→    hero: { label: 'Hero Principal', icon: 'hero', color: 'bg-cm-primary', isCustom: false },
+   328→    sportsSection: { label: 'Instalaciones', icon: 'emoji_events', color: 'bg-green-500', isCustom: false },
+   329→    featuredCourts: { label: 'Canchas Destacadas', icon: 'sports_soccer', color: 'bg-teal-500', isCustom: false },
+   330→    promoBanner: { label: 'Promociones', icon: 'workspace_premium', color: 'bg-purple-500', isCustom: false },
+   331→    howItWorks: { label: 'Cómo Funciona', icon: 'auto_awesome', color: 'bg-sky-500', isCustom: false },
+   332→  }
+   333→
+   334→  const sectionOrder = settings?.sectionOrder || ['hero', 'sportsSection', 'featuredCourts', 'promoBanner', 'howItWorks']
+   335→  const visibility = settings?.sectionVisibility || { hero: true, sportsSection: true, featuredCourts: true, promoBanner: true, howItWorks: true }
+   336→  const customSections = settings?.customSections || []
+   337→
+   338→  const openEditor = (sectionKey: string) => {
+   339→    if (!settings) return
+   340→    setEditSection(sectionKey)
+   341→    if (sectionKey in settings) {
+   342→      setEditForm({ ...(settings[sectionKey as keyof typeof settings] as Record<string, unknown>) })
+   343→    }
+   344→  }
+   345→
+   346→  const handleSave = async () => {
+   347→    if (!editSection || !editForm || !settings) return
+   348→    setSaving(true)
+   349→    const ok = await saveSection(editSection, editForm)
+   350→    setSaving(false)
+   351→    if (ok) {
+   352→      setEditSection(null)
+   353→      setEditForm(null)
+   354→      toast({ title: 'Contenido guardado', description: 'Los cambios se aplicaron correctamente' })
+   355→    } else {
+   356→      toast({ title: 'Error', description: 'No se pudo guardar el contenido', variant: 'destructive' })
+   357→    }
+   358→  }
+   359→
+   360→  const handleDragEnd = async (event: DragEndEvent) => {
+   361→    const { active, over } = event
+   362→    if (!over || active.id === over.id || !settings) return
+   363→    const oldIndex = sectionOrder.indexOf(active.id as string)
+   364→    const newIndex = sectionOrder.indexOf(over.id as string)
+   365→    if (oldIndex < 0 || newIndex < 0) return
+   366→    const newOrder = arrayMove(sectionOrder, oldIndex, newIndex)
+   367→    await reorderSections(newOrder)
+   368→    toast({ title: 'Orden actualizado', description: 'Las secciones se reordenaron correctamente' })
+   369→  }
+   370→
+   371→  const addCustomSection = () => {
+   372→    const id = `cs_${Date.now()}`
+   373→    const newSection: CustomSection = {
+   374→      id, type: 'banner', visible: true, title: 'Nueva sección',
+   375→      subtitle: '', image: '', link: '', ctaText: '', items: [], order: customSections.length,
+   376→    }
+   377→    setEditingCustom(newSection)
+   378→    setCustomForm({ ...newSection })
+   379→  }
+   380→
+   381→  const handleSaveCustom = async () => {
+   382→    if (!customForm || !settings) return
+   383→    setSavingCustom(true)
+   384→    const ok = await saveCustomSection(customForm)
+   385→    setSavingCustom(false)
+   386→    if (ok) {
+   387→      setEditingCustom(null)
+   388→      setCustomForm(null)
+   389→      toast({ title: 'Sección guardada', description: 'La sección personalizada fue guardada' })
+   390→    } else {
+   391→      toast({ title: 'Error', description: 'No se pudo guardar la sección', variant: 'destructive' })
+   392→    }
+   393→  }
+   394→
+   395→  const handleDeleteCustom = async (sectionId: string) => {
+   396→    if (!confirm('¿Eliminar esta sección personalizada?')) return
+   397→    const ok = await removeCustomSection(sectionId)
+   398→    if (ok) toast({ title: 'Sección eliminada' })
+   399→    else toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' })
+   400→  }
+   401→
+   402→  // Promotions CRUD
+   403→  const addPromotion = () => {
+   404→    const newPromo: ActivePromotion = {
+   405→      id: `promo_${Date.now()}`, title: '', description: '', discount: '', validFrom: '', validUntil: '', active: true, image: '',
+   406→    }
+   407→    setEditingPromo(newPromo)
+   408→    setPromoForm({ ...newPromo })
+   409→  }
+   410→
+   411→  const handleSavePromo = async () => {
+   412→    if (!promoForm || !settings) return
+   413→    setSavingPromo(true)
+   414→    const existing = settings.activePromotions.findIndex((p) => p.id === promoForm.id)
+   415→    let updated: ActivePromotion[]
+   416→    if (existing >= 0) { updated = [...settings.activePromotions]; updated[existing] = promoForm }
+   417→    else { updated = [...settings.activePromotions, promoForm] }
+   418→    const ok = await saveFullSettings({ ...settings, activePromotions: updated })
+   419→    setSavingPromo(false)
+   420→    if (ok) { setEditingPromo(null); setPromoForm(null); toast({ title: 'Promoción guardada' }) }
+   421→    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+   422→  }
+   423→
+   424→  const togglePromoActive = async (promoId: string) => {
+   425→    if (!settings) return
+   426→    const updated = settings.activePromotions.map((p) => p.id === promoId ? { ...p, active: !p.active } : p)
+   427→    await saveFullSettings({ ...settings, activePromotions: updated })
+   428→  }
+   429→
+   430→  const deletePromo = async (promoId: string) => {
+   431→    if (!confirm('¿Eliminar esta promoción?')) return
+   432→    if (!settings) return
+   433→    const ok = await saveFullSettings({ ...settings, activePromotions: settings.activePromotions.filter((p) => p.id !== promoId) })
+   434→    if (ok) toast({ title: 'Promoción eliminada' })
+   435→  }
+   436→
+   437→  // Hero Banners CRUD
+   438→  const addHeroBanner = () => {
+   439→    const newBanner: HeroBanner = {
+   440→      id: `hb_${Date.now()}`, image: '', title: '', subtitle: '', link: '', active: true,
+   441→    }
+   442→    setEditingBanner(newBanner)
+   443→    setBannerForm({ ...newBanner })
+   444→  }
+   445→
+   446→  const handleSaveBanner = async () => {
+   447→    if (!bannerForm || !settings) return
+   448→    setSavingBanner(true)
+   449→    const existing = settings.heroBanners.findIndex((b) => b.id === bannerForm.id)
+   450→    let updated: HeroBanner[]
+   451→    if (existing >= 0) { updated = [...settings.heroBanners]; updated[existing] = bannerForm }
+   452→    else { updated = [...settings.heroBanners, bannerForm] }
+   453→    const ok = await saveFullSettings({ ...settings, heroBanners: updated })
+   454→    setSavingBanner(false)
+   455→    if (ok) { setEditingBanner(null); setBannerForm(null); toast({ title: 'Banner guardado' }) }
+   456→    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+   457→  }
+   458→
+   459→  const toggleBannerActive = async (bannerId: string) => {
+   460→    if (!settings) return
+   461→    const updated = settings.heroBanners.map((b) => b.id === bannerId ? { ...b, active: !b.active } : b)
+   462→    await saveFullSettings({ ...settings, heroBanners: updated })
+   463→  }
+   464→
+   465→  const deleteBanner = async (bannerId: string) => {
+   466→    if (!confirm('¿Eliminar este banner?')) return
+   467→    if (!settings) return
+   468→    const ok = await saveFullSettings({ ...settings, heroBanners: settings.heroBanners.filter((b) => b.id !== bannerId) })
+   469→    if (ok) toast({ title: 'Banner eliminado' })
+   470→  }
+   471→
+   472→  // News CRUD
+   473→  const addNews = () => {
+   474→    const newItem: NewsItem = {
+   475→      id: `news_${Date.now()}`, title: '', content: '', image: '', link: '', active: true, pinned: false, createdAt: new Date().toISOString(),
+   476→    }
+   477→    setEditingNews(newItem)
+   478→    setNewsForm({ ...newItem })
+   479→  }
+   480→
+   481→  const handleSaveNews = async () => {
+   482→    if (!newsForm || !settings) return
+   483→    setSavingNews(true)
+   484→    const existing = settings.news.findIndex((n) => n.id === newsForm.id)
+   485→    let updated: NewsItem[]
+   486→    if (existing >= 0) { updated = [...settings.news]; updated[existing] = newsForm }
+   487→    else { updated = [...settings.news, newsForm] }
+   488→    const ok = await saveFullSettings({ ...settings, news: updated })
+   489→    setSavingNews(false)
+   490→    if (ok) { setEditingNews(null); setNewsForm(null); toast({ title: 'Noticia guardada' }) }
+   491→    else toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' })
+   492→  }
+   493→
+   494→  const toggleNewsActive = async (newsId: string) => {
+   495→    if (!settings) return
+   496→    const updated = settings.news.map((n) => n.id === newsId ? { ...n, active: !n.active } : n)
+   497→    await saveFullSettings({ ...settings, news: updated })
+   498→  }
+   499→
+   500→  const toggleNewsPinned = async (newsId: string) => {
+   501→    if (!settings) return
+   502→    const updated = settings.news.map((n) => n.id === newsId ? { ...n, pinned: !n.pinned } : n)
+   503→    await saveFullSettings({ ...settings, news: updated })
+   504→  }
+   505→
+   506→  const deleteNews = async (newsId: string) => {
+   507→    if (!confirm('¿Eliminar esta noticia?')) return
+   508→    if (!settings) return
+   509→    const ok = await saveFullSettings({ ...settings, news: settings.news.filter((n) => n.id !== newsId) })
+   510→    if (ok) toast({ title: 'Noticia eliminada' })
+   511→  }
+   512→
+   513→  /* ─── Image upload ─── */
+   514→  const handleUploadImage = async (file: File, targetPath: string, callback?: (url: string) => void) => {
+   515→    setUploading(targetPath)
+   516→    try {
+   517→      const formData = new FormData()
+   518→      formData.append('file', file)
+   519→      formData.append('folder', 'site-images')
+   520→      // Do NOT send Content-Type or auth headers with FormData — the browser sets multipart boundary automatically
+   521→      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+   522→      if (res.ok) {
+   523→        const data = await res.json()
+   524→        if (targetPath && editForm) {
+   525→          updateField(targetPath, data.url)
+   526→        }
+   527→        callback?.(data.url)
+   528→        toast({ title: 'Imagen subida', description: `${Math.round(data.url.length / 1024)}KB` })
+   529→      } else {
+   530→        const errData = await res.json().catch(() => null)
+   531→        toast({ title: 'Error al subir', description: errData?.error || 'No se pudo subir la imagen', variant: 'destructive' })
+   532→      }
+   533→    } catch {
+   534→      toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
+   535→    } finally {
+   536→      setUploading(null)
+   537→    }
+   538→  }
+   539→
+   540→  const updateField = (path: string, value: unknown) => {
+   541→    if (!editForm) return
+   542→    const keys = path.split('.')
+   543→    const copy = { ...editForm }
+   544→    let target: Record<string, unknown> = copy
+   545→    for (let i = 0; i < keys.length - 1; i++) {
+   546→      if (!target[keys[i]] || typeof target[keys[i]] !== 'object') target[keys[i]] = {}
+   547→      target = target[keys[i]] as Record<string, unknown>
+   548→    }
+   549→    target[keys[keys.length - 1]] = value
+   550→    setEditForm(copy)
+   551→  }
+   552→
+   553→  const getField = (path: string): string => {
+   554→    if (!editForm) return ''
+   555→    const keys = path.split('.')
+   556→    let target: unknown = editForm
+   557→    for (const key of keys) {
+   558→      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) target = (target as Record<string, unknown>)[key]
+   559→      else return ''
+   560→    }
+   561→    return String(target ?? '')
+   562→  }
+   563→
+   564→  const getArray = (path: string): unknown[] => {
+   565→    if (!editForm) return []
+   566→    const keys = path.split('.')
+   567→    let target: unknown = editForm
+   568→    for (const key of keys) {
+   569→      if (target && typeof target === 'object' && key in (target as Record<string, unknown>)) target = (target as Record<string, unknown>)[key]
+   570→      else return []
+   571→    }
+   572→    return Array.isArray(target) ? target : []
+   573→  }
+   574→
+   575→  const updateArrayItem = (path: string, idx: number, field: string, value: string | number | boolean) => {
+   576→    const arr = getArray(path)
+   577→    const copy = [...arr]
+   578→    copy[idx] = { ...(copy[idx] as Record<string, unknown>), [field]: value }
+   579→    updateField(path, copy)
+   580→  }
+   581→
+   582→  const addArrayItem = (path: string, template: Record<string, unknown>) => {
+   583→    const arr = getArray(path)
+   584→    updateField(path, [...arr, template])
+   585→  }
+   586→
+   587→  const removeArrayItem = (path: string, idx: number) => {
+   588→    const arr = getArray(path)
+   589→    updateField(path, arr.filter((_, i) => i !== idx))
+   590→  }
+   591→
+   592→  /* ─── Generic image upload helper (for modals outside editForm context) ─── */
+   593→  const uploadFile = async (file: File, callback: (url: string) => void, uploadId: string) => {
+   594→    setUploading(uploadId)
+   595→    try {
+   596→      const formData = new FormData()
+   597→      formData.append('file', file)
+   598→      formData.append('folder', 'site-images')
+   599→      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+   600→      if (res.ok) {
+   601→        const data = await res.json()
+   602→        callback(data.url)
+   603→        toast({ title: 'Imagen subida', description: `${Math.round(data.url.length / 1024)}KB` })
+   604→      } else {
+   605→        const errData = await res.json().catch(() => null)
+   606→        toast({ title: 'Error al subir', description: errData?.error || 'No se pudo subir', variant: 'destructive' })
+   607→      }
+   608→    } catch {
+   609→      toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' })
+   610→    } finally {
+   611→      setUploading(null)
+   612→    }
+   613→  }
+   614→
+   615→  /* ─── Reusable Image Uploader ─── */
+   616→  const ImageUploader = ({ label, path, currentUrl, onUpload, uploadId }: { label: string; path: string; currentUrl?: string; onUpload?: (url: string) => void; uploadId?: string }) => {
+   617→    const uid = uploadId || path
+   618→    return (
+   619→      <div>
+   620→        <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">{label}</label>
+   621→        <div className="space-y-2">
+   622→          {currentUrl && (
+   623→            <div className="relative group rounded-xl overflow-hidden border border-white/10">
+   624→              <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
+   625→              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+   626→                <button type="button" onClick={() => {
+   627→                  if (path && editForm) updateField(path, '')
+   628→                  onUpload?.('')
+   629→                }} className="p-1.5 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-colors">
+   630→                  <span className="material-symbols-outlined text-[16px]">delete</span>
+   631→                </button>
+   632→              </div>
+   633→            </div>
+   634→          )}
+   635→          <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+   636→            uploading === uid ? 'border-cm-primary/50 bg-cm-primary/5 text-cm-primary' : 'border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary'
+   637→          }`}>
+   638→            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+   639→              const file = e.target.files?.[0]
+   640→              if (file) {
+   641→                if (onUpload && !path) {
+   642→                  uploadFile(file, onUpload, uid)
+   643→                } else {
+   644→                  handleUploadImage(file, path, onUpload)
+   645→                }
+   646→              }
+   647→              e.target.value = ''
+   648→            }} />
+   649→            {uploading === uid ? (<><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span className="text-xs font-medium">Subiendo...</span></>)
+   650→              : (<><span className="material-symbols-outlined text-[18px]">cloud_upload</span><span className="text-xs font-medium">{currentUrl ? 'Cambiar imagen' : 'Subir imagen'}</span></>)}
+   651→          </label>
+   652→        </div>
+   653→      </div>
+   654→    )
+   655→  }
+   656→
+   657→  if (!settings) {
+   658→    return (
+   659→      <div className="glass-card rounded-xl p-8 text-center">
+   660→        <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/30 animate-pulse block mb-2">edit_note</span>
+   661→        <p className="text-cm-on-surface-variant text-sm">Cargando contenido...</p>
+   662→      </div>
+   663→    )
+   664→  }
+   665→
+   666→  return (
+   667→    <>
+   668→      <motion.div key="contenido" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   669→        <div className="mb-6 flex items-start justify-between">
+   670→          <div>
+   671→            <h2 className="font-[family-name:var(--font-sora)] font-bold text-xl text-cm-on-surface">CMS de Inicio</h2>
+   672→            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   673→              Administra todo el contenido de la página de inicio
+   674→            </p>
+   675→          </div>
+   676→          <button type="button"
+   677→            onClick={() => setShowPreview(true)}
+   678→            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cm-primary/10 text-cm-primary border border-cm-primary/20 text-xs font-bold hover:bg-cm-primary/20 transition-all"
+   679→          >
+   680→            <span className="material-symbols-outlined text-[16px]">visibility</span>
+   681→            Vista Previa
+   682→          </button>
+   683→        </div>
+   684→
+   685→        {/* Sub-tabs */}
+   686→        <div className="flex items-center gap-2 mb-6 flex-wrap">
+   687→          {([
+   688→            { key: 'secciones' as const, label: 'Secciones', icon: 'dashboard' },
+   689→            { key: 'promociones' as const, label: 'Promociones', icon: 'local_offer' },
+   690→            { key: 'banners' as const, label: 'Banners Hero', icon: 'view_carousel' },
+   691→            { key: 'noticias' as const, label: 'Noticias', icon: 'newspaper' },
+   692→          ]).map((tab) => (
+   693→            <button type="button"
+   694→              key={tab.key}
+   695→              onClick={() => setActiveSubTab(tab.key)}
+   696→              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+   697→                activeSubTab === tab.key
+   698→                  ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+   699→                  : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
+   700→              }`}
+   701→            >
+   702→              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+   703→              {tab.label}
+   704→              {tab.key === 'promociones' && settings.activePromotions?.length > 0 && (
+   705→                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.activePromotions.length}</span>
+   706→              )}
+   707→              {tab.key === 'banners' && settings.heroBanners?.length > 0 && (
+   708→                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.heroBanners.length}</span>
+   709→              )}
+   710→              {tab.key === 'noticias' && (settings.news?.length || 0) > 0 && (
+   711→                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-on-primary/20 text-[9px]">{settings.news.length}</span>
+   712→              )}
+   713→            </button>
+   714→          ))}
+   715→        </div>
+   716→
+   717→        {/* ═══════ SECCIONES TAB ═══════ */}
+   718→        {activeSubTab === 'secciones' && (
+   719→          <div>
+   720→            <div className="flex items-center justify-between mb-4">
+   721→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Orden de secciones</h3>
+   722→              <button type="button"
+   723→                onClick={addCustomSection}
+   724→                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all"
+   725→              >
+   726→                <span className="material-symbols-outlined text-[14px]">add</span>
+   727→                Agregar sección
+   728→              </button>
+   729→            </div>
+   730→
+   731→            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+   732→              <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+   733→                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+   734→                  {sectionOrder.map((key) => {
+   735→                    const isCustomKey = key.startsWith('custom_')
+   736→                    const meta = sectionMeta[key]
+   737→                    let label = meta?.label || key
+   738→                    let icon = meta?.icon || 'widgets'
+   739→                    let color = meta?.color || 'bg-gray-500'
+   740→
+   741→                    if (isCustomKey) {
+   742→                      const csId = key.replace('custom_', '')
+   743→                      const cs = customSections.find((s) => s.id === csId)
+   744→                      label = cs?.title || 'Sección personalizada'
+   745→                      const typeColors: Record<string, string> = { banner: 'bg-cm-primary', notice: 'bg-amber-500', highlight: 'bg-purple-500', cta: 'bg-sky-500', gallery: 'bg-teal-500' }
+   746→                      const typeIcons: Record<string, string> = { banner: 'image', notice: 'campaign', highlight: 'star', cta: 'touch_app', gallery: 'photo_library' }
+   747→                      color = typeColors[cs?.type || 'banner'] || 'bg-gray-500'
+   748→                      icon = typeIcons[cs?.type || 'banner'] || 'widgets'
+   749→                    }
+   750→
+   751→                    return (
+   752→                      <SortableSectionCard
+   753→                        key={key}
+   754→                        id={key}
+   755→                        label={label}
+   756→                        icon={icon}
+   757→                        color={color}
+   758→                        isCustom={isCustomKey}
+   759→                        visible={isCustomKey ? (customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true) : (visibility[key as keyof typeof visibility] ?? true)}
+   760→                        onToggle={() => {
+   761→                          if (isCustomKey) {
+   762→                            const csId = key.replace('custom_', '')
+   763→                            const cs = customSections.find((s) => s.id === csId)
+   764→                            if (cs) saveCustomSection({ ...cs, visible: !cs.visible })
+   765→                          } else {
+   766→                            toggleSectionVisibility(key)
+   767→                          }
+   768→                        }}
+   769→                        onEdit={() => {
+   770→                          if (isCustomKey) {
+   771→                            const csId = key.replace('custom_', '')
+   772→                            const cs = customSections.find((s) => s.id === csId)
+   773→                            if (cs) { setEditingCustom(cs); setCustomForm({ ...cs }) }
+   774→                          } else {
+   775→                            openEditor(key)
+   776→                          }
+   777→                        }}
+   778→                        onDelete={isCustomKey ? () => handleDeleteCustom(key.replace('custom_', '')) : undefined}
+   779→                      />
+   780→                    )
+   781→                  })}
+   782→                </div>
+   783→              </SortableContext>
+   784→            </DndContext>
+   785→          </div>
+   786→        )}
+   787→
+   788→        {/* ═══════ PROMOCIONES TAB ═══════ */}
+   789→        {activeSubTab === 'promociones' && (
+   790→          <div>
+   791→            <div className="flex items-center justify-between mb-4">
+   792→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Promociones activas</h3>
+   793→              <button type="button" onClick={addPromotion} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+   794→                <span className="material-symbols-outlined text-[14px]">add</span>
+   795→                Nueva promoción
+   796→              </button>
+   797→            </div>
+   798→            {settings.activePromotions.length === 0 ? (
+   799→              <div className="glass-card rounded-xl p-8 text-center">
+   800→                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">local_offer</span>
+   801→                <p className="text-cm-on-surface-variant text-sm">No hay promociones. Crea una para mostrarla en la página de inicio.</p>
+   802→              </div>
+   803→            ) : (
+   804→              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+   805→                {settings.activePromotions.map((promo) => (
+   806→                  <div key={promo.id} className={`glass-card rounded-xl p-4 flex items-start gap-3 ${!promo.active ? 'opacity-40' : ''}`}>
+   807→                    {promo.image && <img src={promo.image} alt={promo.title} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />}
+   808→                    <div className="flex-1 min-w-0">
+   809→                      <div className="flex items-center gap-2">
+   810→                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface truncate">{promo.title || 'Sin título'}</span>
+   811→                        {promo.discount && <span className="px-2 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold">{promo.discount}</span>}
+   812→                      </div>
+   813→                      <p className="text-cm-on-surface-variant text-xs mt-0.5 truncate">{promo.description}</p>
+   814→                      {(promo.validFrom || promo.validUntil) && (
+   815→                        <p className="text-cm-on-surface-variant/60 text-[10px] mt-1">
+   816→                          {promo.validFrom} — {promo.validUntil || 'Sin límite'}
+   817→                        </p>
+   818→                      )}
+   819→                    </div>
+   820→                    <div className="flex items-center gap-1.5 flex-shrink-0">
+   821→                      <button type="button" onClick={() => togglePromoActive(promo.id)} className={`p-1.5 rounded-lg transition-colors ${promo.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+   822→                        <span className="material-symbols-outlined text-[16px]">{promo.active ? 'toggle_on' : 'toggle_off'}</span>
+   823→                      </button>
+   824→                      <button type="button" onClick={() => { setEditingPromo(promo); setPromoForm({ ...promo }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+   825→                        <span className="material-symbols-outlined text-[16px]">edit</span>
+   826→                      </button>
+   827→                      <button type="button" onClick={() => deletePromo(promo.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+   828→                        <span className="material-symbols-outlined text-[16px]">delete</span>
+   829→                      </button>
+   830→                    </div>
+   831→                  </div>
+   832→                ))}
+   833→              </div>
+   834→            )}
+   835→          </div>
+   836→        )}
+   837→
+   838→        {/* ═══════ BANNERS TAB ═══════ */}
+   839→        {activeSubTab === 'banners' && (
+   840→          <div>
+   841→            <div className="flex items-center justify-between mb-4">
+   842→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Banners del carrusel Hero</h3>
+   843→              <button type="button" onClick={addHeroBanner} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+   844→                <span className="material-symbols-outlined text-[14px]">add</span>
+   845→                Nuevo banner
+   846→              </button>
+   847→            </div>
+   848→            {settings.heroBanners.length === 0 ? (
+   849→              <div className="glass-card rounded-xl p-8 text-center">
+   850→                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">view_carousel</span>
+   851→                <p className="text-cm-on-surface-variant text-sm">No hay banners. Agrega banners para mostrar un carrusel en el Hero.</p>
+   852→              </div>
+   853→            ) : (
+   854→              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+   855→                {settings.heroBanners.map((banner, idx) => (
+   856→                  <div key={banner.id} className={`glass-card rounded-xl p-3 flex items-center gap-3 ${!banner.active ? 'opacity-40' : ''}`}>
+   857→                    <span className="text-cm-on-surface-variant text-xs font-bold w-6 text-center font-[family-name:var(--font-sora)]">#{idx + 1}</span>
+   858→                    {banner.image ? (
+   859→                      <img src={banner.image} alt={banner.title || ''} className="w-24 h-16 rounded-lg object-cover flex-shrink-0" />
+   860→                    ) : (
+   861→                      <div className="w-24 h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+   862→                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">image</span>
+   863→                      </div>
+   864→                    )}
+   865→                    <div className="flex-1 min-w-0">
+   866→                      <span className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface truncate block">{banner.title || 'Sin título'}</span>
+   867→                      {banner.subtitle && <span className="text-cm-on-surface-variant text-[10px] truncate block">{banner.subtitle}</span>}
+   868→                    </div>
+   869→                    <div className="flex items-center gap-1.5 flex-shrink-0">
+   870→                      <button type="button" onClick={() => toggleBannerActive(banner.id)} className={`p-1.5 rounded-lg transition-colors ${banner.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+   871→                        <span className="material-symbols-outlined text-[16px]">{banner.active ? 'toggle_on' : 'toggle_off'}</span>
+   872→                      </button>
+   873→                      <button type="button" onClick={() => { setEditingBanner(banner); setBannerForm({ ...banner }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+   874→                        <span className="material-symbols-outlined text-[16px]">edit</span>
+   875→                      </button>
+   876→                      <button type="button" onClick={() => deleteBanner(banner.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+   877→                        <span className="material-symbols-outlined text-[16px]">delete</span>
+   878→                      </button>
+   879→                    </div>
+   880→                  </div>
+   881→                ))}
+   882→              </div>
+   883→            )}
+   884→          </div>
+   885→        )}
+   886→
+   887→        {/* ═══════ NOTICIAS TAB ═══════ */}
+   888→        {activeSubTab === 'noticias' && (
+   889→          <div>
+   890→            <div className="flex items-center justify-between mb-4">
+   891→              <h3 className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface">Noticias y Anuncios</h3>
+   892→              <button type="button" onClick={addNews} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cm-primary/10 text-cm-primary text-xs font-bold hover:bg-cm-primary/20 transition-all">
+   893→                <span className="material-symbols-outlined text-[14px]">add</span>
+   894→                Nueva noticia
+   895→              </button>
+   896→            </div>
+   897→            {(!settings.news || settings.news.length === 0) ? (
+   898→              <div className="glass-card rounded-xl p-8 text-center">
+   899→                <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/30 block mb-2">newspaper</span>
+   900→                <p className="text-cm-on-surface-variant text-sm">No hay noticias. Crea una para mostrar anuncios en la página de inicio.</p>
+   901→              </div>
+   902→            ) : (
+   903→              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+   904→                {[...settings.news].sort((a, b) => {
+   905→                  if (a.pinned && !b.pinned) return -1
+   906→                  if (!a.pinned && b.pinned) return 1
+   907→                  return 0
+   908→                }).map((newsItem) => (
+   909→                  <div key={newsItem.id} className={`glass-card rounded-xl p-4 flex items-start gap-3 ${!newsItem.active ? 'opacity-40' : ''}`}>
+   910→                    {newsItem.image ? (
+   911→                      <img src={newsItem.image} alt={newsItem.title} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+   912→                    ) : (
+   913→                      <div className="w-16 h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center flex-shrink-0">
+   914→                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">article</span>
+   915→                      </div>
+   916→                    )}
+   917→                    <div className="flex-1 min-w-0">
+   918→                      <div className="flex items-center gap-2">
+   919→                        {newsItem.pinned && (
+   920→                          <span className="material-symbols-outlined text-[14px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>push_pin</span>
+   921→                        )}
+   922→                        <span className="font-[family-name:var(--font-sora)] font-bold text-sm text-cm-on-surface truncate">{newsItem.title || 'Sin título'}</span>
+   923→                      </div>
+   924→                      <p className="text-cm-on-surface-variant text-xs mt-0.5 line-clamp-2">{newsItem.content}</p>
+   925→                    </div>
+   926→                    <div className="flex items-center gap-1.5 flex-shrink-0">
+   927→                      <button type="button" onClick={() => toggleNewsPinned(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.pinned ? 'text-cm-primary' : 'text-cm-on-surface-variant/40 hover:text-cm-primary/60'}`} title={newsItem.pinned ? 'Desfijar' : 'Fijar'}>
+   928→                        <span className="material-symbols-outlined text-[16px]">push_pin</span>
+   929→                      </button>
+   930→                      <button type="button" onClick={() => toggleNewsActive(newsItem.id)} className={`p-1.5 rounded-lg transition-colors ${newsItem.active ? 'text-cm-primary hover:bg-cm-primary/10' : 'text-cm-on-surface-variant/40'}`}>
+   931→                        <span className="material-symbols-outlined text-[16px]">{newsItem.active ? 'toggle_on' : 'toggle_off'}</span>
+   932→                      </button>
+   933→                      <button type="button" onClick={() => { setEditingNews(newsItem); setNewsForm({ ...newsItem }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
+   934→                        <span className="material-symbols-outlined text-[16px]">edit</span>
+   935→                      </button>
+   936→                      <button type="button" onClick={() => deleteNews(newsItem.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
+   937→                        <span className="material-symbols-outlined text-[16px]">delete</span>
+   938→                      </button>
+   939→                    </div>
+   940→                  </div>
+   941→                ))}
+   942→              </div>
+   943→            )}
+   944→          </div>
+   945→        )}
+   946→      </motion.div>
+   947→
+   948→      {/* ═══════ SECTION EDIT MODAL ═══════ */}
+   949→      {editSection && editForm && (
+   950→        <EditModal
+   951→          open={true}
+   952→          onClose={() => { setEditSection(null); setEditForm(null) }}
+   953→          title={`Editar: ${sectionMeta[editSection]?.label || editSection}`}
+   954→          onSave={handleSave}
+   955→          saving={saving}
+   956→        >
+   957→          {editSection === 'hero' && (
+   958→            <>
+   959→              <FormField label="Ubicación" value={getField('location')} onChange={(v) => updateField('location', v)} />
+   960→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+   961→              <div className="grid grid-cols-2 gap-3">
+   962→                <FormField label="Título" value={getField('headline')} onChange={(v) => updateField('headline', v)} />
+   963→                <FormField label="Highlight" value={getField('headlineHighlight')} onChange={(v) => updateField('headlineHighlight', v)} />
+   964→              </div>
+   965→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+   966→              <div className="grid grid-cols-2 gap-3">
+   967→                <FormField label="Promo Highlight" value={getField('promoHighlight')} onChange={(v) => updateField('promoHighlight', v)} />
+   968→                <FormField label="Promo Text" value={getField('promoText')} onChange={(v) => updateField('promoText', v)} />
+   969→              </div>
+   970→              <div className="space-y-3">
+   971→                <ImageUploader label="Imagen de fondo principal" path="backgroundImage" currentUrl={getField('backgroundImage')} />
+   972→                <ImageUploader label="Imagen secundaria" path="secondaryImage" currentUrl={getField('secondaryImage')} />
+   973→              </div>
+   974→              <div>
+   975→                <div className="flex items-center justify-between mb-2">
+   976→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Estadísticas</label>
+   977→                  <button type="button" onClick={() => addArrayItem('stats', { label: 'Nuevo', value: 0 })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+   978→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+   979→                  </button>
+   980→                </div>
+   981→                {(getArray('stats') as Array<{ label: string; value: number }>).map((stat, idx) => (
+   982→                  <div key={idx} className="flex items-center gap-2 mb-2">
+   983→                    <input value={stat.label} onChange={(e) => updateArrayItem('stats', idx, 'label', e.target.value)} placeholder="Etiqueta" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+   984→                    <input type="number" value={stat.value} onChange={(e) => updateArrayItem('stats', idx, 'value', parseInt(e.target.value) || 0)} className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+   985→                    <button type="button" onClick={() => removeArrayItem('stats', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+   986→                  </div>
+   987→                ))}
+   988→              </div>
+   989→            </>
+   990→          )}
+   991→          {editSection === 'sportsSection' && (
+   992→            <>
+   993→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+   994→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+   995→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+   996→              {(getArray('sports') as Array<Record<string, unknown>>).map((sport, idx) => (
+   997→                <div key={idx} className="p-3 rounded-xl border border-white/10 space-y-2">
+   998→                  <div className="flex items-center gap-2 text-cm-primary text-xs font-bold font-[family-name:var(--font-sora)]">
+   999→                    <span className="material-symbols-outlined text-[16px]">sports</span>
+  1000→                    {sport.label || `Deporte #${idx + 1}`}
+  1001→                  </div>
+  1002→                  <div className="grid grid-cols-2 gap-2">
+  1003→                    <FormField label="Nombre" value={String(sport.label || '')} onChange={(v) => updateArrayItem('sports', idx, 'label', v)} />
+  1004→                    <FormField label="Precio" value={String(sport.priceRange || '')} onChange={(v) => updateArrayItem('sports', idx, 'priceRange', v)} />
+  1005→                  </div>
+  1006→                  <div className="grid grid-cols-2 gap-2">
+  1007→                    <FormField label="Cantidad" value={String(sport.count || '')} onChange={(v) => updateArrayItem('sports', idx, 'count', v)} type="number" />
+  1008→                    <FormField label="Badge" value={String(sport.badge || '')} onChange={(v) => updateArrayItem('sports', idx, 'badge', v)} />
+  1009→                  </div>
+  1010→                  <ArrayField label="Amenidades" items={(sport.amenities as string[]) || []} onChange={(items) => updateArrayItem('sports', idx, 'amenities', items)} />
+  1011→                  <ImageUploader label={`Imagen de ${sport.label || 'deporte'}`} path={`sports.${idx}.image`} currentUrl={String(sport.image || '')} />
+  1012→                  {/* Pricing details editor */}
+  1013→                  <div>
+  1014→                    <div className="flex items-center justify-between mb-1.5">
+  1015→                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Detalles de precio</label>
+  1016→                      <button type="button" onClick={() => {
+  1017→                        const pricing = (sport.pricingDetails as Array<Record<string, unknown>>) || []
+  1018→                        updateArrayItem('sports', idx, 'pricingDetails', [...pricing, { label: 'Nuevo turno', timeRange: '', price: 0 }])
+  1019→                      }} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1020→                        <span className="material-symbols-outlined text-[14px]">add</span> Agregar turno
+  1021→                      </button>
+  1022→                    </div>
+  1023→                    {((sport.pricingDetails as Array<Record<string, unknown>>) || []).map((pd, pdIdx) => (
+  1024→                      <div key={pdIdx} className="flex items-center gap-1.5 mb-1.5 p-2 rounded-lg bg-cm-surface-container-highest/20">
+  1025→                        <input value={String(pd.label || '')} onChange={(e) => {
+  1026→                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1027→                          arr[pdIdx] = { ...arr[pdIdx], label: e.target.value }
+  1028→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1029→                        }} placeholder="Turno" className="w-20 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1030→                        <input value={String(pd.timeRange || '')} onChange={(e) => {
+  1031→                          const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1032→                          arr[pdIdx] = { ...arr[pdIdx], timeRange: e.target.value }
+  1033→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1034→                        }} placeholder="7:00 - 5:00 PM" className="flex-1 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1035→                        <div className="flex items-center gap-0.5">
+  1036→                          <span className="text-[10px] text-cm-on-surface-variant">S/.</span>
+  1037→                          <input type="number" value={String(pd.price || 0)} onChange={(e) => {
+  1038→                            const arr = [...((sport.pricingDetails as Array<Record<string, unknown>>) || [])]
+  1039→                            arr[pdIdx] = { ...arr[pdIdx], price: parseFloat(e.target.value) || 0 }
+  1040→                            updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1041→                          }} className="w-14 px-2 py-1.5 bg-transparent border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1042→                        </div>
+  1043→                        <button type="button" onClick={() => {
+  1044→                          const arr = ((sport.pricingDetails as Array<Record<string, unknown>>) || []).filter((_, i) => i !== pdIdx)
+  1045→                          updateArrayItem('sports', idx, 'pricingDetails', arr)
+  1046→                        }} className="p-1 rounded text-red-400 hover:bg-red-500/10">
+  1047→                          <span className="material-symbols-outlined text-[14px]">delete</span>
+  1048→                        </button>
+  1049→                      </div>
+  1050→                    ))}
+  1051→                  </div>
+  1052→                </div>
+  1053→              ))}
+  1054→            </>
+  1055→          )}
+  1056→          {editSection === 'featuredCourts' && (
+  1057→            <>
+  1058→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} placeholder="Ej. Nuestras canchas" />
+  1059→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} placeholder="Canchas Destacadas" />
+  1060→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" placeholder="Elige tu espacio ideal y reserva al instante" />
+  1061→              <FormField label="Texto del botón CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} placeholder="Ver Todas" />
+  1062→              <div className="p-3 rounded-xl bg-cm-surface-container-highest/20 border border-white/5">
+  1063→                <p className="text-[10px] text-cm-on-surface-variant flex items-center gap-1.5">
+  1064→                  <span className="material-symbols-outlined text-[14px]">info</span>
+  1065→                  Las canchas mostradas provienen del módulo "Canchas". Usa esa pestaña para editar nombres, precios e imágenes de cada cancha.
+  1066→                </p>
+  1067→              </div>
+  1068→            </>
+  1069→          )}
+  1070→          {editSection === 'promoBanner' && (
+  1071→            <>
+  1072→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+  1073→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+  1074→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+  1075→              <FormField label="Texto CTA" value={getField('ctaText')} onChange={(v) => updateField('ctaText', v)} />
+  1076→              <div>
+  1077→                <div className="flex items-center justify-between mb-2">
+  1078→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Puntos de venta</label>
+  1079→                  <button type="button" onClick={() => addArrayItem('sellingPoints', { icon: 'star', title: '', description: '', highlight: false })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1080→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1081→                  </button>
+  1082→                </div>
+  1083→                {(getArray('sellingPoints') as Array<Record<string, unknown>>).map((pt, idx) => (
+  1084→                  <div key={idx} className="p-2 rounded-lg border border-white/10 mb-2 space-y-2">
+  1085→                    <div className="flex items-center justify-between">
+  1086→                      <span className="text-[10px] text-cm-on-surface-variant font-semibold">#{idx + 1}</span>
+  1087→                      <div className="flex items-center gap-2">
+  1088→                        <label className="flex items-center gap-1 text-[10px] text-cm-primary cursor-pointer">
+  1089→                          <input type="checkbox" checked={!!pt.highlight} onChange={(e) => updateArrayItem('sellingPoints', idx, 'highlight', e.target.checked)} className="accent-green-500" />
+  1090→                          Destacado
+  1091→                        </label>
+  1092→                        <button type="button" onClick={() => removeArrayItem('sellingPoints', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+  1093→                      </div>
+  1094→                    </div>
+  1095→                    <div className="grid grid-cols-3 gap-2">
+  1096→                      <FormField label="Icono" value={String(pt.icon || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'icon', v)} />
+  1097→                      <FormField label="Título" value={String(pt.title || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'title', v)} />
+  1098→                      <FormField label="Descripción" value={String(pt.description || '')} onChange={(v) => updateArrayItem('sellingPoints', idx, 'description', v)} />
+  1099→                    </div>
+  1100→                  </div>
+  1101→                ))}
+  1102→              </div>
+  1103→              <div>
+  1104→                <div className="flex items-center justify-between mb-2">
+  1105→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Métodos de pago</label>
+  1106→                  <button type="button" onClick={() => addArrayItem('paymentMethods', { name: '', icon: 'payments', color: 'text-gray-400' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1107→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1108→                  </button>
+  1109→                </div>
+  1110→                {(getArray('paymentMethods') as Array<Record<string, unknown>>).map((pm, idx) => (
+  1111→                  <div key={idx} className="flex items-center gap-2 mb-2">
+  1112→                    <input value={String(pm.name || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'name', e.target.value)} placeholder="Nombre" className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1113→                    <input value={String(pm.icon || '')} onChange={(e) => updateArrayItem('paymentMethods', idx, 'icon', e.target.value)} placeholder="Icono" className="w-28 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1114→                    <button type="button" onClick={() => removeArrayItem('paymentMethods', idx)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[16px]">delete</span></button>
+  1115→                  </div>
+  1116→                ))}
+  1117→              </div>
+  1118→            </>
+  1119→          )}
+  1120→          {editSection === 'howItWorks' && (
+  1121→            <>
+  1122→              <FormField label="Badge" value={getField('badge')} onChange={(v) => updateField('badge', v)} />
+  1123→              <FormField label="Título" value={getField('title')} onChange={(v) => updateField('title', v)} />
+  1124→              <FormField label="Subtítulo" value={getField('subtitle')} onChange={(v) => updateField('subtitle', v)} type="textarea" />
+  1125→              <div className="grid grid-cols-2 gap-3">
+  1126→                <FormField label="Texto WhatsApp" value={getField('whatsappText')} onChange={(v) => updateField('whatsappText', v)} />
+  1127→                <FormField label="Texto Soporte" value={getField('supportText')} onChange={(v) => updateField('supportText', v)} />
+  1128→              </div>
+  1129→              <div>
+  1130→                <div className="flex items-center justify-between mb-2">
+  1131→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Pasos</label>
+  1132→                  <button type="button" onClick={() => addArrayItem('steps', { number: '', title: '', description: '', icon: 'star', detail: '' })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1133→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar
+  1134→                  </button>
+  1135→                </div>
+  1136→                {(getArray('steps') as Array<Record<string, unknown>>).map((step, idx) => (
+  1137→                  <div key={idx} className="p-3 rounded-xl border border-white/10 mb-3 space-y-2">
+  1138→                    <div className="flex items-center justify-between">
+  1139→                      <span className="text-[10px] text-cm-primary font-bold font-[family-name:var(--font-sora)]">Paso {step.number || idx + 1}</span>
+  1140→                      <button type="button" onClick={() => removeArrayItem('steps', idx)} className="p-1 rounded text-red-400 hover:bg-red-500/10"><span className="material-symbols-outlined text-[14px]">delete</span></button>
+  1141→                    </div>
+  1142→                    <div className="grid grid-cols-2 gap-2">
+  1143→                      <FormField label="Título" value={String(step.title || '')} onChange={(v) => updateArrayItem('steps', idx, 'title', v)} />
+  1144→                      <FormField label="Icono" value={String(step.icon || '')} onChange={(v) => updateArrayItem('steps', idx, 'icon', v)} />
+  1145→                    </div>
+  1146→                    <FormField label="Descripción" value={String(step.description || '')} onChange={(v) => updateArrayItem('steps', idx, 'description', v)} type="textarea" rows={2} />
+  1147→                    <FormField label="Detalle" value={String(step.detail || '')} onChange={(v) => updateArrayItem('steps', idx, 'detail', v)} />
+  1148→                  </div>
+  1149→                ))}
+  1150→              </div>
+  1151→            </>
+  1152→          )}
+  1153→        </EditModal>
+  1154→      )}
+  1155→
+  1156→      {/* ═══════ CUSTOM SECTION MODAL ═══════ */}
+  1157→      <EditModal
+  1158→        open={!!editingCustom}
+  1159→        onClose={() => { setEditingCustom(null); setCustomForm(null) }}
+  1160→        title={customForm?.id && settings?.customSections.some((s) => s.id === customForm.id) ? 'Editar sección personalizada' : 'Nueva sección personalizada'}
+  1161→        onSave={handleSaveCustom}
+  1162→        saving={savingCustom}
+  1163→      >
+  1164→        {customForm && (
+  1165→          <>
+  1166→            <div>
+  1167→              <label className="text-xs text-cm-on-surface-variant font-semibold mb-1.5 block font-[family-name:var(--font-inter)]">Tipo de sección</label>
+  1168→              <select
+  1169→                value={customForm.type}
+  1170→                onChange={(e) => setCustomForm({ ...customForm, type: e.target.value as CustomSection['type'] })}
+  1171→                className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40"
+  1172→              >
+  1173→                <option value="banner">Banner (imagen completa)</option>
+  1174→                <option value="notice">Aviso / Noticia</option>
+  1175→                <option value="highlight">Destacado</option>
+  1176→                <option value="cta">Llamada a la acción (CTA)</option>
+  1177→                <option value="gallery">Galería de imágenes</option>
+  1178→              </select>
+  1179→            </div>
+  1180→            <FormField label="Título" value={customForm.title} onChange={(v) => setCustomForm({ ...customForm, title: v })} />
+  1181→            <FormField label="Subtítulo" value={customForm.subtitle || ''} onChange={(v) => setCustomForm({ ...customForm, subtitle: v })} type="textarea" />
+  1182→            {customForm.type !== 'notice' && (
+  1183→              <ImageUploader label="Imagen" path="" currentUrl={customForm.image || ''} onUpload={(url) => setCustomForm({ ...customForm, image: url })} uploadId="custom-image" />
+  1184→            )}
+  1185→            <FormField label="Enlace (URL opcional)" value={customForm.link || ''} onChange={(v) => setCustomForm({ ...customForm, link: v })} />
+  1186→            {(customForm.type === 'banner' || customForm.type === 'cta') && (
+  1187→              <FormField label="Texto del botón CTA" value={customForm.ctaText || ''} onChange={(v) => setCustomForm({ ...customForm, ctaText: v })} />
+  1188→            )}
+  1189→            {/* Gallery items management */}
+  1190→            {customForm.type === 'gallery' && (
+  1191→              <div>
+  1192→                <div className="flex items-center justify-between mb-1.5">
+  1193→                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">Imágenes de la galería</label>
+  1194→                  <button type="button" onClick={() => setCustomForm({
+  1195→                    ...customForm,
+  1196→                    items: [...(customForm.items || []), { image: '', title: '', description: '' }],
+  1197→                  })} className="text-[10px] font-semibold text-cm-primary flex items-center gap-1">
+  1198→                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar imagen
+  1199→                  </button>
+  1200→                </div>
+  1201→                <div className="grid grid-cols-2 gap-2">
+  1202→                  {(customForm.items || []).map((item, idx) => (
+  1203→                    <div key={idx} className="rounded-xl border border-white/10 p-2 space-y-1.5">
+  1204→                      {item.image ? (
+  1205→                        <div className="relative group rounded-lg overflow-hidden">
+  1206→                          <img src={item.image} alt={item.title || ''} className="w-full h-20 object-cover" />
+  1207→                          <button type="button" onClick={() => {
+  1208→                            const items = [...(customForm.items || [])]
+  1209→                            items[idx] = { ...items[idx], image: '' }
+  1210→                            setCustomForm({ ...customForm, items })
+  1211→                          }} className="absolute top-1 right-1 p-0.5 rounded bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+  1212→                            <span className="material-symbols-outlined text-[12px]">close</span>
+  1213→                          </button>
+  1214→                        </div>
+  1215→                      ) : (
+  1216→                        <label className="flex items-center justify-center h-20 rounded-lg border border-dashed border-white/10 cursor-pointer hover:border-cm-primary/30 transition-colors">
+  1217→                          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+  1218→                            const file = e.target.files?.[0]
+  1219→                            if (file) {
+  1220→                              const fd = new FormData()
+  1221→                              fd.append('file', file)
+  1222→                              fd.append('folder', 'gallery')
+  1223→                              fetch('/api/upload', { method: 'POST', body: fd })
+  1224→                                .then((r) => r.json())
+  1225→                                .then((data) => {
+  1226→                                  const items = [...(customForm.items || [])]
+  1227→                                  items[idx] = { ...items[idx], image: data.url }
+  1228→                                  setCustomForm({ ...customForm, items })
+  1229→                                  toast({ title: 'Imagen subida' })
+  1230→                                })
+  1231→                                .catch(() => toast({ title: 'Error al subir', variant: 'destructive' }))
+  1232→                            }
+  1233→                            e.target.value = ''
+  1234→                          }} />
+  1235→                          <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[20px]">add_photo_alternate</span>
+  1236→                        </label>
+  1237→                      )}
+  1238→                      <input value={item.title || ''} onChange={(e) => {
+  1239→                        const items = [...(customForm.items || [])]
+  1240→                        items[idx] = { ...items[idx], title: e.target.value }
+  1241→                        setCustomForm({ ...customForm, items })
+  1242→                      }} placeholder="Título" className="w-full px-2 py-1 bg-transparent border border-white/10 rounded-lg text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+  1243→                      <button type="button" onClick={() => {
+  1244→                        const items = (customForm.items || []).filter((_, i) => i !== idx)
+  1245→                        setCustomForm({ ...customForm, items })
+  1246→                      }} className="flex items-center gap-1 text-red-400 hover:text-red-300 text-[10px]">
+  1247→                        <span className="material-symbols-outlined text-[12px]">delete</span> Eliminar
+  1248→                      </button>
+  1249→                    </div>
+  1250→                  ))}
+  1251→                </div>
+  1252→              </div>
+  1253→            )}
+  1254→            <div className="flex items-center gap-2">
+  1255→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1256→                <input type="checkbox" checked={customForm.visible} onChange={(e) => setCustomForm({ ...customForm, visible: e.target.checked })} className="accent-green-500" />
+  1257→                Sección visible
+  1258→              </label>
+  1259→            </div>
+  1260→          </>
+  1261→        )}
+  1262→      </EditModal>
+  1263→
+  1264→      {/* ═══════ PROMOTION MODAL ═══════ */}
+  1265→      <EditModal
+  1266→        open={!!editingPromo}
+  1267→        onClose={() => { setEditingPromo(null); setPromoForm(null) }}
+  1268→        title="Promoción"
+  1269→        onSave={handleSavePromo}
+  1270→        saving={savingPromo}
+  1271→      >
+  1272→        {promoForm && (
+  1273→          <>
+  1274→            <FormField label="Título" value={promoForm.title} onChange={(v) => setPromoForm({ ...promoForm, title: v })} />
+  1275→            <FormField label="Descripción" value={promoForm.description} onChange={(v) => setPromoForm({ ...promoForm, description: v })} type="textarea" />
+  1276→            <div className="grid grid-cols-2 gap-3">
+  1277→              <FormField label="Descuento (ej. 20%)" value={promoForm.discount || ''} onChange={(v) => setPromoForm({ ...promoForm, discount: v })} />
+  1278→              <div className="flex items-center gap-2">
+  1279→                <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1280→                  <input type="checkbox" checked={promoForm.active} onChange={(e) => setPromoForm({ ...promoForm, active: e.target.checked })} className="accent-green-500" />
+  1281→                  Activar
+  1282→                </label>
+  1283→              </div>
+  1284→            </div>
+  1285→            <div className="grid grid-cols-2 gap-3">
+  1286→              <FormField label="Válido desde" value={promoForm.validFrom || ''} onChange={(v) => setPromoForm({ ...promoForm, validFrom: v })} />
+  1287→              <FormField label="Válido hasta" value={promoForm.validUntil || ''} onChange={(v) => setPromoForm({ ...promoForm, validUntil: v })} />
+  1288→            </div>
+  1289→            <ImageUploader label="Imagen de promoción" path="" currentUrl={promoForm.image || ''} onUpload={(url) => setPromoForm({ ...promoForm, image: url })} uploadId="promo-image" />
+  1290→          </>
+  1291→        )}
+  1292→      </EditModal>
+  1293→
+  1294→      {/* ═══════ HERO BANNER MODAL ═══════ */}
+  1295→      <EditModal
+  1296→        open={!!editingBanner}
+  1297→        onClose={() => { setEditingBanner(null); setBannerForm(null) }}
+  1298→        title="Banner del Hero"
+  1299→        onSave={handleSaveBanner}
+  1300→        saving={savingBanner}
+  1301→      >
+  1302→        {bannerForm && (
+  1303→          <>
+  1304→            <FormField label="Título" value={bannerForm.title || ''} onChange={(v) => setBannerForm({ ...bannerForm, title: v })} />
+  1305→            <FormField label="Subtítulo" value={bannerForm.subtitle || ''} onChange={(v) => setBannerForm({ ...bannerForm, subtitle: v })} />
+  1306→            <FormField label="Enlace (URL)" value={bannerForm.link || ''} onChange={(v) => setBannerForm({ ...bannerForm, link: v })} />
+  1307→            <ImageUploader label="Imagen del banner" path="" currentUrl={bannerForm.image || ''} onUpload={(url) => setBannerForm({ ...bannerForm, image: url })} uploadId="banner-image" />
+  1308→            <div className="flex items-center gap-2">
+  1309→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1310→                <input type="checkbox" checked={bannerForm.active} onChange={(e) => setBannerForm({ ...bannerForm, active: e.target.checked })} className="accent-green-500" />
+  1311→                Banner activo
+  1312→              </label>
+  1313→            </div>
+  1314→          </>
+  1315→        )}
+  1316→      </EditModal>
+  1317→
+  1318→      {/* ═══════ NEWS MODAL ═══════ */}
+  1319→      <EditModal
+  1320→        open={!!editingNews}
+  1321→        onClose={() => { setEditingNews(null); setNewsForm(null) }}
+  1322→        title={newsForm?.id && settings?.news.some((n) => n.id === newsForm.id) ? 'Editar noticia' : 'Nueva noticia'}
+  1323→        onSave={handleSaveNews}
+  1324→        saving={savingNews}
+  1325→      >
+  1326→        {newsForm && (
+  1327→          <>
+  1328→            <FormField label="Título" value={newsForm.title} onChange={(v) => setNewsForm({ ...newsForm, title: v })} placeholder="Título de la noticia" />
+  1329→            <FormField label="Contenido" value={newsForm.content} onChange={(v) => setNewsForm({ ...newsForm, content: v })} type="textarea" rows={4} placeholder="Escribe el contenido o descripción de la noticia..." />
+  1330→            <FormField label="Enlace (URL opcional)" value={newsForm.link || ''} onChange={(v) => setNewsForm({ ...newsForm, link: v })} placeholder="https://..." />
+  1331→            <ImageUploader label="Imagen de la noticia" path="" currentUrl={newsForm.image || ''} onUpload={(url) => setNewsForm({ ...newsForm, image: url })} uploadId="news-image" />
+  1332→            <div className="grid grid-cols-2 gap-3">
+  1333→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1334→                <input type="checkbox" checked={newsForm.active} onChange={(e) => setNewsForm({ ...newsForm, active: e.target.checked })} className="accent-green-500" />
+  1335→                Publicada (activa)
+  1336→              </label>
+  1337→              <label className="flex items-center gap-2 text-xs text-cm-on-surface-variant cursor-pointer">
+  1338→                <input type="checkbox" checked={newsForm.pinned} onChange={(e) => setNewsForm({ ...newsForm, pinned: e.target.checked })} className="accent-cm-primary" />
+  1339→                Fijar como destacada
+  1340→              </label>
+  1341→            </div>
+  1342→          </>
+  1343→        )}
+  1344→      </EditModal>
+  1345→
+  1346→      {/* ═══════ PREVIEW MODAL ═══════ */}
+  1347→      <AnimatePresence>
+  1348→        {showPreview && (
+  1349→          <motion.div
+  1350→            initial={{ opacity: 0 }}
+  1351→            animate={{ opacity: 1 }}
+  1352→            exit={{ opacity: 0 }}
+  1353→            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+  1354→            onClick={() => setShowPreview(false)}
+  1355→          >
+  1356→            <motion.div
+  1357→              initial={{ y: 40, opacity: 0, scale: 0.95 }}
+  1358→              animate={{ y: 0, opacity: 1, scale: 1 }}
+  1359→              exit={{ y: 40, opacity: 0, scale: 0.95 }}
+  1360→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+  1361→              className="w-full max-w-5xl max-h-[90vh] glass-card rounded-2xl overflow-hidden flex flex-col border-cm-primary/20"
+  1362→              onClick={(e) => e.stopPropagation()}
+  1363→            >
+  1364→              <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-cm-surface-container/50">
+  1365→                <div className="flex items-center gap-2">
+  1366→                  <span className="material-symbols-outlined text-cm-primary text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>preview</span>
+  1367→                  <h2 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">Vista Previa — Inicio</h2>
+  1368→                </div>
+  1369→                <div className="flex items-center gap-2">
+  1370→                  <span className="px-2 py-1 rounded-lg bg-cm-primary/10 text-cm-primary text-[10px] font-bold">{sectionOrder.filter((k) => {
+  1371→                    const v = k.startsWith('custom_') ? customSections.find((s) => s.id === k.replace('custom_', ''))?.visible ?? true : (visibility[k as keyof typeof visibility] ?? true)
+  1372→                    return v
+  1373→                  }).length} secciones visibles</span>
+  1374→                  <button type="button" onClick={() => setShowPreview(false)} className="p-1.5 rounded-full hover:bg-cm-surface-container-highest transition-colors">
+  1375→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+  1376→                  </button>
+  1377→                </div>
+  1378→              </div>
+  1379→              <div className="flex-1 overflow-y-auto bg-cm-background/50">
+  1380→                {/* Mobile frame preview */}
+  1381→                <div className="flex justify-center py-6 px-4">
+  1382→                  <div className="w-full max-w-[390px] bg-cm-background rounded-[2rem] shadow-2xl shadow-black/40 overflow-hidden border border-white/10">
+  1383→                    {/* Status bar */}
+  1384→                    <div className="flex items-center justify-between px-6 pt-3 pb-1">
+  1385→                      <span className="text-[10px] text-cm-on-surface-variant font-medium">9:41</span>
+  1386→                      <div className="w-20 h-5 bg-cm-on-surface rounded-full"></div>
+  1387→                      <div className="flex items-center gap-1">
+  1388→                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">signal_cellular_alt</span>
+  1389→                        <span className="material-symbols-outlined text-[12px] text-cm-on-surface-variant">battery_full</span>
+  1390→                      </div>
+  1391→                    </div>
+  1392→                    {/* Content preview */}
+  1393→                    <div className="overflow-y-auto max-h-[70vh]">
+  1394→                      {sectionOrder.map((key) => {
+  1395→                        const isVisible = key.startsWith('custom_')
+  1396→                          ? customSections.find((s) => s.id === key.replace('custom_', ''))?.visible ?? true
+  1397→                          : (visibility[key as keyof typeof visibility] ?? true)
+  1398→                        if (!isVisible) return null
+  1399→
+  1400→                        return (
+  1401→                          <div key={key} className="relative">
+  1402→                            {/* Hidden sections indicator */}
+  1403→                            {!isVisible && (
+  1404→                              <div className="px-4 py-2 bg-white/5 border-l-2 border-gray-500/50">
+  1405→                                <span className="text-[10px] text-cm-on-surface-variant/50 font-medium">OCULTO — {sectionMeta[key]?.label || key}</span>
+  1406→                              </div>
+  1407→                            )}
+  1408→
+  1409→                            {/* ── Hero Section Preview ── */}
+  1410→                            {key === 'hero' && (
+  1411→                              <div className="relative overflow-hidden">
+  1412→                                {settings.hero.backgroundImage ? (
+  1413→                                  <img src={settings.hero.backgroundImage} alt="" className="w-full h-56 object-cover" />
+  1414→                                ) : (
+  1415→                                  <div className="w-full h-56 bg-gradient-to-br from-cm-primary/30 to-cm-primary/5" />
+  1416→                                )}
+  1417→                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+  1418→                                <div className="absolute bottom-0 left-0 right-0 p-5">
+  1419→                                  <div className="flex items-center gap-1.5 mb-2">
+  1420→                                    <span className="material-symbols-outlined text-[12px] text-cm-primary">location_on</span>
+  1421→                                    <span className="text-[10px] text-white/70">{settings.hero.location}</span>
+  1422→                                  </div>
+  1423→                                  <div className="px-2.5 py-1 rounded-full bg-cm-primary/20 backdrop-blur-sm inline-block mb-2">
+  1424→                                    <span className="text-[10px] text-cm-primary font-bold">{settings.hero.badge}</span>
+  1425→                                  </div>
+  1426→                                  <h3 className="text-lg font-bold text-white font-[family-name:var(--font-sora)] leading-tight">
+  1427→                                    {settings.hero.headline} <span className="text-cm-primary">{settings.hero.headlineHighlight}</span>
+  1428→                                  </h3>
+  1429→                                  <p className="text-[10px] text-white/60 mt-1 line-clamp-2">{settings.hero.subtitle}</p>
+  1430→                                  <div className="flex gap-3 mt-3">
+  1431→                                    {settings.hero.stats.map((stat, i) => (
+  1432→                                      <div key={i} className="text-center">
+  1433→                                        <span className="text-sm font-bold text-white font-[family-name:var(--font-sora)]">{stat.value}</span>
+  1434→                                        <p className="text-[9px] text-white/50">{stat.label}</p>
+  1435→                                      </div>
+  1436→                                    ))}
+  1437→                                  </div>
+  1438→                                </div>
+  1439→                              </div>
+  1440→                            )}
+  1441→
+  1442→                            {/* ── Sports Section Preview ── */}
+  1443→                            {key === 'sportsSection' && (
+  1444→                              <div className="p-4">
+  1445→                                <div className="px-2.5 py-1 rounded-full bg-green-500/15 inline-block mb-1">
+  1446→                                  <span className="text-[10px] text-green-400 font-bold">{settings.sportsSection.badge}</span>
+  1447→                                </div>
+  1448→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.sportsSection.title}</h3>
+  1449→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.sportsSection.subtitle}</p>
+  1450→                                <div className="mt-3 space-y-3">
+  1451→                                  {settings.sportsSection.sports.map((sport) => (
+  1452→                                    <div key={sport.id} className="rounded-xl overflow-hidden border border-white/10">
+  1453→                                      {sport.image ? (
+  1454→                                        <img src={sport.image} alt={sport.label} className="w-full h-28 object-cover" />
+  1455→                                      ) : (
+  1456→                                        <div className="w-full h-28 bg-cm-surface-container-highest flex items-center justify-center">
+  1457→                                          <span className="material-symbols-outlined text-3xl text-cm-on-surface-variant/20">{sport.icon || 'sports'}</span>
+  1458→                                        </div>
+  1459→                                      )}
+  1460→                                      <div className="p-3">
+  1461→                                        <div className="flex items-center justify-between">
+  1462→                                          <div className="flex items-center gap-2">
+  1463→                                            <span className="font-bold text-sm text-cm-on-surface font-[family-name:var(--font-sora)]">{sport.label}</span>
+  1464→                                            {sport.badge && (
+  1465→                                              <span className="px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[8px] font-bold">{sport.badge}</span>
+  1466→                                            )}
+  1467→                                          </div>
+  1468→                                          <span className="text-sm font-bold text-cm-primary">{sport.priceRange}</span>
+  1469→                                        </div>
+  1470→                                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+  1471→                                          {sport.pricingDetails?.map((pd, i) => (
+  1472→                                            <span key={i} className="px-2 py-0.5 rounded-lg bg-white/5 text-[9px] text-cm-on-surface-variant">
+  1473→                                              {pd.label}: {pd.timeRange} — S/. {pd.price}
+  1474→                                            </span>
+  1475→                                          ))}
+  1476→                                        </div>
+  1477→                                        <div className="flex gap-1 mt-2 flex-wrap">
+  1478→                                          {sport.amenities.map((a, i) => (
+  1479→                                            <span key={i} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] text-cm-on-surface-variant">{a}</span>
+  1480→                                          ))}
+  1481→                                        </div>
+  1482→                                      </div>
+  1483→                                    </div>
+  1484→                                  ))}
+  1485→                                </div>
+  1486→                              </div>
+  1487→                            )}
+  1488→
+  1489→                            {/* ── Featured Courts Preview ── */}
+  1490→                            {key === 'featuredCourts' && (
+  1491→                              <div className="p-4">
+  1492→                                {settings.featuredCourts?.badge && (
+  1493→                                  <div className="px-2.5 py-1 rounded-full bg-teal-500/15 inline-block mb-1">
+  1494→                                    <span className="text-[10px] text-teal-400 font-bold">{settings.featuredCourts.badge}</span>
+  1495→                                  </div>
+  1496→                                )}
+  1497→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1">{settings.featuredCourts?.title || 'Canchas Destacadas'}</h3>
+  1498→                                <p className="text-[10px] text-cm-on-surface-variant mb-3">{settings.featuredCourts?.subtitle || 'Reserva tu espacio favorito'}</p>
+  1499→                                <div className="grid grid-cols-2 gap-2">
+  1500→                                  {['Cancha Fútbol 1', 'Cancha Fútbol 2', 'Cancha Vóley A', 'Cancha Vóley B'].map((name, i) => (
+  1501→                                    <div key={i} className="rounded-xl border border-white/10 p-2.5 bg-cm-surface-container/30">
+  1502→                                      <div className="w-full h-16 rounded-lg bg-cm-surface-container-highest flex items-center justify-center mb-1.5">
+  1503→                                        <span className="material-symbols-outlined text-xl text-cm-on-surface-variant/20">{i < 2 ? 'sports_soccer' : 'sports_volleyball'}</span>
+  1504→                                      </div>
+  1505→                                      <span className="text-[10px] font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{name}</span>
+  1506→                                    </div>
+  1507→                                  ))}
+  1508→                                </div>
+  1509→                              </div>
+  1510→                            )}
+  1511→
+  1512→                            {/* ── Promo Banner Preview ── */}
+  1513→                            {key === 'promoBanner' && (
+  1514→                              <div className="p-4">
+  1515→                                <div className="px-2.5 py-1 rounded-full bg-purple-500/15 inline-block mb-1">
+  1516→                                  <span className="text-[10px] text-purple-400 font-bold">{settings.promoBanner.badge}</span>
+  1517→                                </div>
+  1518→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.promoBanner.title}</h3>
+  1519→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{settings.promoBanner.subtitle}</p>
+  1520→                                <div className="mt-3 space-y-2">
+  1521→                                  {settings.promoBanner.sellingPoints.map((sp, i) => (
+  1522→                                    <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl ${sp.highlight ? 'bg-cm-primary/10 border border-cm-primary/20' : 'bg-white/5'}`}>
+  1523→                                      <span className="material-symbols-outlined text-[18px] text-cm-primary mt-0.5" style={{ fontVariationSettings: '"FILL" 1' }}>{sp.icon || 'star'}</span>
+  1524→                                      <div>
+  1525→                                        <span className="text-xs font-bold text-cm-on-surface">{sp.title}</span>
+  1526→                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5">{sp.description}</p>
+  1527→                                      </div>
+  1528→                                    </div>
+  1529→                                  ))}
+  1530→                                </div>
+  1531→                                <div className="mt-3 flex items-center gap-2">
+  1532→                                  {settings.promoBanner.paymentMethods.map((pm, i) => (
+  1533→                                    <span key={i} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5">
+  1534→                                      <span className="material-symbols-outlined text-[12px]">{pm.icon}</span>
+  1535→                                      <span className="text-[9px] text-cm-on-surface-variant">{pm.name}</span>
+  1536→                                    </span>
+  1537→                                  ))}
+  1538→                                </div>
+  1539→                              </div>
+  1540→                            )}
+  1541→
+  1542→                            {/* ── How It Works Preview ── */}
+  1543→                            {key === 'howItWorks' && (
+  1544→                              <div className="p-4">
+  1545→                                <div className="px-2.5 py-1 rounded-full bg-sky-500/15 inline-block mb-1">
+  1546→                                  <span className="text-[10px] text-sky-400 font-bold">{settings.howItWorks.badge}</span>
+  1547→                                </div>
+  1548→                                <h3 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{settings.howItWorks.title}</h3>
+  1549→                                <p className="text-[10px] text-cm-on-surface-variant mt-0.5 mb-3">{settings.howItWorks.subtitle}</p>
+  1550→                                <div className="space-y-2.5">
+  1551→                                  {settings.howItWorks.steps.map((step, i) => (
+  1552→                                    <div key={i} className="flex items-start gap-3">
+  1553→                                      <div className="w-8 h-8 rounded-full bg-cm-primary/15 flex items-center justify-center flex-shrink-0">
+  1554→                                        <span className="text-[10px] font-bold text-cm-primary">{step.number}</span>
+  1555→                                      </div>
+  1556→                                      <div className="flex-1 pt-0.5">
+  1557→                                        <span className="text-xs font-bold text-cm-on-surface">{step.title}</span>
+  1558→                                        <p className="text-[9px] text-cm-on-surface-variant mt-0.5 line-clamp-2">{step.description}</p>
+  1559→                                      </div>
+  1560→                                      {i < settings.howItWorks.steps.length - 1 && (
+  1561→                                        <div className="absolute left-[22px] top-8 w-0.5 h-3 bg-cm-primary/20" />
+  1562→                                      )}
+  1563→                                    </div>
+  1564→                                  ))}
+  1565→                                </div>
+  1566→                              </div>
+  1567→                            )}
+  1568→
+  1569→                            {/* ── Custom Section Preview ── */}
+  1570→                            {key.startsWith('custom_') && (() => {
+  1571→                              const cs = customSections.find((s) => s.id === key.replace('custom_', ''))
+  1572→                              if (!cs) return null
+  1573→                              const typeConfig: Record<string, { color: string; icon: string }> = {
+  1574→                                banner: { color: 'border-l-cm-primary', icon: 'image' },
+  1575→                                notice: { color: 'border-l-amber-400', icon: 'campaign' },
+  1576→                                highlight: { color: 'border-l-purple-400', icon: 'star' },
+  1577→                                cta: { color: 'border-l-sky-400', icon: 'touch_app' },
+  1578→                                gallery: { color: 'border-l-teal-400', icon: 'photo_library' },
+  1579→                              }
+  1580→                              const cfg = typeConfig[cs.type] || typeConfig.banner
+  1581→                              return (
+  1582→                                <div className={`border-l-2 ${cfg.color} p-3 mx-4 my-2 rounded-r-xl bg-white/5`}>
+  1583→                                  {cs.image && (
+  1584→                                    <img src={cs.image} alt={cs.title} className="w-full h-32 object-cover rounded-lg mb-2" />
+  1585→                                  )}
+  1586→                                  <div className="flex items-center gap-1.5 mb-1">
+  1587→                                    <span className="material-symbols-outlined text-[14px] text-cm-on-surface-variant">{cfg.icon}</span>
+  1588→                                    <span className="text-[10px] text-cm-on-surface-variant/60 font-semibold uppercase">{cs.type}</span>
+  1589→                                  </div>
+  1590→                                  <h4 className="text-sm font-bold text-cm-on-surface">{cs.title}</h4>
+  1591→                                  {cs.subtitle && <p className="text-[10px] text-cm-on-surface-variant mt-0.5">{cs.subtitle}</p>}
+  1592→                                  {cs.ctaText && (
+  1593→                                    <div className="mt-2">
+  1594→                                      <span className="px-3 py-1.5 rounded-lg bg-cm-primary text-cm-on-primary text-[10px] font-bold inline-block">{cs.ctaText}</span>
+  1595→                                    </div>
+  1596→                                  )}
+  1597→                                  {cs.type === 'gallery' && cs.items && cs.items.length > 0 && (
+  1598→                                    <div className="mt-2 grid grid-cols-3 gap-1">
+  1599→                                      {cs.items.map((item, i) => (
+  1600→                                        <img key={i} src={item.image} alt={item.title || ''} className="w-full h-16 object-cover rounded-lg" />
+  1601→                                      ))}
+  1602→                                    </div>
+  1603→                                  )}
+  1604→                                </div>
+  1605→                              )
+  1606→                            })()}
+  1607→                          </div>
+  1608→                        )
+  1609→                      })}
+  1610→
+  1611→                      {/* Active promotions strip */}
+  1612→                      {settings.activePromotions.filter((p) => p.active).length > 0 && (
+  1613→                        <div className="px-4 pb-3">
+  1614→                          <div className="rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/20 p-3">
+  1615→                            <div className="flex items-center gap-1.5 mb-2">
+  1616→                              <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>local_offer</span>
+  1617→                              <span className="text-[10px] text-amber-400 font-bold">Promociones</span>
+  1618→                            </div>
+  1619→                            <div className="flex gap-2 overflow-x-auto pb-1">
+  1620→                              {settings.activePromotions.filter((p) => p.active).map((p) => (
+  1621→                                <div key={p.id} className="flex-shrink-0 w-48 rounded-lg bg-white/5 p-2">
+  1622→                                  {p.image && <img src={p.image} alt={p.title} className="w-full h-16 object-cover rounded-md mb-1.5" />}
+  1623→                                  <div className="flex items-center gap-1">
+  1624→                                    <span className="text-[10px] font-bold text-cm-on-surface truncate">{p.title}</span>
+  1625→                                    {p.discount && <span className="px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[8px] font-bold flex-shrink-0">{p.discount}</span>}
+  1626→                                  </div>
+  1627→                                  {p.description && <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{p.description}</p>}
+  1628→                                </div>
+  1629→                              ))}
+  1630→                            </div>
+  1631→                          </div>
+  1632→                        </div>
+  1633→                      )}
+  1634→
+  1635→                      {/* Hero banners strip */}
+  1636→                      {settings.heroBanners.filter((b) => b.active).length > 0 && (
+  1637→                        <div className="px-4 pb-4">
+  1638→                          <div className="flex items-center gap-1.5 mb-2">
+  1639→                            <span className="material-symbols-outlined text-sky-400 text-[14px]">view_carousel</span>
+  1640→                            <span className="text-[10px] text-sky-400 font-bold">Carrusel Hero ({settings.heroBanners.filter((b) => b.active).length})</span>
+  1641→                          </div>
+  1642→                          <div className="flex gap-2 overflow-x-auto pb-1">
+  1643→                            {settings.heroBanners.filter((b) => b.active).map((b) => (
+  1644→                              <div key={b.id} className="flex-shrink-0 w-56 rounded-lg overflow-hidden border border-white/10">
+  1645→                                {b.image ? (
+  1646→                                  <img src={b.image} alt={b.title || ''} className="w-full h-24 object-cover" />
+  1647→                                ) : (
+  1648→                                  <div className="w-full h-24 bg-cm-surface-container-highest flex items-center justify-center">
+  1649→                                    <span className="material-symbols-outlined text-cm-on-surface-variant/20">image</span>
+  1650→                                  </div>
+  1651→                                )}
+  1652→                                <div className="p-2">
+  1653→                                  {b.title && <span className="text-[10px] font-bold text-cm-on-surface">{b.title}</span>}
+  1654→                                  {b.subtitle && <p className="text-[8px] text-cm-on-surface-variant">{b.subtitle}</p>}
+  1655→                                </div>
+  1656→                              </div>
+  1657→                            ))}
+  1658→                          </div>
+  1659→                        </div>
+  1660→                      )}
+  1661→
+  1662→                      {/* News strip */}
+  1663→                      {settings.news && settings.news.filter((n) => n.active).length > 0 && (
+  1664→                        <div className="px-4 pb-3">
+  1665→                          <div className="rounded-xl bg-gradient-to-r from-cm-primary/10 to-teal-500/10 border border-cm-primary/20 p-3">
+  1666→                            <div className="flex items-center gap-1.5 mb-2">
+  1667→                              <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>newspaper</span>
+  1668→                              <span className="text-[10px] text-cm-primary font-bold">Noticias</span>
+  1669→                            </div>
+  1670→                            <div className="space-y-2">
+  1671→                              {[...settings.news].filter((n) => n.active).sort((a, b) => (a.pinned && !b.pinned ? -1 : 0)).slice(0, 3).map((n) => (
+  1672→                                <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+  1673→                                  {n.image && <img src={n.image} alt={n.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />}
+  1674→                                  <div className="flex-1 min-w-0">
+  1675→                                    <div className="flex items-center gap-1">
+  1676→                                      {n.pinned && <span className="material-symbols-outlined text-[10px] text-cm-primary">push_pin</span>}
+  1677→                                      <span className="text-[10px] font-bold text-cm-on-surface truncate">{n.title}</span>
+  1678→                                    </div>
+  1679→                                    <p className="text-[8px] text-cm-on-surface-variant mt-0.5 line-clamp-1">{n.content}</p>
+  1680→                                  </div>
+  1681→                                </div>
+  1682→                              ))}
+  1683→                            </div>
+  1684→                          </div>
+  1685→                        </div>
+  1686→                      )}
+  1687→                    </div>
+  1688→                    {/* Bottom nav hint */}
+  1689→                    <div className="flex items-center justify-around py-2 border-t border-white/10 bg-cm-surface-container/50">
+  1690→                      {['home', 'search', 'calendar_month', 'person'].map((icon, i) => (
+  1691→                        <span key={i} className={`material-symbols-outlined text-[20px] ${i === 0 ? 'text-cm-primary' : 'text-cm-on-surface-variant/30'}`}>{icon}</span>
+  1692→                      ))}
+  1693→                    </div>
+  1694→                  </div>
+  1695→                </div>
+  1696→              </div>
+  1697→            </motion.div>
+  1698→          </motion.div>
+  1699→        )}
+  1700→      </AnimatePresence>
+  1701→    </>
+  1702→  )
+  1703→}
+  1704→
+  1705→/* ═══════════════════════════════════════════════════
+  1706→   COURTS MANAGEMENT TAB
+  1707→   ═══════════════════════════════════════════════════ */
+  1708→
+  1709→function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; name: string; sport?: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }>; onRefresh: () => void }) {
+  1710→  const [migrating, setMigrating] = useState(false)
+  1711→  const [editingCourt, setEditingCourt] = useState<string | null>(null)
+  1712→  const [editName, setEditName] = useState('')
+  1713→  const [editPrice, setEditPrice] = useState('')
+  1714→  const [editSchedule, setEditSchedule] = useState<PricingScheduleItem[]>([])
+  1715→  const [saving, setSaving] = useState(false)
+  1716→  const [showSchedule, setShowSchedule] = useState<string | null>(null)
+  1717→
+  1718→  const blockPresets = [
+  1719→    { label: 'Mañana', startHour: 7, endHour: 13, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+  1720→    { label: 'Tarde', startHour: 13, endHour: 18, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
+  1721→    { label: 'Noche', startHour: 18, endHour: 23, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
+  1722→  ]
+  1723→
+  1724→  const handleMigrate = async () => {
+  1725→    setMigrating(true)
+  1726→    try {
+  1727→      const res = await fetch('/api/migrate/courts', { method: 'PUT', headers: getAuthHeaders() })
+  1728→      if (res.ok) {
+  1729→        toast({ title: 'Migración exitosa', description: 'Canchas actualizadas correctamente en Firestore.' })
+  1730→        onRefresh()
+  1731→      } else {
+  1732→        const err = await res.json().catch(() => ({ error: 'Error' }))
+  1733→        toast({ title: 'Error en migración', description: err.error || 'No se pudo migrar', variant: 'destructive' })
+  1734→      }
+  1735→    } catch {
+  1736→      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+  1737→    } finally {
+  1738→      setMigrating(false)
+  1739→    }
+  1740→  }
+  1741→
+  1742→
+  1743→  // Check for overlapping blocks
+  1744→  const getOverlapWarnings = (schedule: PricingScheduleItem[]): string[] => {
+  1745→    const warnings: string[] = []
+  1746→    const sorted = [...schedule]
+  1747→      .filter(s => s.startHour < s.endHour)
+  1748→      .sort((a, b) => a.startHour - b.startHour)
+  1749→    for (let i = 0; i < sorted.length - 1; i++) {
+  1750→      if (sorted[i].endHour > sorted[i + 1].startHour) {
+  1751→        warnings.push(
+  1752→          `"${sorted[i].label}" (${fmtHour(sorted[i].startHour)}–${fmtHour(sorted[i].endHour)}) se solapa con "${sorted[i + 1].label}" (${fmtHour(sorted[i + 1].startHour)}–${fmtHour(sorted[i + 1].endHour)})`
+  1753→        )
+  1754→      }
+  1755→    }
+  1756→    return warnings
+  1757→  }
+  1758→
+  1759→  const getZeroPriceWarnings = (schedule: PricingScheduleItem[]): string[] => {
+  1760→    return schedule
+  1761→      .filter(s => s.startHour < s.endHour && s.pricePerHour <= 0)
+  1762→      .map(s => `"${s.label}" (${fmtHour(s.startHour)}–${fmtHour(s.endHour)}) tiene precio S/ 0 — no generará cobro`)
+  1763→  }
+  1764→
+  1765→  const handleSaveCourt = async () => {
+  1766→    if (!editingCourt || !editName) return
+  1767→
+  1768→    const overlaps = getOverlapWarnings(editSchedule)
+  1769→    if (overlaps.length > 0) {
+  1770→      toast({ title: 'Bloques solapados', description: overlaps[0], variant: 'destructive' })
+  1771→      return
+  1772→    }
+  1773→
+  1774→    const validSchedule = editSchedule
+  1775→      .filter(s => s.startHour < s.endHour)
+  1776→      .sort((a, b) => a.startHour - b.startHour)
+  1777→
+  1778→    const zeroWarnings = getZeroPriceWarnings(validSchedule)
+  1779→
+  1780→    setSaving(true)
+  1781→    try {
+  1782→      const res = await fetch('/api/admin/courts', {
+  1783→        method: 'PUT',
+  1784→        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+  1785→        body: JSON.stringify({
+  1786→          id: editingCourt,
+  1787→          name: editName,
+  1788→          price_per_hour: parseFloat(editPrice) || undefined,
+  1789→          pricing_schedule: validSchedule,
+  1790→        }),
+  1791→      })
+  1792→      if (res.ok) {
+  1793→        const blockCount = validSchedule.filter(s => s.pricePerHour > 0).length
+  1794→        const msg = blockCount > 0
+  1795→          ? `"${editName}" guardada con ${blockCount} bloque${blockCount > 1 ? 's' : ''} de tarifa activos.`
+  1796→          : `"${editName}" guardada. Todos los bloques tienen precio S/ 0 — se usará el precio base.`
+  1797→        toast({
+  1798→          title: 'Cancha actualizada',
+  1799→          description: msg,
+  1800→          ...(zeroWarnings.length > 0 && { variant: 'destructive' }),
+  1801→        })
+  1802→        setEditingCourt(null)
+  1803→        onRefresh()
+  1804→      } else {
+  1805→        const err = await res.json().catch(() => ({ error: 'Error' }))
+  1806→        toast({ title: 'Error', description: err.error || 'No se pudo actualizar', variant: 'destructive' })
+  1807→      }
+  1808→    } catch {
+  1809→      toast({ title: 'Error', description: 'Error de conexión', variant: 'destructive' })
+  1810→    } finally {
+  1811→      setSaving(false)
+  1812→    }
+  1813→  }
+  1814→
+  1815→  const startEdit = (court: { id: string; name: string; pricePerHour?: number; pricingSchedule?: PricingScheduleItem[] }) => {
+  1816→    setEditingCourt(court.id)
+  1817→    setEditName(court.name)
+  1818→    setEditPrice(String(court.pricePerHour || 0))
+  1819→    setEditSchedule(
+  1820→      Array.isArray(court.pricingSchedule) && court.pricingSchedule.length > 0
+  1821→        ? court.pricingSchedule.map(s => ({ ...s }))
+  1822→        : blockPresets.map(p => ({ label: p.label, startHour: p.startHour, endHour: p.endHour, pricePerHour: 0 }))
+  1823→    )
+  1824→  }
+  1825→
+  1826→  const updateScheduleItem = (idx: number, field: keyof PricingScheduleItem, value: string | number) => {
+  1827→    setEditSchedule(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s))
+  1828→  }
+  1829→
+  1830→  const addScheduleBlock = () => {
+  1831→    setEditSchedule(prev => [...prev, { label: 'Bloque', startHour: 0, endHour: 1, pricePerHour: 0 }])
+  1832→  }
+  1833→
+  1834→  const removeScheduleBlock = (idx: number) => {
+  1835→    setEditSchedule(prev => prev.filter((_, i) => i !== idx))
+  1836→  }
+  1837→
+  1838→  const sportLabels: Record<string, string> = { futbol: 'Fútbol 7', voley: 'Vóley' }
+  1839→  const sportColors: Record<string, string> = { futbol: 'bg-green-500/15 text-green-400 border-green-500/30', voley: 'bg-amber-500/15 text-amber-400 border-amber-500/30' }
+  1840→
+  1841→  const getBlockStyle = (label: string) => {
+  1842→    const l = label.toLowerCase()
+  1843→    if (l.includes('mañana') || l.includes('manana') || l.includes('dia')) return { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30', dot: 'bg-amber-400' }
+  1844→    if (l.includes('tarde')) return { color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30', dot: 'bg-orange-400' }
+  1845→    if (l.includes('noche')) return { color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', dot: 'bg-indigo-400' }
+  1846→    return { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', dot: 'bg-blue-400' }
+  1847→  }
+  1848→
+  1849→  return (
+  1850→    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+  1851→      {/* Header */}
+  1852→      <div className="flex items-center justify-between">
+  1853→        <div>
+  1854→          <h2 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Gestión de Canchas</h2>
+  1855→          <p className="text-cm-on-surface-variant text-xs mt-1 font-[family-name:var(--font-inter)]">
+  1856→            {allCourts.length} canchas registradas · Configura tarifas por bloques horarios
+  1857→          </p>
+  1858→        </div>
+  1859→        <button type="button"
+  1860→          onClick={handleMigrate}
+  1861→          disabled={migrating}
+  1862→          className="flex items-center gap-2 px-4 py-2.5 bg-[#00ff41]/10 text-[#00ff41] text-sm font-semibold rounded-xl border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all disabled:opacity-50 font-[family-name:var(--font-sora)]"
+  1863→        >
+  1864→          <span className="material-symbols-outlined text-[18px]">{migrating ? 'progress_activity' : 'sync'}</span>
+  1865→          {migrating ? 'Migrando...' : 'Sincronizar'}
+  1866→        </button>
+  1867→      </div>
+  1868→
+  1869→      {/* Courts List */}
+  1870→      <div className="space-y-4">
+  1871→        {allCourts.map((court) => {
+  1872→          const schedule = court.pricingSchedule || []
+  1873→          const courtEditing = editingCourt === court.id
+  1874→
+  1875→          return (
+  1876→            <div key={court.id} className="glass-card rounded-xl overflow-hidden">
+  1877→              {courtEditing ? (
+  1878→                /* ─── EDIT MODE ─── */
+  1879→                <div className="p-5 space-y-5">
+  1880→                  {/* Name + Base Price */}
+  1881→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1882→                    <div>
+  1883→                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Nombre de la cancha</label>
+  1884→                      <input
+  1885→                        value={editName}
+  1886→                        onChange={(e) => setEditName(e.target.value)}
+  1887→                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+  1888→                      />
+  1889→                    </div>
+  1890→                    <div>
+  1891→                      <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Precio base / respaldo (S/ hora)</label>
+  1892→                      <input
+  1893→                        type="number"
+  1894→                        min="0"
+  1895→                        step="1"
+  1896→                        value={editPrice}
+  1897→                        onChange={(e) => setEditPrice(e.target.value)}
+  1898→                        className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-[#00ff41]/40 font-[family-name:var(--font-inter)]"
+  1899→                      />
+  1900→                    </div>
+  1901→                  </div>
+  1902→
+  1903→                  {/* Pricing Schedule */}
+  1904→                  <div>
+  1905→                    <div className="flex items-center justify-between mb-3">
+  1906→                      <div>
+  1907→                        <h4 className="text-sm font-bold text-cm-on-surface font-[family-name:var(--font-sora)] flex items-center gap-2">
+  1908→                          <span className="material-symbols-outlined text-[16px] text-[#00ff41]">schedule</span>
+  1909→                          Tarifas por Bloques Horarios
+  1910→                        </h4>
+  1911→                        <p className="text-[10px] text-cm-on-surface-variant mt-0.5 font-[family-name:var(--font-inter)]">Define precios diferentes según el turno. Las reservas calcularán automáticamente.</p>
+  1912→                      </div>
+  1913→                      <button type="button"
+  1914→                        onClick={addScheduleBlock}
+  1915→                        className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-[#00ff41] bg-[#00ff41]/10 border border-[#00ff41]/30 rounded-lg hover:bg-[#00ff41]/20 transition-all"
+  1916→                      >
+  1917→                        <span className="material-symbols-outlined text-[14px]">add</span>
+  1918→                        Bloque
+  1919→                      </button>
+  1920→                    </div>
+  1921→
+  1922→                    {editSchedule.length === 0 ? (
+  1923→                      <div className="text-center py-6 border border-dashed border-white/10 rounded-xl">
+  1924→                        <span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[32px]">schedule</span>
+  1925→                        <p className="text-xs text-cm-on-surface-variant mt-2">Sin bloques de tarifa. Se usará el precio base.</p>
+  1926→                      </div>
+  1927→                    ) : (
+  1928→                      <div className="space-y-2">
+  1929→                        {editSchedule.map((slot, idx) => {
+  1930→                          const style = getBlockStyle(slot.label)
+  1931→                          return (
+  1932→                            <div key={idx} className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${style.bg} ${style.border}`}>
+  1933→                              {/* Label */}
+  1934→                              <input
+  1935→                                value={slot.label}
+  1936→                                onChange={(e) => updateScheduleItem(idx, 'label', e.target.value)}
+  1937→                                className="w-24 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs font-semibold text-cm-on-surface focus:outline-none focus:border-white/30 font-[family-name:var(--font-sora)]"
+  1938→                                placeholder="Turno"
+  1939→                              />
+  1940→                              {/* Time Range */}
+  1941→                              <div className="flex items-center gap-1">
+  1942→                                <input
+  1943→                                  type="number"
+  1944→                                  min={0}
+  1945→                                  max={23}
+  1946→                                  value={slot.startHour}
+  1947→                                  onChange={(e) => updateScheduleItem(idx, 'startHour', parseInt(e.target.value) || 0)}
+  1948→                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+  1949→                                />
+  1950→                                <span className="text-cm-on-surface-variant text-xs font-mono">:</span>
+  1951→                                <span className="text-cm-on-surface-variant text-[10px]">00</span>
+  1952→                                <span className="text-cm-on-surface-variant text-xs mx-1">—</span>
+  1953→                                <input
+  1954→                                  type="number"
+  1955→                                  min={1}
+  1956→                                  max={24}
+  1957→                                  value={slot.endHour}
+  1958→                                  onChange={(e) => updateScheduleItem(idx, 'endHour', parseInt(e.target.value) || 1)}
+  1959→                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
+  1960→                                />
+  1961→                                <span className="text-cm-on-surface-variant text-xs font-mono">:00</span>
+  1962→                              </div>
+  1963→                              {/* Price */}
+  1964→                              <div className="flex items-center gap-1 ml-auto">
+  1965→                                <span className="text-cm-on-surface-variant text-xs">S/</span>
+  1966→                                <input
+  1967→                                  type="number"
+  1968→                                  min={0}
+  1969→                                  step="1"
+  1970→                                  value={slot.pricePerHour}
+  1971→                                  onChange={(e) => updateScheduleItem(idx, 'pricePerHour', parseFloat(e.target.value) || 0)}
+  1972→                                  className={`w-20 px-2 py-1.5 border rounded-lg text-xs text-center focus:outline-none font-mono font-semibold transition-colors ${
+  1973→                                    slot.pricePerHour <= 0
+  1974→                                      ? 'bg-red-500/10 border-red-500/30 text-red-300 focus:border-red-500/50'
+  1975→                                      : 'bg-black/20 border-white/10 text-cm-on-surface focus:border-white/30'
+  1976→                                  }`}
+  1977→                                />
+  1978→                                <span className="text-cm-on-surface-variant text-[10px]">/hr</span>
+  1979→                              </div>
+  1980→                              {/* Remove */}
+  1981→                              <button type="button"
+  1982→                                onClick={() => removeScheduleBlock(idx)}
+  1983→                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
+  1984→                              >
+  1985→                                <span className="material-symbols-outlined text-[14px]">close</span>
+  1986→                              </button>
+  1987→                            </div>
+  1988→                          )
+  1989→                        })}
+  1990→                      </div>
+  1991→                    )}
+  1992→
+  1993→                    {/* Real-time Validation Warnings */}
+  1994→                    {editSchedule.length > 0 && (
+  1995→                      <div className="mt-2 space-y-1">
+  1996→                        {getOverlapWarnings(editSchedule).map((w, i) => (
+  1997→                          <div key={`ov-${i}`} className="flex items-start gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/25 rounded-lg">
+  1998→                            <span className="material-symbols-outlined text-red-400 text-[14px] mt-0.5 shrink-0">warning</span>
+  1999→                            <p className="text-[11px] text-red-300 font-[family-name:var(--font-inter)]">{w}</p>
+  2000→                          </div>
+
+[showing lines 1-2000 of 6884; use offset=2001 with limit to continue reading]

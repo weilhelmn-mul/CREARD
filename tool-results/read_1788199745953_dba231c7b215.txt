@@ -1,0 +1,1266 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+     4→import { useAppStore } from '@/store/useAppStore'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { getAuthHeaders } from '@/lib/auth-helpers'
+     8→import CulqiPayButton from '@/components/payments/CulqiPayButton'
+     9→import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
+    10→import PaymentVoucher from '@/components/payments/PaymentVoucher'
+    11→
+    12→/* ═══════════════════════════════════════════════════════
+    13→   CREARD — UnifiedBookingView
+    14→   Single-screen booking: multi-court + multi-timeslot
+    15→   1-hour blocks ONLY, real-time Firebase availability
+    16→   ═══════════════════════════════════════════════════════ */
+    17→
+    18→// ── Interfaces ──
+    19→
+    20→interface PricingScheduleItem {
+    21→  label: string
+    22→  startHour: number
+    23→  endHour: number
+    24→  pricePerHour: number
+    25→}
+    26→
+    27→interface Court {
+    28→  id: string
+    29→  name: string
+    30→  sport: string
+    31→  pricePerHour: number
+    32→  pricingSchedule: PricingScheduleItem[]
+    33→  branch: { name: string; city: string }
+    34→  images: string[]
+    35→}
+    36→
+    37→interface ExistingBooking {
+    38→  id: string
+    39→  court_id: string
+    40→  court_ids?: string[]
+    41→  start_time: string
+    42→  end_time: string
+    43→  status: string
+    44→}
+    45→
+    46→// ── Constants ──
+    47→
+    48→const SLOT_START = 7
+    49→const SLOT_END = 22
+    50→
+    51→const sportConfig: Record<string, { label: string; icon: string; color: string }> = {
+    52→  futbol: { label: 'Fútbol', icon: 'sports_soccer', color: '#22c55e' },
+    53→  voley:  { label: 'Vóley',  icon: 'sports_volleyball', color: '#f59e0b' },
+    54→}
+    55→
+    56→const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    57→const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    58→
+    59→// ── Helpers ──
+    60→
+    61→function formatDateISO(date: Date): string {
+    62→  const y = date.getFullYear()
+    63→  const m = String(date.getMonth() + 1).padStart(2, '0')
+    64→  const d = String(date.getDate()).padStart(2, '0')
+    65→  return `${y}-${m}-${d}`
+    66→}
+    67→
+    68→function getNext14Days(): Date[] {
+    69→  const days: Date[] = []
+    70→  const now = new Date()
+    71→  for (let i = 0; i < 14; i++) {
+    72→    days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() + i))
+    73→  }
+    74→  return days
+    75→}
+    76→
+    77→function isToday(date: Date): boolean {
+    78→  const t = new Date()
+    79→  return date.getFullYear() === t.getFullYear() &&
+    80→    date.getMonth() === t.getMonth() &&
+    81→    date.getDate() === t.getDate()
+    82→}
+    83→
+    84→/** Returns the next full hour boundary. E.g. if now is 14:35, returns 15 */
+    85→function getNextFullHour(): number {
+    86→  const now = new Date()
+    87→  const h = now.getHours()
+    88→  const m = now.getMinutes()
+    89→  return m >= 1 ? h + 1 : h
+    90→}
+    91→
+    92→function getMinSlotHour(date: Date): number {
+    93→  if (isToday(date)) {
+    94→    return Math.max(SLOT_START, getNextFullHour())
+    95→  }
+    96→  return SLOT_START
+    97→}
+    98→
+    99→function generateHourSlots(): string[] {
+   100→  const slots: string[] = []
+   101→  for (let h = SLOT_START; h < SLOT_END; h++) {
+   102→    slots.push(`${String(h).padStart(2, '0')}:00`)
+   103→  }
+   104→  return slots
+   105→}
+   106→
+   107→function formatHour(slot: string): string {
+   108→  const [h] = slot.split(':').map(Number)
+   109→  if (h === 0 || h === 12) return `${h === 0 ? 12 : 12}:00 ${h === 0 ? 'AM' : 'PM'}`
+   110→  if (h < 12) return `${h}:00 AM`
+   111→  return `${h - 12}:00 PM`
+   112→}
+   113→
+   114→function getRefCode(bookingId: string): string {
+   115→  const hash = bookingId.slice(-8).toUpperCase()
+   116→  return `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`
+   117→}
+   118→
+   119→/** Calculate price for a 1-hour slot using a pricing schedule */
+   120→function calcSlotPrice(schedule: PricingScheduleItem[], slot: string): number {
+   121→  const hour = parseInt(slot.split(':')[0], 10)
+   122→  if (schedule.length > 0) {
+   123→    for (const tier of schedule) {
+   124→      if (hour >= tier.startHour && hour < tier.endHour) return tier.pricePerHour
+   125→    }
+   126→  }
+   127→  return 0
+   128→}
+   129→
+   130→// ── Component ──
+   131→
+   132→export default function UnifiedBookingView() {
+   133→  const {
+   134→    user,
+   135→    selectedDate,
+   136→    selectedCourtIds,
+   137→    selectedTimeSlots,
+   138→    setSelectedDate,
+   139→    addSelectedCourtId,
+   140→    removeSelectedCourtId,
+   141→    clearSelectedCourtIds,
+   142→    setSelectedTimeSlots,
+   143→    toggleTimeSlot,
+   144→    clearTimeSlots,
+   145→    setSelectedTimeSlot,
+   146→    setView,
+   147→    setSelectedCourt,
+   148→    addNotification,
+   149→  } = useAppStore()
+   150→
+   151→  const [courts, setCourts] = useState<Court[]>([])
+   152→  const [courtsLoading, setCourtsLoading] = useState(true)
+   153→  const [bookings, setBookings] = useState<ExistingBooking[]>([])
+   154→  const [bookingsLoading, setBookingsLoading] = useState(false)
+   155→  const [submitting, setSubmitting] = useState(false)
+   156→  const [success, setSuccess] = useState(false)
+   157→  const [bookingRefs, setBookingRefs] = useState<string[]>([])
+   158→  const [createdBookings, setCreatedBookings] = useState<any[]>([])
+   159→
+   160→  const [clientName, setClientName] = useState(user?.name || '')
+   161→  const [clientPhone, setClientPhone] = useState(user?.phone || '')
+   162→  const [clientEmail, setClientEmail] = useState(user?.email || '')
+   163→  const [formStep, setFormStep] = useState<'select' | 'summary' | 'payment' | 'done'>('select')
+   164→  const [activePaymentMethod, setActivePaymentMethod] = useState<'yape_qr' | 'culqi'>('yape_qr')
+   165→  const [paymentType, setPaymentType] = useState<'advance' | 'full_payment'>('advance')
+   166→  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
+   167→  const [showVoucher, setShowVoucher] = useState(false)
+   168→  const [voucherData, setVoucherData] = useState<any>(null)
+   169→
+   170→  // Fetch active payment methods from Firebase
+   171→  useEffect(() => {
+   172→    fetch('/api/payment-methods')
+   173→      .then(r => r.json())
+   174→      .then(data => {
+   175→        if (data.culqi && data.yape_qr) setActivePaymentMethod('yape_qr')
+   176→        else if (data.culqi) setActivePaymentMethod('culqi')
+   177→        else setActivePaymentMethod('yape_qr')
+   178→      })
+   179→      .catch(() => setActivePaymentMethod('yape_qr'))
+   180→  }, [])
+   181→
+   182→  const dateScrollRef = useRef<HTMLDivElement>(null)
+   183→
+   184→  // ── Derived data ──
+   185→
+   186→  const availableDays = useMemo(() => getNext14Days(), [])
+   187→
+   188→  const bookingDate = useMemo(() => {
+   189→    if (!selectedDate) return new Date()
+   190→    const parts = selectedDate.split('-')
+   191→    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+   192→  }, [selectedDate])
+   193→
+   194→  const allSlots = useMemo(() => generateHourSlots(), [])
+   195→  const minHour = useMemo(() => getMinSlotHour(bookingDate), [bookingDate])
+   196→
+   197→  const visibleSlots = useMemo(
+   198→    () => allSlots.filter((s) => parseInt(s.split(':')[0], 10) >= minHour),
+   199→    [allSlots, minHour]
+   200→  )
+   201→
+   202→  // Courts grouped by sport
+   203→  const courtsBySport = useMemo(() => {
+   204→    const groups: Record<string, Court[]> = {}
+   205→    for (const c of courts) {
+   206→      const sport = c.sport || 'otros'
+   207→      if (!groups[sport]) groups[sport] = []
+   208→      groups[sport].push(c)
+   209→    }
+   210→    return groups
+   211→  }, [courts])
+   212→
+   213→  // ── Availability map: "courtId:HH:00" → true if occupied ──
+   214→
+   215→  const occupiedMap = useMemo(() => {
+   216→    const map = new Map<string, boolean>()
+   217→    for (const b of bookings) {
+   218→      if (b.status === 'cancelled') continue
+   219→      const courtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : (b.court_id ? [b.court_id] : [])
+   220→      const startH = parseInt((b.start_time || '').split(':')[0] || '0', 10)
+   221→      const endH = parseInt((b.end_time || '').split(':')[0] || '0', 10)
+   222→      for (const cId of courtIds) {
+   223→        for (let h = startH; h < endH; h++) {
+   224→          const key = `${cId}:${String(h).padStart(2, '0')}:00`
+   225→          map.set(key, true)
+   226→        }
+   227→      }
+   228→    }
+   229→    return map
+   230→  }, [bookings])
+   231→
+   232→  // ── Slot status for a specific court ──
+   233→
+   234→  function getSlotStatus(courtId: string, slot: string): 'available' | 'occupied' | 'selected' | 'past' {
+   235→    const hour = parseInt(slot.split(':')[0], 10)
+   236→    if (hour < minHour) return 'past'
+   237→    if (selectedTimeSlots.includes(slot)) return 'selected'
+   238→    if (occupiedMap.has(`${courtId}:${slot}`)) return 'occupied'
+   239→    return 'available'
+   240→  }
+   241→
+   242→  // ── For unified grid: slot is available only if ALL selected courts are free ──
+   243→
+   244→  function getUnifiedSlotStatus(slot: string): 'available' | 'occupied' | 'selected' | 'past' {
+   245→    const hour = parseInt(slot.split(':')[0], 10)
+   246→    if (hour < minHour) return 'past'
+   247→    if (selectedTimeSlots.includes(slot)) return 'selected'
+   248→    if (selectedCourtIds.length === 0) return 'available'
+   249→    for (const cId of selectedCourtIds) {
+   250→      if (occupiedMap.has(`${cId}:${slot}`)) return 'occupied'
+   251→    }
+   252→    return 'available'
+   253→  }
+   254→
+   255→  // ── Price calculation ──
+   256→
+   257→  const pricingBreakdown = useMemo(() => {
+   258→    const items: Array<{ courtId: string; courtName: string; slot: string; price: number }> = []
+   259→    for (const cId of selectedCourtIds) {
+   260→      const court = courts.find((c) => c.id === cId)
+   261→      if (!court) continue
+   262→      for (const slot of selectedTimeSlots) {
+   263→        const price = calcSlotPrice(court.pricingSchedule || [], slot) || court.pricePerHour
+   264→        items.push({ courtId: cId, courtName: court.name, slot, price })
+   265→      }
+   266→    }
+   267→    return items
+   268→  }, [selectedCourtIds, selectedTimeSlots, courts])
+   269→
+   270→  const totalPrice = useMemo(
+   271→    () => pricingBreakdown.reduce((sum, item) => sum + item.price, 0),
+   272→    [pricingBreakdown]
+   273→  )
+   274→  const advanceAmount = Math.round(totalPrice * 50) / 100
+   275→  const remainingAmount = Math.round((totalPrice - advanceAmount) * 100) / 100
+   276→
+   277→  const paymentAmount = paymentType === 'full_payment' ? totalPrice : advanceAmount
+   278→  const paymentRemaining = paymentType === 'full_payment' ? 0 : remainingAmount
+   279→
+   280→  const totalSlots = selectedTimeSlots.length
+   281→  const totalCourts = selectedCourtIds.length
+   282→  const totalItems = totalCourts * totalSlots
+   283→
+   284→  // ── Fetch courts ──
+   285→
+   286→  useEffect(() => {
+   287→    let cancelled = false
+   288→    setCourtsLoading(true)
+   289→    fetch('/api/courts')
+   290→      .then((r) => r.json())
+   291→      .then((data) => {
+   292→        if (cancelled) return
+   293→        const list = Array.isArray(data) ? data : (data.courts || [])
+   294→        setCourts(list)
+   295→        setCourtsLoading(false)
+   296→      })
+   297→      .catch(() => {
+   298→        if (!cancelled) setCourtsLoading(false)
+   299→      })
+   300→    return () => { cancelled = true }
+   301→  }, [])
+   302→
+   303→  // ── Fetch bookings for selected date ──
+   304→
+   305→  useEffect(() => {
+   306→    if (!selectedDate) return
+   307→    let cancelled = false
+   308→    setBookingsLoading(true)
+   309→    fetch(`/api/bookings?date=${selectedDate}`)
+   310→      .then((r) => r.json())
+   311→      .then((data) => {
+   312→        if (cancelled) return
+   313→        const list = Array.isArray(data) ? data : (data.bookings || [])
+   314→        setBookings(list)
+   315→        setBookingsLoading(false)
+   316→      })
+   317→      .catch(() => {
+   318→        if (!cancelled) setBookingsLoading(false)
+   319→      })
+   320→    return () => { cancelled = true }
+   321→  }, [selectedDate])
+   322→
+   323→  // ── Auto-select today if no date ──
+   324→
+   325→  useEffect(() => {
+   326→    if (!selectedDate) {
+   327→      setSelectedDate(formatDateISO(new Date()))
+   328→    }
+   329→  }, [selectedDate, setSelectedDate])
+   330→
+   331→  // ── Pre-fill user info ──
+   332→
+   333→  useEffect(() => {
+   334→    if (user) {
+   335→      setClientName(user.name || '')
+   336→      setClientEmail(user.email || '')
+   337→      setClientPhone(user.phone || '')
+   338→    }
+   339→  }, [user])
+   340→
+   341→  // ── Handlers ──
+   342→
+   343→  const handleDateSelect = useCallback((date: Date) => {
+   344→    setSelectedDate(formatDateISO(date))
+   345→    clearTimeSlots()
+   346→  }, [setSelectedDate, clearTimeSlots])
+   347→
+   348→  const handleCourtToggle = useCallback((courtId: string) => {
+   349→    if (selectedCourtIds.includes(courtId)) {
+   350→      removeSelectedCourtId(courtId)
+   351→    } else {
+   352→      addSelectedCourtId(courtId)
+   353→    }
+   354→  }, [selectedCourtIds, addSelectedCourtId, removeSelectedCourtId])
+   355→
+   356→  const handleSlotToggle = (slot: string) => {
+   357→    // If clicking a selected slot, deselect it
+   358→    if (selectedTimeSlots.includes(slot)) {
+   359→      setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot))
+   360→      return
+   361→    }
+   362→    // If no slots selected yet, just select this one
+   363→    if (selectedTimeSlots.length === 0) {
+   364→      setSelectedTimeSlots([slot])
+   365→      return
+   366→    }
+   367→    // Range selection: fill all slots between first selected and clicked slot
+   368→    const sorted = [...selectedTimeSlots].sort()
+   369→    const firstH = parseInt(sorted[0].split(':')[0], 10)
+   370→    const clickH = parseInt(slot.split(':')[0], 10)
+   371→    const lo = Math.min(firstH, clickH)
+   372→    const hi = Math.max(firstH, clickH)
+   373→    const rangeSlots: string[] = []
+   374→    for (let h = lo; h <= hi; h++) {
+   375→      const s = `${String(h).padStart(2, '0')}:00`
+   376→      // Skip occupied and past slots
+   377→      if (h < minHour) continue
+   378→      let isOccupied = false
+   379→      for (const cId of selectedCourtIds) {
+   380→        if (occupiedMap.has(`${cId}:${s}`)) { isOccupied = true; break }
+   381→      }
+   382→      if (!isOccupied) rangeSlots.push(s)
+   383→    }
+   384→    // Merge with existing selections
+   385→    const merged = new Set([...selectedTimeSlots, ...rangeSlots])
+   386→    setSelectedTimeSlots([...merged].sort())
+   387→  }
+   388→
+   389→  const handleProceed = useCallback(() => {
+   390→    if (selectedCourtIds.length === 0) {
+   391→      toast({ title: 'Selecciona canchas', description: 'Debes seleccionar al menos una cancha.', variant: 'destructive' })
+   392→      return
+   393→    }
+   394→    if (selectedTimeSlots.length === 0) {
+   395→      toast({ title: 'Selecciona horarios', description: 'Debes seleccionar al menos un horario.', variant: 'destructive' })
+   396→      return
+   397→    }
+   398→    if (!user?.id) {
+   399→      toast({ title: 'Inicia sesión', description: 'Debes iniciar sesión para reservar.', variant: 'destructive' })
+   400→      setView('login')
+   401→      return
+   402→    }
+   403→    setFormStep('summary')
+   404→  }, [selectedCourtIds, selectedTimeSlots, user, setView])
+   405→
+   406→  // ── Submit: create one booking per time slot ──
+   407→
+   408→  const handleSubmit = useCallback(async () => {
+   409→    if (!user?.id || !selectedDate || selectedCourtIds.length === 0 || selectedTimeSlots.length === 0) return
+   410→    if (!clientName.trim() || !clientPhone.trim()) {
+   411→      toast({ title: 'Datos incompletos', description: 'Nombre y teléfono son requeridos.', variant: 'destructive' })
+   412→      return
+   413→    }
+   414→
+   415→    setSubmitting(true)
+   416→
+   417→    try {
+   418→      // Sort slots for consistent time range
+   419→      const sortedSlots = [...selectedTimeSlots].sort()
+   420→      const startTime = sortedSlots[0]
+   421→      const lastH = parseInt(sortedSlots[sortedSlots.length - 1].split(':')[0], 10)
+   422→      const endTime = `${String(lastH + 1).padStart(2, '0')}:00`
+   423→
+   424→      // Calculate total price from all courts × all slots
+   425→      let calcTotal = 0
+   426→      for (const cId of selectedCourtIds) {
+   427→        const court = courts.find((c) => c.id === cId)
+   428→        if (!court) continue
+   429→        for (const slot of sortedSlots) {
+   430→          calcTotal += calcSlotPrice(court.pricingSchedule || [], slot) || court.pricePerHour
+   431→        }
+   432→      }
+   433→
+   434→      const isFull = paymentType === 'full_payment'
+   435→      const adv = isFull ? calcTotal : Math.round(calcTotal * 50) / 100
+   436→      const rem = isFull ? 0 : Math.round((calcTotal - adv) * 100) / 100
+   437→
+   438→      const res = await fetch('/api/bookings', {
+   439→        method: 'POST',
+   440→        headers: getAuthHeaders(),
+   441→        body: JSON.stringify({
+   442→          courtIds: selectedCourtIds,
+   443→          userId: user.id,
+   444→          date: selectedDate,
+   445→          startTime,
+   446→          endTime,
+   447→          totalPrice: calcTotal,
+   448→          advanceAmount: adv,
+   449→          remainingAmount: rem,
+   450→          paymentType: paymentType,
+   451→          status: 'reserved',
+   452→          paymentMethod: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'culqi',
+   453→          selectedSlots: sortedSlots,
+   454→        }),
+   455→      })
+   456→
+   457→      if (!res.ok) {
+   458→        const data = await res.json()
+   459→        if (res.status === 409) {
+   460→          toast({
+   461→            title: 'Horarios ya no disponibles',
+   462→            description: data.error || 'Algunos de los horarios seleccionados fueron reservados por otra persona. Por favor, vuelve a seleccionar.',
+   463→            variant: 'destructive',
+   464→          })
+   465→          // Refresh bookings to show updated availability
+   466→          const bookRes = await fetch(`/api/bookings?date=${selectedDate}`)
+   467→          const bookData = await bookRes.json()
+   468→          const list = Array.isArray(bookData) ? bookData : (bookData.bookings || [])
+   469→          setBookings(list)
+   470→          setFormStep('select')
+   471→        } else {
+   472→          toast({ title: 'Error al crear reserva', description: data.error || 'Intenta nuevamente.', variant: 'destructive' })
+   473→        }
+   474→        setSubmitting(false)
+   475→        return
+   476→      }
+   477→
+   478→      const booking = await res.json()
+   479→      const paymentId = booking.paymentId || null
+   480→      setLastPaymentId(paymentId)
+   481→      // Construct voucher data for later use
+   482→      setVoucherData({
+   483→        payment_id: paymentId || '',
+   484→        booking_code: getRefCode(booking.id),
+   485→        user_name: clientName,
+   486→        user_email: clientEmail || user?.email || '',
+   487→        user_phone: clientPhone || null,
+   488→        user_document: null,
+   489→        court_name: selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', '),
+   490→        sport: selectedCourtIds.length > 0 ? (courts.find((c) => c.id === selectedCourtIds[0])?.sport || '') : '',
+   491→        booking_date: selectedDate || '',
+   492→        booking_start_time: [...selectedTimeSlots].sort()[0] || '',
+   493→        booking_end_time: `${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00`,
+   494→        payment_type: paymentType,
+   495→        amount_paid: isFull ? calcTotal : adv,
+   496→        remaining_balance: isFull ? 0 : rem,
+   497→        payment_method_display: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'Culqi',
+   498→        payment_status: isFull ? 'completed' : 'parcial',
+   499→        payment_date: (() => { const p = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(new Date()); return `${p.find(x => x.type === 'day')?.value}/${p.find(x => x.type === 'month')?.value}/${p.find(x => x.type === 'year')?.value}`; })(),
+   500→        payment_time: (() => { const p = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(new Date()); return `${p.find(x => x.type === 'hour')?.value}:${p.find(x => x.type === 'minute')?.value}:${p.find(x => x.type === 'second')?.value}`; })(),
+   501→        total_price: calcTotal,
+   502→      })
+   503→      setCreatedBookings([booking])
+   504→      setBookingRefs([getRefCode(booking.id)])
+   505→      setFormStep('payment')
+   506→    } catch {
+   507→      toast({ title: 'Error', description: 'No se pudo crear la reserva. Verifica tu conexión.', variant: 'destructive' })
+   508→    }
+   509→
+   510→    setSubmitting(false)
+   511→  }, [user, selectedDate, selectedCourtIds, selectedTimeSlots, courts, clientName, clientPhone, setView, addNotification, clearSelectedCourtIds])
+   512→
+   513→  const handlePaymentSuccess = useCallback(() => {
+   514→    setFormStep('done')
+   515→    setSuccess(true)
+   516→    const courtNames = selectedCourtIds
+   517→      .map((id) => courts.find((c) => c.id === id)?.name || id)
+   518→      .join(', ')
+   519→    addNotification({
+   520→      title: 'Reserva confirmada',
+   521→      message: `${totalCourts} cancha${totalCourts > 1 ? 's' : ''}: ${courtNames} — ${bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })} · ${totalSlots}h · Ref: ${bookingRefs.join(', ')}`,
+   522→      type: 'success',
+   523→    })
+   524→  }, [courts, selectedCourtIds, totalCourts, bookingDate, totalSlots, bookingRefs, addNotification])
+   525→
+   526→  const handlePaymentError = useCallback((error: string) => {
+   527→    toast({ title: 'Error en el pago', description: error, variant: 'destructive' })
+   528→  }, [])
+   529→
+   530→  const handleBack = useCallback(() => {
+   531→    if (formStep === 'payment') { setFormStep('summary'); return }
+   532→    if (formStep === 'summary') { setFormStep('select'); return }
+   533→    if (success) {
+   534→      clearTimeSlots()
+   535→      clearSelectedCourtIds()
+   536→      setSelectedCourt(null)
+   537→      setSelectedDate(null)
+   538→      setView('bookings')
+   539→    } else {
+   540→      clearTimeSlots()
+   541→      clearSelectedCourtIds()
+   542→      setSelectedCourt(null)
+   543→      setView('home')
+   544→    }
+   545→  }, [formStep, success, clearTimeSlots, clearSelectedCourtIds, setSelectedCourt, setSelectedDate, setView])
+   546→
+   547→  // ── Render ──
+   548→
+   549→  // Loading state
+   550→  if (courtsLoading) {
+   551→    return (
+   552→      <div className="min-h-screen bg-cm-background">
+   553→        <div className="max-w-2xl mx-auto px-4 py-6">
+   554→          <div className="animate-pulse space-y-4">
+   555→            <div className="h-8 bg-cm-surface-container-highest rounded w-48" />
+   556→            <div className="h-12 bg-cm-surface-container-highest rounded-xl" />
+   557→            <div className="h-64 bg-cm-surface-container-highest rounded-xl" />
+   558→            <div className="h-48 bg-cm-surface-container-highest rounded-xl" />
+   559→          </div>
+   560→        </div>
+   561→      </div>
+   562→    )
+   563→  }
+   564→
+   565→  return (
+   566→    <motion.div
+   567→      initial={{ opacity: 0, x: '100%' }}
+   568→      animate={{ opacity: 1, x: 0 }}
+   569→      exit={{ opacity: 0, x: '100%' }}
+   570→      transition={{ type: 'tween', duration: 0.3 }}
+   571→      className="min-h-screen bg-cm-background"
+   572→    >
+   573→      {/* ═══ HEADER ═══ */}
+   574→      <div className="max-w-2xl mx-auto px-4 pt-6 pb-2">
+   575→        <div className="flex items-center gap-3">
+   576→          <button type="button" onClick={handleBack}
+   577→            className="p-2 rounded-full bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-on-surface transition-colors">
+   578→            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+   579→          </button>
+   580→          <div>
+   581→            <h1 className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">
+   582→              {formStep === 'select' && 'Reservar Cancha'}
+   583→              {formStep === 'summary' && 'Confirmar Reserva'}
+   584→              {formStep === 'payment' && 'Pagar Adelanto'}
+   585→              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? '¡Pago Registrado!' : 'Reserva Confirmada')}
+   586→            </h1>
+   587→            <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+   588→              {formStep === 'select' && 'Selecciona canchas y horarios en un solo lugar'}
+   589→              {formStep === 'summary' && 'Verifica los detalles antes de pagar'}
+   590→              {formStep === 'payment' && `Ref: ${bookingRefs.join(', ')}`}
+   591→              {formStep === 'done' && (activePaymentMethod === 'yape_qr' ? 'Tu solicitud está siendo procesada' : 'Tu reserva ha sido registrada exitosamente')}
+   592→            </p>
+   593→          </div>
+   594→        </div>
+   595→      </div>
+   596→
+   597→      <AnimatePresence mode="wait">
+   598→      {/* ═══ STEP 1: SELECT COURTS & SLOTS ═══ */}
+   599→      {formStep === 'select' && (
+   600→        <motion.div key="select" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+   601→          className="max-w-2xl mx-auto px-4 pb-40">
+   602→
+   603→          {/* ── Date Picker ── */}
+   604→          <div className="mb-5">
+   605→            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-2.5 flex items-center gap-1.5">
+   606→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">calendar_month</span>
+   607→              Fecha
+   608→            </h2>
+   609→            <div ref={dateScrollRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+   610→              {availableDays.map((day) => {
+   611→                const iso = formatDateISO(day)
+   612→                const isActive = selectedDate === iso
+   613→                const isTodayDate = isToday(day)
+   614→                return (
+   615→                  <button key={iso} type="button" onClick={() => handleDateSelect(day)}
+   616→                    className={`flex-shrink-0 w-[72px] py-2.5 rounded-xl text-center transition-all duration-200 border ${
+   617→                      isActive
+   618→                        ? 'bg-[#00ff41]/15 border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.1)]'
+   619→                        : 'bg-cm-surface-container-highest/40 border-transparent hover:border-white/10'
+   620→                    }`}>
+   621→                    <p className={`text-[10px] font-[family-name:var(--font-inter)] ${isActive ? 'text-[#00ff41] font-semibold' : 'text-cm-on-surface-variant'}`}>
+   622→                      {DAYS_ES[day.getDay()]}
+   623→                    </p>
+   624→                    <p className={`text-lg font-bold font-[family-name:var(--font-sora)] leading-tight ${isActive ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
+   625→                      {day.getDate()}
+   626→                    </p>
+   627→                    <p className={`text-[10px] font-[family-name:var(--font-inter)] ${isActive ? 'text-[#00ff41]/70' : 'text-cm-on-surface-variant/60'}`}>
+   628→                      {MONTHS_ES[day.getMonth()]}
+   629→                    </p>
+   630→                    {isTodayDate && (
+   631→                      <span className="block mt-0.5 text-[8px] font-bold text-[#00ff41] font-[family-name:var(--font-inter)]">HOY</span>
+   632→                    )}
+   633→                  </button>
+   634→                )
+   635→              })}
+   636→            </div>
+   637→          </div>
+   638→
+   639→          {/* ── Court Selector ── */}
+   640→          <div className="mb-5">
+   641→            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-4 flex items-center gap-1.5">
+   642→              <span className="material-symbols-outlined text-[16px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+   643→              Selecciona Canchas
+   644→              {selectedCourtIds.length > 0 && (
+   645→                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold font-[family-name:var(--font-inter)]">
+   646→                  {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+   647→                </span>
+   648→              )}
+   649→            </h2>
+   650→            <div className="space-y-6">
+   651→              {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
+   652→                const cfg = sportConfig[sport] || { label: sport, icon: 'sports' }
+   653→                const isFutbol = sport === 'futbol'
+   654→                const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
+   655→                return (
+   656→                  <section key={sport} className="space-y-3">
+   657→                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+   658→                      <div className="flex items-center gap-2">
+   659→                        <span className={`material-symbols-outlined text-[18px] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>{cfg.icon}</span>
+   660→                        <h3 className={`text-[11px] font-bold uppercase tracking-widest font-[family-name:var(--font-inter)] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>
+   661→                          Canchas de {cfg.label}
+   662→                        </h3>
+   663→                      </div>
+   664→                      <span className="text-[10px] text-cm-on-surface-variant bg-cm-surface-container-highest/60 px-2.5 py-0.5 rounded-full font-[family-name:var(--font-inter)]">
+   665→                        {surfaceLabel}
+   666→                      </span>
+   667→                    </div>
+   668→                    <div className={`grid gap-5 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+   669→                      {sportCourts.map((court) => {
+   670→                        const isSelected = selectedCourtIds.includes(court.id)
+   671→                        const schedule = court.pricingSchedule || []
+   672→                        const uniquePrices = [...new Set(schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour])]
+   673→                        const dayPrice = Math.min(...uniquePrices)
+   674→                        const nightPrice = Math.max(...uniquePrices)
+   675→                        const singlePrice = uniquePrices.length === 1
+   676→                        const accentBorder = isFutbol
+   677→                          ? isSelected ? 'border-cm-primary/60' : 'border-[#3d4a42]'
+   678→                          : isSelected ? 'border-[#b4c5ff]/60' : 'border-[#3d4a42]'
+   679→                        const accentBg = isFutbol
+   680→                          ? isSelected ? 'bg-[#1b211d]' : 'bg-[#171d19]'
+   681→                          : isSelected ? 'bg-[#1b1d21]' : 'bg-[#171d19]'
+   682→                        const accentShadow = isFutbol
+   683→                          ? isSelected ? 'shadow-[0_0_0_1px_#68dba9]' : ''
+   684→                          : isSelected ? 'shadow-[0_0_0_1px_#b4c5ff]' : ''
+   685→                        const accentText = isFutbol
+   686→                          ? isSelected ? 'text-cm-primary' : 'text-cm-on-surface'
+   687→                          : isSelected ? 'text-[#b4c5ff]' : 'text-cm-on-surface'
+   688→                        const hoverBorder = isFutbol
+   689→                          ? 'hover:border-cm-primary/50'
+   690→                          : 'hover:border-[#b4c5ff]/50'
+   691→                        return (
+   692→                          <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
+   693→                            className={`group relative w-full flex flex-col p-3 rounded-xl border transition-all duration-300 text-left active:scale-[0.97] ${accentBg} ${accentBorder} ${accentShadow} ${hoverBorder}`}>
+   694→                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-lg relative overflow-hidden mb-3 border border-white/10 ${
+   695→                              isFutbol ? '' : ''
+   696→                            }`} style={{
+   697→                              background: isFutbol
+   698→                                ? 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)'
+   699→                                : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+   700→                              boxShadow: 'inset 0 0 40px rgba(0,0,0,0.3)'
+   701→                            }}>
+   702→                              {isFutbol ? (
+   703→                                <>
+   704→                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
+   705→                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-white/20 rounded-full" />
+   706→                                  <div className="absolute left-0 top-1/4 h-1/2 w-3 border-r border-y border-white/20" />
+   707→                                  <div className="absolute right-0 top-1/4 h-1/2 w-3 border-l border-y border-white/20" />
+   708→                                </>
+   709→                              ) : (
+   710→                                <>
+   711→                                  <div className="absolute inset-2 border border-white/20" />
+   712→                                  <div className="absolute inset-x-2 top-[30%] h-[40%] border-y border-white/10" />
+   713→                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/40 shadow-sm z-10" />
+   714→                                </>
+   715→                              )}
+   716→                            </div>
+   717→                            {isFutbol ? (
+   718→                              <div className="w-full space-y-1">
+   719→                                <div className="flex justify-between items-start">
+   720→                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+   721→                                  <span className={`w-2 h-2 rounded-full mt-2 ${isFutbol ? 'bg-cm-primary' : 'bg-[#b4c5ff]'}`} />
+   722→                                </div>
+   723→                                <p className={`text-[11px] ${isFutbol ? 'text-cm-primary' : 'text-cm-primary'} font-medium font-[family-name:var(--font-inter)]`}>Disponible</p>
+   724→                                <div className="flex flex-col gap-1 mt-1">
+   725→                                  <div className="flex items-center gap-2">
+   726→                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
+   727→                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+   728→                                  </div>
+   729→                                  {!singlePrice && (
+   730→                                    <div className="flex items-center gap-2">
+   731→                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
+   732→                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+   733→                                    </div>
+   734→                                  )}
+   735→                                </div>
+   736→                              </div>
+   737→                            ) : (
+   738→                              <div className="w-full flex justify-between items-center">
+   739→                                <div>
+   740→                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+   741→                                  <p className="text-[11px] text-cm-primary font-medium font-[family-name:var(--font-inter)]">Disponible</p>
+   742→                                </div>
+   743→                                <div className="flex flex-col items-end gap-0.5">
+   744→                                  <div className="flex items-center gap-1.5">
+   745→                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
+   746→                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+   747→                                  </div>
+   748→                                  {!singlePrice && (
+   749→                                    <div className="flex items-center gap-1.5">
+   750→                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
+   751→                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+   752→                                    </div>
+   753→                                  )}
+   754→                                </div>
+   755→                              </div>
+   756→                            )}
+   757→                          </button>
+   758→                        )
+   759→                      })}
+   760→                    </div>
+   761→                  </section>
+   762→                )
+   763→              })}
+   764→            </div>
+   765→          </div>
+   766→          {/* ── Time Slot Grid ── */}
+   767→          {selectedCourtIds.length > 0 && (
+   768→            <div className="mb-5">
+   769→              <div className="flex items-center justify-between mb-3">
+   770→                <div className="flex items-center gap-2">
+   771→                  <span className="material-symbols-outlined text-cm-primary text-[18px]">schedule</span>
+   772→                  <h2 className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Horarios Disponibles</h2>
+   773→                  {bookingsLoading && (
+   774→                    <span className="material-symbols-outlined text-[14px] animate-spin text-cm-on-surface-variant">progress_activity</span>
+   775→                  )}
+   776→                </div>
+   777→                <span className="text-[10px] font-bold px-3 py-1 bg-cm-primary/10 text-cm-primary rounded-full font-[family-name:var(--font-inter)] truncate max-w-[180px]">
+   778→                  {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+   779→                </span>
+   780→              </div>
+   781→              <div className="space-y-2">
+   782→                <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   783→                  {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+   784→                </p>
+   785→                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+   786→                  {visibleSlots.map((slot) => {
+   787→                    const status = getUnifiedSlotStatus(slot)
+   788→                    const hour = parseInt(slot.split(':')[0], 10)
+   789→                    const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
+   790→                    let chipClass = 'bg-white/10 backdrop-blur-md text-cm-on-surface font-medium border border-white/20 hover:bg-white/20 shadow-sm'
+   791→                    let clickAllowed = true
+   792→                    if (status === 'selected') {
+   793→                      chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
+   794→                    } else if (status === 'occupied') {
+   795→                      chipClass = 'bg-white/5 backdrop-blur-sm text-cm-on-surface-variant font-medium border border-white/10 opacity-40 cursor-not-allowed'
+   796→                      clickAllowed = false
+   797→                    } else if (status === 'past') {
+   798→                      chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/20 border border-transparent cursor-not-allowed'
+   799→                      clickAllowed = false
+   800→                    }
+   801→                    return (
+   802→                      <button key={slot} type="button" disabled={!clickAllowed}
+   803→                        onClick={() => handleSlotToggle(slot)}
+   804→                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+   805→                        {slot} - {nextHour}
+   806→                      </button>
+   807→                    )
+   808→                  })}
+   809→                </div>
+   810→              </div>
+   811→              {selectedTimeSlots.length > 0 && (
+   812→                <button type="button" onClick={clearTimeSlots}
+   813→                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+   814→                  Limpiar selección
+   815→                </button>
+   816→              )}
+   817→            </div>
+   818→          )}
+   819→          {/* ── Empty state: no courts selected ── */}
+   820→          {selectedCourtIds.length === 0 && (
+   821→            <div className="flex flex-col items-center justify-center py-12 text-center">
+   822→              <span className="material-symbols-outlined text-[48px] text-cm-on-surface-variant/20 mb-3">sports</span>
+   823→              <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   824→                Selecciona al menos una cancha para ver los horarios disponibles
+   825→              </p>
+   826→            </div>
+   827→          )}
+   828→        </motion.div>
+   829→      )}
+   830→
+   831→      {/* ═══ STEP 2: SUMMARY ═══ */}
+   832→      {formStep === 'summary' && (
+   833→        <motion.div key="summary" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+   834→          transition={{ type: 'tween', duration: 0.3 }}
+   835→          className="max-w-2xl mx-auto px-4 pb-40">
+   836→
+   837→          {/* Courts & Slots Summary */}
+   838→          <div className="glass-card rounded-2xl p-4 mb-4">
+   839→            <h3 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-2">
+   840→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+   841→              {totalCourts} cancha{totalCourts > 1 ? 's' : ''} x {totalSlots} hora{totalSlots > 1 ? 's' : ''} = {totalItems} bloque{totalItems > 1 ? 's' : ''}
+   842→            </h3>
+   843→            <div className="space-y-2">
+   844→              {selectedCourtIds.map((cId) => {
+   845→                const court = courts.find((c) => c.id === cId)
+   846→                if (!court) return null
+   847→                const cfg = sportConfig[court.sport] || { icon: 'sports', label: court.sport }
+   848→                const courtSlots = selectedTimeSlots.sort()
+   849→                const courtTotal = pricingBreakdown
+   850→                  .filter((p) => p.courtId === cId)
+   851→                  .reduce((s, p) => s + p.price, 0)
+   852→                return (
+   853→                  <div key={cId} className="bg-cm-surface-container-highest/30 rounded-xl p-3">
+   854→                    <div className="flex items-center gap-2 mb-2">
+   855→                      <span className="material-symbols-outlined text-[20px] text-[#00ff41]">{cfg.icon}</span>
+   856→                      <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{court.name}</span>
+   857→                      <span className="ml-auto text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+   858→                    </div>
+   859→                    <div className="flex flex-wrap gap-1.5">
+   860→                      {courtSlots.map((s) => (
+   861→                        <span key={s} className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400 font-[family-name:var(--font-inter)] font-medium">
+   862→                          {formatHour(s)}
+   863→                        </span>
+   864→                      ))}
+   865→                    </div>
+   866→                  </div>
+   867→                )
+   868→              })}
+   869→            </div>
+   870→          </div>
+   871→
+   872→          {/* Date & Time Info */}
+   873→          <div className="grid grid-cols-2 gap-3 mb-4">
+   874→            <div className="glass-card rounded-xl p-3">
+   875→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   876→                <span className="material-symbols-outlined text-[12px]">calendar_month</span> Fecha
+   877→              </p>
+   878→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+   879→                {bookingDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+   880→              </p>
+   881→            </div>
+   882→            <div className="glass-card rounded-xl p-3">
+   883→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   884→                <span className="material-symbols-outlined text-[12px]">schedule</span> Horario
+   885→              </p>
+   886→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   887→                {[...selectedTimeSlots].sort()[0]} - {String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00
+   888→              </p>
+   889→            </div>
+   890→          </div>
+   891→
+   892→          {/* Payment Breakdown */}
+   893→          <div className="glass-card rounded-2xl p-4 mb-4">
+   894→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-4 flex items-center gap-2">
+   895→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>receipt_long</span>
+   896→              Resumen de Pago
+   897→            </h2>
+   898→            <div className="space-y-2">
+   899→              {selectedCourtIds.map((cId) => {
+   900→                const court = courts.find((c) => c.id === cId)
+   901→                if (!court) return null
+   902→                const courtTotal = pricingBreakdown.filter((p) => p.courtId === cId).reduce((s, p) => s + p.price, 0)
+   903→                return (
+   904→                  <div key={cId} className="flex items-center justify-between">
+   905→                    <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{court.name} ({totalSlots}h)</span>
+   906→                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+   907→                  </div>
+   908→                )
+   909→              })}
+   910→
+   911→              {/* Payment Type Selector */}
+   912→              <div className="mb-4">
+   913→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 font-medium">Selecciona el monto a pagar</p>
+   914→                <div className="space-y-2">
+   915→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'advance' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   916→                    <input type="radio" name="paymentType" value="advance" checked={paymentType === 'advance'} onChange={() => setPaymentType('advance')} className="accent-[#00ff41] w-4 h-4" />
+   917→                    <div className="flex-1">
+   918→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar adelanto (50%)</p>
+   919→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago minimo obligatorio para confirmar la reserva</p>
+   920→                    </div>
+   921→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+   922→                  </label>
+   923→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'full_payment' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   924→                    <input type="radio" name="paymentType" value="full_payment" checked={paymentType === 'full_payment'} onChange={() => setPaymentType('full_payment')} className="accent-[#00ff41] w-4 h-4" />
+   925→                    <div className="flex-1">
+   926→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar el total (100%)</p>
+   927→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Tu reserva quedara completamente pagada</p>
+   928→                    </div>
+   929→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   930→                  </label>
+   931→                </div>
+   932→              </div>
+   933→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   934→                <div className="flex items-center gap-2">
+   935→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+   936→                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">
+   937→                    {paymentType === 'full_payment' ? 'PAGO TOTAL' : 'ADELANTO'}
+   938→                  </span>
+   939→                </div>
+   940→                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+   941→              </div>
+   942→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   943→                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Saldo pendiente</span>
+   944→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {paymentRemaining.toFixed(2)}</span>
+   945→              </div>
+   946→              <div className="border-t border-white/5 pt-2 flex items-center justify-between">
+   947→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
+   948→                <span className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   949→              </div>
+   950→            </div>
+   951→          </div>
+   952→
+   953→          {/* Contact Info */}
+   954→          <div className="glass-card rounded-2xl p-4 mb-4">
+   955→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3 flex items-center gap-2">
+   956→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>person</span>
+   957→              Datos de contacto
+   958→            </h2>
+   959→            <div className="space-y-3">
+   960→              <div>
+   961→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Nombre completo <span className="text-red-400">*</span></label>
+   962→                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Tu nombre"
+   963→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   964→              </div>
+   965→              <div>
+   966→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Email</label>
+   967→                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="tu@email.com"
+   968→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   969→              </div>
+   970→              <div>
+   971→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Teléfono <span className="text-red-400">*</span></label>
+   972→                <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+51 999 999 999"
+   973→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   974→              </div>
+   975→            </div>
+   976→          </div>
+   977→        </motion.div>
+   978→      )}
+   979→
+   980→      {/* ═══ STEP 3: PAYMENT ═══ */}
+   981→      {formStep === 'payment' && !success && createdBookings.length > 0 && (
+   982→        <motion.div key="payment" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+   983→          transition={{ type: 'tween', duration: 0.3 }}
+   984→          className="max-w-2xl mx-auto px-4 pb-40">
+   985→
+   986→          {/* Booking summary card */}
+   987→          <div className="glass-card rounded-2xl p-4 mb-6">
+   988→            <div className="flex items-center gap-3 mb-3">
+   989→              <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   990→                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">sports</span>
+   991→              </div>
+   992→              <div className="flex-1 min-w-0">
+   993→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   994→                  {totalCourts} cancha{totalCourts > 1 ? 's' : ''} · {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })} · {totalSlots}h
+   995→                </p>
+   996→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   997→                  {selectedTimeSlots.sort().map(formatHour).join(', ')}
+   998→                </p>
+   999→              </div>
+  1000→              <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</p>
+  1001→            </div>
+  1002→            <div className="bg-cm-surface-container-highest/40 rounded-lg p-2.5 text-center">
+  1003→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1004→                {paymentType === 'full_payment' ? 'Pago total de la reserva' : 'Adelanto 50% requerido'}
+  1005→              </p>
+  1006→              {paymentRemaining > 0 && (
+  1007→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante S/ {paymentRemaining.toFixed(2)} se paga en el local</p>
+  1008→              )}
+  1009→            </div>
+  1010→          </div>
+  1011→
+  1012→          <YapeQRPayButton
+  1013→            bookingIds={createdBookings.map((b: any) => b.id)}
+  1014→            amount={paymentAmount}
+  1015→            userEmail={clientEmail || user?.email || ''}
+  1016→            onPaymentMarked={() => {
+  1017→              setFormStep('done')
+  1018→              setSuccess(true)
+  1019→            }}
+  1020→            onBack={() => setFormStep('summary')}
+  1021→          />
+  1022→          <div className="flex items-center justify-center gap-2 mt-4">
+  1023→            <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/40" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+  1024→            <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">
+  1025→              Pago seguro mediante Yape
+  1026→            </span>
+  1027→          </div>
+  1028→        </motion.div>
+  1029→      )}
+  1030→
+  1031→      {/* ═══ STEP 4: SUCCESS ═══ */}
+  1032→      {formStep === 'done' && success && (
+  1033→        <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+  1034→          transition={{ duration: 0.4 }}
+  1035→          className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]">
+  1036→
+  1037→          {activePaymentMethod === 'yape_qr' ? (
+  1038→            /* ── Yape: Pago Registrado (premium design) ── */
+  1039→            <>
+  1040→              {/* Icon with emerald glow + pulse */}
+  1041→              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+  1042→                className="relative mb-8">
+  1043→                <div className="w-24 h-24 rounded-full bg-cm-primary/20 border-2 border-cm-primary flex items-center justify-center animate-pulse"
+  1044→                  style={{ filter: 'drop-shadow(0 0 20px rgba(0,255,65,0.35))', animationDuration: '3s' }}>
+  1045→                  <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+  1046→                </div>
+  1047→              </motion.div>
+  1048→
+  1049→              {/* Title + Description */}
+  1050→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="text-center mb-8">
+  1051→                <h2 className="font-[family-name:var(--font-sora)] text-3xl font-extrabold text-cm-on-surface mb-3 tracking-tight"
+  1052→                  style={{ filter: 'drop-shadow(0 0 12px rgba(0,255,65,0.3))' }}>
+  1053→                  ¡Pago Registrado!
+  1054→                </h2>
+  1055→                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] leading-relaxed max-w-sm mx-auto">
+  1056→                  Tu solicitud está <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>siendo procesada</span>. Por favor, espera la confirmación de nuestro administrador para{' '}
+  1057→                  <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>asegurar tu turno</span>.
+  1058→                </p>
+  1059→              </motion.div>
+  1060→
+  1061→              {/* Info card: check reservations */}
+  1062→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+  1063→                className="w-full glass-card rounded-2xl p-5 mb-5 relative overflow-hidden">
+  1064→                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-cm-primary/5 -translate-y-1/2 translate-x-1/2" />
+  1065→                <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-cm-primary/5 translate-y-1/2 -translate-x-1/2" />
+  1066→                <div className="relative flex items-start gap-3">
+  1067→                  <div className="w-10 h-10 rounded-xl bg-cm-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+  1068→                    <span className="material-symbols-outlined text-[#00ff41] text-[22px]">info</span>
+  1069→                  </div>
+  1070→                  <div>
+  1071→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1.5">
+  1072→                      Revisa tu bandeja de reservas
+  1073→                    </p>
+  1074→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] leading-relaxed">
+  1075→                      Cuando el administrador valide tu pago, tu reserva cambiará a{' '}
+  1076→                      <span className="text-green-400 font-semibold">"Reservado"</span>.{' '}
+  1077→                      Si el pago no puede ser verificado, aparecerá como{' '}
+  1078→                      <span className="text-red-400 font-semibold">"Rechazado"</span>.
+  1079→                    </p>
+  1080→                  </div>
+  1081→                </div>
+  1082→              </motion.div>
+  1083→            </>
+  1084→          ) : (
+  1085→            /* ── Non-Yape: Reserva confirmada ── */
+  1086→            <>
+  1087→              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+  1088→                className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6">
+  1089→                <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+  1090→              </motion.div>
+  1091→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-8">
+  1092→                <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Reserva Confirmada</h2>
+  1093→                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">Tu reserva ha sido registrada exitosamente</p>
+  1094→              </motion.div>
+  1095→            </>
+  1096→          )}
+  1097→
+  1098→          {/* Booking details card (shared) - Bento Glassmorphism */}
+  1099→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+  1100→            className="w-full rounded-2xl p-6 mb-6 relative overflow-hidden"
+  1101→            style={{ background: 'rgba(30,41,59,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+  1102→
+  1103→            {/* Section label */}
+  1104→            <div className="flex items-center gap-2 mb-5 opacity-60">
+  1105→              <span className="material-symbols-outlined text-[14px] text-[#00ff41]">receipt_long</span>
+  1106→              <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-[0.15em]">Resumen de la Transacción</span>
+  1107→            </div>
+  1108→
+  1109→            {/* Bento grid */}
+  1110→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
+  1111→              {/* Cancha */}
+  1112→              <div className="flex flex-col gap-1">
+  1113→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Cancha</span>
+  1114→                <div className="flex items-center gap-2">
+  1115→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">sports</span>
+  1116→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1117→                    {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+  1118→                  </span>
+  1119→                </div>
+  1120→              </div>
+  1121→              {/* Fecha */}
+  1122→              <div className="flex flex-col gap-1">
+  1123→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Fecha</span>
+  1124→                <div className="flex items-center gap-2">
+  1125→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">calendar_today</span>
+  1126→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+  1127→                    {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+  1128→                  </span>
+  1129→                </div>
+  1130→              </div>
+  1131→              {/* Horario */}
+  1132→              <div className="flex flex-col gap-1">
+  1133→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Horario</span>
+  1134→                <div className="flex items-center gap-2">
+  1135→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">schedule</span>
+  1136→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+  1137→                    {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : '-'}
+  1138→                  </span>
+  1139→                </div>
+  1140→              </div>
+  1141→              {/* Monto */}
+  1142→              <div className="flex flex-col gap-1">
+  1143→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">
+  1144→                  {paymentType === 'full_payment' ? 'Monto Pagado' : (activePaymentMethod === 'yape_qr' ? 'Monto Pagado' : 'Adelanto')}
+  1145→                </span>
+  1146→                <div className="flex items-center gap-2">
+  1147→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">payments</span>
+  1148→                  <span className="text-lg font-black text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+  1149→                </div>
+  1150→              </div>
+  1151→            </div>
+  1152→
+  1153→            {/* Footer: status + ref */}
+  1154→            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+  1155→              <div className="flex items-center gap-2">
+  1156→                <span className="w-2 h-2 rounded-full bg-[#00ff41]" style={{ filter: 'drop-shadow(0 0 6px rgba(0,255,65,0.5))' }} />
+  1157→                <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-wider">
+  1158→                  {activePaymentMethod === 'yape_qr' ? 'Pendiente de Verificación' : 'Confirmado'}
+  1159→                </span>
+  1160→              </div>
+  1161→              <span className="text-[10px] text-cm-on-surface-variant font-mono opacity-40">#{bookingRefs.join('-')}</span>
+  1162→            </div>
+  1163→
+  1164→            {/* Restante (only for Yape) */}
+  1165→            {paymentRemaining > 0 && (
+  1166→              <div className="mt-3 pt-3 border-t border-dashed border-white/5">
+  1167→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1168→                  Pago restante: <span className="font-semibold text-cm-on-surface">S/ {paymentRemaining.toFixed(2)}</span> (en el local)
+  1169→                </p>
+  1170→              </div>
+  1171→            )}
+  1172→          </motion.div>
+  1173→
+  1174→          {/* Action Buttons */}
+  1175→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="w-full space-y-3">
+  1176→            <button type="button" onClick={() => setShowVoucher(true)}
+  1177→              className="w-full py-3 bg-white/10 text-cm-on-surface font-semibold rounded-xl hover:bg-white/15 transition-all border border-white/10 font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+  1178→              <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+  1179→              Imprimir Voucher de Pago
+  1180→            </button>
+  1181→            <button type="button" onClick={handleBack}
+  1182→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2 shadow-lg"
+  1183→              style={{ boxShadow: '0 8px 24px rgba(0,255,65,0.15)' }}>
+  1184→              <span className="material-symbols-outlined text-[20px]">event_available</span> Ver mis Reservas
+  1185→            </button>
+  1186→            <button type="button" onClick={() => { clearTimeSlots(); clearSelectedCourtIds(); setSelectedCourt(null); setView('home') }}
+  1187→              className="w-full py-3 text-cm-on-surface-variant text-sm font-medium font-[family-name:var(--font-inter)] hover:text-cm-on-surface transition-colors rounded-xl border border-white/10 hover:border-white/20 flex items-center justify-center gap-2">
+  1188→              <span className="material-symbols-outlined text-[18px]">home</span> Volver al Inicio
+  1189→            </button>
+  1190→          </motion.div>
+  1191→        </motion.div>
+  1192→      )}
+  1193→      </AnimatePresence>
+  1194→
+  1195→      {/* ═══ BOTTOM ACTION BAR ═══ */}
+  1196→      {formStep === 'select' && (
+  1197→        <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
+  1198→          <div className="max-w-2xl mx-auto p-4">
+  1199→            {totalItems > 0 ? (
+  1200→              <>
+  1201→                <div className="flex items-center justify-between mb-3">
+  1202→                  <div>
+  1203→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1204→                      {totalCourts} cancha{totalCourts > 1 ? 's' : ''} x {totalSlots}h
+  1205→                    </p>
+  1206→                    <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">
+  1207→                      S/ {totalPrice.toFixed(2)}
+  1208→                    </p>
+  1209→                  </div>
+  1210→                  <div className="text-right">
+  1211→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50%</p>
+  1212→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</p>
+  1213→                  </div>
+  1214→                </div>
+  1215→                <button type="button" onClick={handleProceed}
+  1216→                  className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+  1217→                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>arrow_forward</span>
+  1218→                  Continuar ({totalItems} bloque{totalItems > 1 ? 's' : ''})
+  1219→                </button>
+  1220→              </>
+  1221→            ) : (
+  1222→              <div className="text-center py-1">
+  1223→                <p className="text-xs text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">
+  1224→                  Selecciona canchas y horarios para continuar
+  1225→                </p>
+  1226→              </div>
+  1227→            )}
+  1228→          </div>
+  1229→        </div>
+  1230→      )}
+  1231→
+  1232→      {/* ═══ SUMMARY BOTTOM BAR ═══ */}
+  1233→      {formStep === 'summary' && (
+  1234→        <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
+  1235→          <div className="max-w-2xl mx-auto p-4">
+  1236→            <div className="flex items-center justify-between mb-3">
+  1237→              <div>
+  1238→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</p>
+  1239→                <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">S/ {paymentAmount.toFixed(2)}</p>
+  1240→              </div>
+  1241→              <div className="text-right">
+  1242→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
+  1243→                  {bookingDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+  1244→                </p>
+  1245→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+  1246→                  {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : ''}
+  1247→                </p>
+  1248→              </div>
+  1249→            </div>
+  1250→            <button type="button" disabled={submitting || !clientName.trim() || !clientPhone.trim()}
+  1251→              onClick={handleSubmit}
+  1252→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+  1253→              {submitting ? (
+  1254→                <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando reserva...</>
+  1255→              ) : (
+  1256→                <><span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified_payment</span> Confirmar Reserva y Pagar</>
+  1257→              )}
+  1258→            </button>
+  1259→          </div>
+  1260→        </div>
+  1261→      )}
+  1262→      <PaymentVoucher data={voucherData} open={showVoucher} onClose={() => setShowVoucher(false)} />
+  1263→    </motion.div>
+  1264→  )
+  1265→}
+  1266→

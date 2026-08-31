@@ -1,0 +1,402 @@
+   600→        <motion.div key="select" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+   601→          className="max-w-2xl mx-auto px-4 pb-40">
+   602→
+   603→          {/* ── Date Picker ── */}
+   604→          <div className="mb-5">
+   605→            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-2.5 flex items-center gap-1.5">
+   606→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">calendar_month</span>
+   607→              Fecha
+   608→            </h2>
+   609→            <div ref={dateScrollRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+   610→              {availableDays.map((day) => {
+   611→                const iso = formatDateISO(day)
+   612→                const isActive = selectedDate === iso
+   613→                const isTodayDate = isToday(day)
+   614→                return (
+   615→                  <button key={iso} type="button" onClick={() => handleDateSelect(day)}
+   616→                    className={`flex-shrink-0 w-[72px] py-2.5 rounded-xl text-center transition-all duration-200 border ${
+   617→                      isActive
+   618→                        ? 'bg-[#00ff41]/15 border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.1)]'
+   619→                        : 'bg-cm-surface-container-highest/40 border-transparent hover:border-white/10'
+   620→                    }`}>
+   621→                    <p className={`text-[10px] font-[family-name:var(--font-inter)] ${isActive ? 'text-[#00ff41] font-semibold' : 'text-cm-on-surface-variant'}`}>
+   622→                      {DAYS_ES[day.getDay()]}
+   623→                    </p>
+   624→                    <p className={`text-lg font-bold font-[family-name:var(--font-sora)] leading-tight ${isActive ? 'text-[#00ff41]' : 'text-cm-on-surface'}`}>
+   625→                      {day.getDate()}
+   626→                    </p>
+   627→                    <p className={`text-[10px] font-[family-name:var(--font-inter)] ${isActive ? 'text-[#00ff41]/70' : 'text-cm-on-surface-variant/60'}`}>
+   628→                      {MONTHS_ES[day.getMonth()]}
+   629→                    </p>
+   630→                    {isTodayDate && (
+   631→                      <span className="block mt-0.5 text-[8px] font-bold text-[#00ff41] font-[family-name:var(--font-inter)]">HOY</span>
+   632→                    )}
+   633→                  </button>
+   634→                )
+   635→              })}
+   636→            </div>
+   637→          </div>
+   638→
+   639→          {/* ── Court Selector ── */}
+   640→          <div className="mb-5">
+   641→            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-4 flex items-center gap-1.5">
+   642→              <span className="material-symbols-outlined text-[16px] text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>sports</span>
+   643→              Selecciona Canchas
+   644→              {selectedCourtIds.length > 0 && (
+   645→                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold font-[family-name:var(--font-inter)]">
+   646→                  {selectedCourtIds.length} seleccionada{selectedCourtIds.length > 1 ? 's' : ''}
+   647→                </span>
+   648→              )}
+   649→            </h2>
+   650→            <div className="space-y-6">
+   651→              {Object.entries(courtsBySport).map(([sport, sportCourts]) => {
+   652→                const cfg = sportConfig[sport] || { label: sport, icon: 'sports' }
+   653→                const isFutbol = sport === 'futbol'
+   654→                const surfaceLabel = isFutbol ? 'Sint\u00e9tico Premium' : 'Piso Flotante'
+   655→                return (
+   656→                  <section key={sport} className="space-y-3">
+   657→                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+   658→                      <div className="flex items-center gap-2">
+   659→                        <span className={`material-symbols-outlined text-[18px] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>{cfg.icon}</span>
+   660→                        <h3 className={`text-[11px] font-bold uppercase tracking-widest font-[family-name:var(--font-inter)] ${isFutbol ? 'text-cm-primary' : 'text-[#b4c5ff]'}`}>
+   661→                          Canchas de {cfg.label}
+   662→                        </h3>
+   663→                      </div>
+   664→                      <span className="text-[10px] text-cm-on-surface-variant bg-cm-surface-container-highest/60 px-2.5 py-0.5 rounded-full font-[family-name:var(--font-inter)]">
+   665→                        {surfaceLabel}
+   666→                      </span>
+   667→                    </div>
+   668→                    <div className={`grid gap-5 ${isFutbol && sportCourts.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+   669→                      {sportCourts.map((court) => {
+   670→                        const isSelected = selectedCourtIds.includes(court.id)
+   671→                        const schedule = court.pricingSchedule || []
+   672→                        const uniquePrices = [...new Set(schedule.length > 0 ? schedule.map((s: PricingScheduleItem) => s.pricePerHour) : [court.pricePerHour])]
+   673→                        const dayPrice = Math.min(...uniquePrices)
+   674→                        const nightPrice = Math.max(...uniquePrices)
+   675→                        const singlePrice = uniquePrices.length === 1
+   676→                        const accentBorder = isFutbol
+   677→                          ? isSelected ? 'border-cm-primary/60' : 'border-[#3d4a42]'
+   678→                          : isSelected ? 'border-[#b4c5ff]/60' : 'border-[#3d4a42]'
+   679→                        const accentBg = isFutbol
+   680→                          ? isSelected ? 'bg-[#1b211d]' : 'bg-[#171d19]'
+   681→                          : isSelected ? 'bg-[#1b1d21]' : 'bg-[#171d19]'
+   682→                        const accentShadow = isFutbol
+   683→                          ? isSelected ? 'shadow-[0_0_0_1px_#68dba9]' : ''
+   684→                          : isSelected ? 'shadow-[0_0_0_1px_#b4c5ff]' : ''
+   685→                        const accentText = isFutbol
+   686→                          ? isSelected ? 'text-cm-primary' : 'text-cm-on-surface'
+   687→                          : isSelected ? 'text-[#b4c5ff]' : 'text-cm-on-surface'
+   688→                        const hoverBorder = isFutbol
+   689→                          ? 'hover:border-cm-primary/50'
+   690→                          : 'hover:border-[#b4c5ff]/50'
+   691→                        return (
+   692→                          <button key={court.id} type="button" onClick={() => handleCourtToggle(court.id)}
+   693→                            className={`group relative w-full flex flex-col p-3 rounded-xl border transition-all duration-300 text-left active:scale-[0.97] ${accentBg} ${accentBorder} ${accentShadow} ${hoverBorder}`}>
+   694→                            <div className={`w-full ${isFutbol ? 'aspect-[16/10]' : 'aspect-[21/9]'} rounded-lg relative overflow-hidden mb-3 border border-white/10 ${
+   695→                              isFutbol ? '' : ''
+   696→                            }`} style={{
+   697→                              background: isFutbol
+   698→                                ? 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)'
+   699→                                : 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)',
+   700→                              boxShadow: 'inset 0 0 40px rgba(0,0,0,0.3)'
+   701→                            }}>
+   702→                              {isFutbol ? (
+   703→                                <>
+   704→                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/20" />
+   705→                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 border border-white/20 rounded-full" />
+   706→                                  <div className="absolute left-0 top-1/4 h-1/2 w-3 border-r border-y border-white/20" />
+   707→                                  <div className="absolute right-0 top-1/4 h-1/2 w-3 border-l border-y border-white/20" />
+   708→                                </>
+   709→                              ) : (
+   710→                                <>
+   711→                                  <div className="absolute inset-2 border border-white/20" />
+   712→                                  <div className="absolute inset-x-2 top-[30%] h-[40%] border-y border-white/10" />
+   713→                                  <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-white/40 shadow-sm z-10" />
+   714→                                </>
+   715→                              )}
+   716→                            </div>
+   717→                            {isFutbol ? (
+   718→                              <div className="w-full space-y-1">
+   719→                                <div className="flex justify-between items-start">
+   720→                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+   721→                                  <span className={`w-2 h-2 rounded-full mt-2 ${isFutbol ? 'bg-cm-primary' : 'bg-[#b4c5ff]'}`} />
+   722→                                </div>
+   723→                                <p className={`text-[11px] ${isFutbol ? 'text-cm-primary' : 'text-cm-primary'} font-medium font-[family-name:var(--font-inter)]`}>Disponible</p>
+   724→                                <div className="flex flex-col gap-1 mt-1">
+   725→                                  <div className="flex items-center gap-2">
+   726→                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
+   727→                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+   728→                                  </div>
+   729→                                  {!singlePrice && (
+   730→                                    <div className="flex items-center gap-2">
+   731→                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
+   732→                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+   733→                                    </div>
+   734→                                  )}
+   735→                                </div>
+   736→                              </div>
+   737→                            ) : (
+   738→                              <div className="w-full flex justify-between items-center">
+   739→                                <div>
+   740→                                  <span className={`text-sm font-bold font-[family-name:var(--font-sora)] ${accentText}`}>{court.name}</span>
+   741→                                  <p className="text-[11px] text-cm-primary font-medium font-[family-name:var(--font-inter)]">Disponible</p>
+   742→                                </div>
+   743→                                <div className="flex flex-col items-end gap-0.5">
+   744→                                  <div className="flex items-center gap-1.5">
+   745→                                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#fbbf24"/><g stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="1" y1="10" x2="3" y2="10"/><line x1="17" y1="10" x2="19" y2="10"/><line x1="3.5" y1="3.5" x2="5" y2="5"/><line x1="15" y1="15" x2="16.5" y2="16.5"/><line x1="3.5" y1="16.5" x2="5" y2="15"/><line x1="15" y1="5" x2="16.5" y2="3.5"/></g></svg>
+   746→                                    <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {dayPrice}</span>
+   747→                                  </div>
+   748→                                  {!singlePrice && (
+   749→                                    <div className="flex items-center gap-1.5">
+   750→                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="none"><path d="M17.3 12.3A7.5 7.5 0 016.7 2.7 7.5 7.5 0 1017.3 12.3z" fill="#818cf8"/></svg>
+   751→                                      <span className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {nightPrice}</span>
+   752→                                    </div>
+   753→                                  )}
+   754→                                </div>
+   755→                              </div>
+   756→                            )}
+   757→                          </button>
+   758→                        )
+   759→                      })}
+   760→                    </div>
+   761→                  </section>
+   762→                )
+   763→              })}
+   764→            </div>
+   765→          </div>
+   766→          {/* ── Time Slot Grid ── */}
+   767→          {selectedCourtIds.length > 0 && (
+   768→            <div className="mb-5">
+   769→              <div className="flex items-center justify-between mb-3">
+   770→                <div className="flex items-center gap-2">
+   771→                  <span className="material-symbols-outlined text-cm-primary text-[18px]">schedule</span>
+   772→                  <h2 className="text-[13px] font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">Horarios Disponibles</h2>
+   773→                  {bookingsLoading && (
+   774→                    <span className="material-symbols-outlined text-[14px] animate-spin text-cm-on-surface-variant">progress_activity</span>
+   775→                  )}
+   776→                </div>
+   777→                <span className="text-[10px] font-bold px-3 py-1 bg-cm-primary/10 text-cm-primary rounded-full font-[family-name:var(--font-inter)] truncate max-w-[180px]">
+   778→                  {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+   779→                </span>
+   780→              </div>
+   781→              <div className="space-y-2">
+   782→                <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   783→                  {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+   784→                </p>
+   785→                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+   786→                  {visibleSlots.map((slot) => {
+   787→                    const status = getUnifiedSlotStatus(slot)
+   788→                    const hour = parseInt(slot.split(':')[0], 10)
+   789→                    const nextHour = `${String(hour + 1).padStart(2, '0')}:00`
+   790→                    let chipClass = 'bg-white/10 backdrop-blur-md text-cm-on-surface font-medium border border-white/20 hover:bg-white/20 shadow-sm'
+   791→                    let clickAllowed = true
+   792→                    if (status === 'selected') {
+   793→                      chipClass = 'bg-cm-primary text-cm-on-primary border-cm-primary shadow-lg shadow-cm-primary/20'
+   794→                    } else if (status === 'occupied') {
+   795→                      chipClass = 'bg-white/5 backdrop-blur-sm text-cm-on-surface-variant font-medium border border-white/10 opacity-40 cursor-not-allowed'
+   796→                      clickAllowed = false
+   797→                    } else if (status === 'past') {
+   798→                      chipClass = 'bg-white/[0.02] text-cm-on-surface-variant/20 border border-transparent cursor-not-allowed'
+   799→                      clickAllowed = false
+   800→                    }
+   801→                    return (
+   802→                      <button key={slot} type="button" disabled={!clickAllowed}
+   803→                        onClick={() => handleSlotToggle(slot)}
+   804→                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+   805→                        {slot} - {nextHour}
+   806→                      </button>
+   807→                    )
+   808→                  })}
+   809→                </div>
+   810→              </div>
+   811→              {selectedTimeSlots.length > 0 && (
+   812→                <button type="button" onClick={clearTimeSlots}
+   813→                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+   814→                  Limpiar selección
+   815→                </button>
+   816→              )}
+   817→            </div>
+   818→          )}
+   819→          {/* ── Empty state: no courts selected ── */}
+   820→          {selectedCourtIds.length === 0 && (
+   821→            <div className="flex flex-col items-center justify-center py-12 text-center">
+   822→              <span className="material-symbols-outlined text-[48px] text-cm-on-surface-variant/20 mb-3">sports</span>
+   823→              <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   824→                Selecciona al menos una cancha para ver los horarios disponibles
+   825→              </p>
+   826→            </div>
+   827→          )}
+   828→        </motion.div>
+   829→      )}
+   830→
+   831→      {/* ═══ STEP 2: SUMMARY ═══ */}
+   832→      {formStep === 'summary' && (
+   833→        <motion.div key="summary" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+   834→          transition={{ type: 'tween', duration: 0.3 }}
+   835→          className="max-w-2xl mx-auto px-4 pb-40">
+   836→
+   837→          {/* Courts & Slots Summary */}
+   838→          <div className="glass-card rounded-2xl p-4 mb-4">
+   839→            <h3 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-2">
+   840→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+   841→              {totalCourts} cancha{totalCourts > 1 ? 's' : ''} x {totalSlots} hora{totalSlots > 1 ? 's' : ''} = {totalItems} bloque{totalItems > 1 ? 's' : ''}
+   842→            </h3>
+   843→            <div className="space-y-2">
+   844→              {selectedCourtIds.map((cId) => {
+   845→                const court = courts.find((c) => c.id === cId)
+   846→                if (!court) return null
+   847→                const cfg = sportConfig[court.sport] || { icon: 'sports', label: court.sport }
+   848→                const courtSlots = selectedTimeSlots.sort()
+   849→                const courtTotal = pricingBreakdown
+   850→                  .filter((p) => p.courtId === cId)
+   851→                  .reduce((s, p) => s + p.price, 0)
+   852→                return (
+   853→                  <div key={cId} className="bg-cm-surface-container-highest/30 rounded-xl p-3">
+   854→                    <div className="flex items-center gap-2 mb-2">
+   855→                      <span className="material-symbols-outlined text-[20px] text-[#00ff41]">{cfg.icon}</span>
+   856→                      <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{court.name}</span>
+   857→                      <span className="ml-auto text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+   858→                    </div>
+   859→                    <div className="flex flex-wrap gap-1.5">
+   860→                      {courtSlots.map((s) => (
+   861→                        <span key={s} className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400 font-[family-name:var(--font-inter)] font-medium">
+   862→                          {formatHour(s)}
+   863→                        </span>
+   864→                      ))}
+   865→                    </div>
+   866→                  </div>
+   867→                )
+   868→              })}
+   869→            </div>
+   870→          </div>
+   871→
+   872→          {/* Date & Time Info */}
+   873→          <div className="grid grid-cols-2 gap-3 mb-4">
+   874→            <div className="glass-card rounded-xl p-3">
+   875→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   876→                <span className="material-symbols-outlined text-[12px]">calendar_month</span> Fecha
+   877→              </p>
+   878→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+   879→                {bookingDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+   880→              </p>
+   881→            </div>
+   882→            <div className="glass-card rounded-xl p-3">
+   883→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+   884→                <span className="material-symbols-outlined text-[12px]">schedule</span> Horario
+   885→              </p>
+   886→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   887→                {[...selectedTimeSlots].sort()[0]} - {String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00
+   888→              </p>
+   889→            </div>
+   890→          </div>
+   891→
+   892→          {/* Payment Breakdown */}
+   893→          <div className="glass-card rounded-2xl p-4 mb-4">
+   894→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-4 flex items-center gap-2">
+   895→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>receipt_long</span>
+   896→              Resumen de Pago
+   897→            </h2>
+   898→            <div className="space-y-2">
+   899→              {selectedCourtIds.map((cId) => {
+   900→                const court = courts.find((c) => c.id === cId)
+   901→                if (!court) return null
+   902→                const courtTotal = pricingBreakdown.filter((p) => p.courtId === cId).reduce((s, p) => s + p.price, 0)
+   903→                return (
+   904→                  <div key={cId} className="flex items-center justify-between">
+   905→                    <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{court.name} ({totalSlots}h)</span>
+   906→                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+   907→                  </div>
+   908→                )
+   909→              })}
+   910→
+   911→              {/* Payment Type Selector */}
+   912→              <div className="mb-4">
+   913→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 font-medium">Selecciona el monto a pagar</p>
+   914→                <div className="space-y-2">
+   915→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'advance' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   916→                    <input type="radio" name="paymentType" value="advance" checked={paymentType === 'advance'} onChange={() => setPaymentType('advance')} className="accent-[#00ff41] w-4 h-4" />
+   917→                    <div className="flex-1">
+   918→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar adelanto (50%)</p>
+   919→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago minimo obligatorio para confirmar la reserva</p>
+   920→                    </div>
+   921→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+   922→                  </label>
+   923→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'full_payment' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   924→                    <input type="radio" name="paymentType" value="full_payment" checked={paymentType === 'full_payment'} onChange={() => setPaymentType('full_payment')} className="accent-[#00ff41] w-4 h-4" />
+   925→                    <div className="flex-1">
+   926→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar el total (100%)</p>
+   927→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Tu reserva quedara completamente pagada</p>
+   928→                    </div>
+   929→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   930→                  </label>
+   931→                </div>
+   932→              </div>
+   933→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   934→                <div className="flex items-center gap-2">
+   935→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+   936→                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">
+   937→                    {paymentType === 'full_payment' ? 'PAGO TOTAL' : 'ADELANTO'}
+   938→                  </span>
+   939→                </div>
+   940→                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+   941→              </div>
+   942→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   943→                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Saldo pendiente</span>
+   944→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {paymentRemaining.toFixed(2)}</span>
+   945→              </div>
+   946→              <div className="border-t border-white/5 pt-2 flex items-center justify-between">
+   947→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
+   948→                <span className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   949→              </div>
+   950→            </div>
+   951→          </div>
+   952→
+   953→          {/* Contact Info */}
+   954→          <div className="glass-card rounded-2xl p-4 mb-4">
+   955→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3 flex items-center gap-2">
+   956→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>person</span>
+   957→              Datos de contacto
+   958→            </h2>
+   959→            <div className="space-y-3">
+   960→              <div>
+   961→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Nombre completo <span className="text-red-400">*</span></label>
+   962→                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Tu nombre"
+   963→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   964→              </div>
+   965→              <div>
+   966→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Email</label>
+   967→                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="tu@email.com"
+   968→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   969→              </div>
+   970→              <div>
+   971→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Teléfono <span className="text-red-400">*</span></label>
+   972→                <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+51 999 999 999"
+   973→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   974→              </div>
+   975→            </div>
+   976→          </div>
+   977→        </motion.div>
+   978→      )}
+   979→
+   980→      {/* ═══ STEP 3: PAYMENT ═══ */}
+   981→      {formStep === 'payment' && !success && createdBookings.length > 0 && (
+   982→        <motion.div key="payment" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+   983→          transition={{ type: 'tween', duration: 0.3 }}
+   984→          className="max-w-2xl mx-auto px-4 pb-40">
+   985→
+   986→          {/* Booking summary card */}
+   987→          <div className="glass-card rounded-2xl p-4 mb-6">
+   988→            <div className="flex items-center gap-3 mb-3">
+   989→              <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   990→                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">sports</span>
+   991→              </div>
+   992→              <div className="flex-1 min-w-0">
+   993→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   994→                  {totalCourts} cancha{totalCourts > 1 ? 's' : ''} · {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })} · {totalSlots}h
+   995→                </p>
+   996→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   997→                  {selectedTimeSlots.sort().map(formatHour).join(', ')}
+   998→                </p>
+   999→              </div>
+
+[showing lines 600-999 of 1266; use offset=1000 with limit to continue reading]

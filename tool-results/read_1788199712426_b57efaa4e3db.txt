@@ -1,0 +1,778 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useState, useCallback } from 'react'
+     4→import { useAppStore } from '@/store/useAppStore'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { toast } from '@/hooks/use-toast'
+     7→import { getAuthHeaders } from '@/lib/auth-helpers'
+     8→import { formatTimeRange } from '@/lib/timeUtils'
+     9→import CulqiPayButton from '@/components/payments/CulqiPayButton'
+    10→import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
+    11→import PaymentVoucher from '@/components/payments/PaymentVoucher'
+    12→
+    13→/* ─── types ─── */
+    14→interface Booking {
+    15→  id: string
+    16→  courtId: string
+    17→  userId: string
+    18→  date: string
+    19→  startTime: string
+    20→  endTime: string
+    21→  totalPrice: number
+    22→  advanceAmount: number
+    23→  remainingAmount: number
+    24→  remainingPaymentStatus: string | null
+    25→  status: string
+    26→  paymentMethod: string | null
+    27→  notes: string | null
+    28→  court: {
+    29→    id: string
+    30→    name: string
+    31→    sport: string
+    32→    branch: { id: string; name: string }
+    33→  }
+    34→  user: { id: string; name: string; email: string }
+    35→}
+    36→
+    37→type TabType = 'upcoming' | 'completed' | 'cancelled'
+    38→
+    39→/* ─── config ─── */
+    40→const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
+    41→  reserved:       { label: 'Reservado',            color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'check_circle' },
+    42→  payment_pending: { label: 'Pendiente de reserva', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: 'hourglass_top' },
+    43→  remaining_payment_pending: { label: 'Pago restante pendiente', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'pending' },
+    44→  completed:      { label: 'Completo',             color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',     icon: 'verified' },
+    45→  cancelled:      { label: 'Cancelado',            color: 'bg-red-500/20 text-red-400 border-red-500/30',       icon: 'cancel' },
+    46→}
+    47→
+    48→const sportIcons: Record<string, string> = {
+    49→  futbol: 'sports_soccer',
+    50→  voley: 'sports_volleyball',
+    51→  basket: 'sports_basketball',
+    52→  tenis: 'sports_tennis',
+    53→  // FIX P2-11: Added padel
+    54→  padel: 'sports_tennis',
+    55→  eventos: 'celebration',
+    56→}
+    57→
+    58→const sportLabels: Record<string, string> = {
+    59→  futbol: 'Fútbol',
+    60→  voley: 'Vóley',
+    61→  basket: 'Básquet',
+    62→  tenis: 'Tenis',
+    63→  // FIX P2-11: Added padel
+    64→  padel: 'Pádel',
+    65→  eventos: 'Eventos',
+    66→}
+    67→
+    68→const paymentMethodLabels: Record<string, string> = {
+    69→  'yape qr': 'Yape QR',
+    70→  'Yape QR': 'Yape QR',
+    71→  yape: 'Yape',
+    72→  plin: 'Plin',
+    73→  culqi: 'Culqi',
+    74→  card: 'Tarjeta',
+    75→  cash: 'Efectivo',
+    76→  transfer: 'Transferencia',
+    77→}
+    78→
+    79→const onlineMethods = ['culqi', 'yape', 'yape qr', 'plin', 'card', 'tarjeta']
+    80→const manualMethods = ['efectivo', 'transferencia', 'cash', 'transfer']
+    81→
+    82→const tabs: { key: TabType; label: string }[] = [
+    83→  { key: 'upcoming',   label: 'Próximas' },
+    84→  { key: 'completed',  label: 'Completadas' },
+    85→  { key: 'cancelled',  label: 'Canceladas' },
+    86→]
+    87→
+    88→/* ─── helpers ─── */
+    89→// Parse date string as local date (avoids UTC timezone issues for Peru, UTC-5)
+    90→function parseLocalDate(dateStr: string): Date {
+    91→  const parts = dateStr.split('-')
+    92→  if (parts.length === 3) {
+    93→    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+    94→  }
+    95→  return new Date(dateStr + 'T00:00:00')
+    96→}
+    97→
+    98→const fmt = (dateStr: string) => {
+    99→  const d = parseLocalDate(dateStr)
+   100→  return d.toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' })
+   101→}
+   102→
+   103→const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+   104→
+   105→function getRefCode(bookingId: string): string {
+   106→  const hash = bookingId.slice(-8).toUpperCase()
+   107→  return `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`
+   108→}
+   109→
+   110→/* ─── component ─── */
+   111→export default function BookingsView() {
+   112→  const { user, setView } = useAppStore()
+   113→  const [bookings, setBookings] = useState<Booking[]>([])
+   114→  const [activeTab, setActiveTab] = useState<TabType>('upcoming')
+   115→  const [loading, setLoading] = useState(true)
+   116→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   117→  const [use12hFormat, setUse12hFormat] = useState(false)
+   118→
+   119→  /* payment methods from admin config */
+   120→  const [paymentMethods, setPaymentMethods] = useState<{ yape_qr: boolean; culqi: boolean }>({ yape_qr: true, culqi: false })
+   121→  const [yapeRemainingPaid, setYapeRemainingPaid] = useState(false)
+   122→  const [voucherData, setVoucherData] = useState<any>(null)
+   123→  const [showVoucher, setShowVoucher] = useState(false)
+   124→
+   125→  useEffect(() => {
+   126→    fetch('/api/payment-methods')
+   127→      .then(r => r.json())
+   128→      .then(data => setPaymentMethods(data))
+   129→      .catch(() => {})
+   130→  }, [])
+   131→
+   132→  /* pay-remaining modal */
+   133→  const [payModal, setPayModal] = useState<Booking | null>(null)
+   134→  const [payMethod, setPayMethod] = useState('yape')
+   135→  const [paying, setPaying] = useState(false)
+   136→  const [payModalTab, setPayModalTab] = useState<'online' | 'yape' | 'manual'>('online')
+   137→
+   138→  /* ─── fetch ─── */
+   139→  const fetchBookings = useCallback(async () => {
+   140→    if (!user) return
+   141→    try {
+   142→      setLoading(true)
+   143→      // Don't send userId as query param — let the server determine it from auth headers
+   144→      // This avoids mismatch between old demo IDs and real Firebase UIDs
+   145→      const res = await fetch('/api/bookings', {
+   146→        headers: getAuthHeaders(),
+   147→      })
+   148→      if (res.ok) {
+   149→        const data: Booking[] = await res.json()
+   150→        setBookings(data)
+   151→      } else {
+   152→        const err = await res.json().catch(() => ({ error: 'Error desconocido' }))
+   153→        // Error loading bookings (suppressed in production)
+   154→      }
+   155→    } catch (err) {
+   156→      // Fetch bookings error (suppressed in production)
+   157→      toast({ title: 'Error', description: 'No se pudieron cargar las reservas', variant: 'destructive' })
+   158→    } finally {
+   159→      setLoading(false)
+   160→    }
+   161→  }, [user])
+   162→
+   163→  useEffect(() => { fetchBookings() }, [fetchBookings])
+   164→
+   165→  /* ─── filter ─── */
+   166→  const today = new Date()
+   167→  today.setHours(0, 0, 0, 0)
+   168→  const tomorrow = new Date(today)
+   169→  tomorrow.setDate(tomorrow.getDate() + 1)
+   170→
+   171→  const filtered = bookings.filter((b) => {
+   172→    const bd = parseLocalDate(b.date)
+   173→    // FIX P2-9: Show today's bookings for regular users
+   174→    switch (activeTab) {
+   175→      case 'upcoming':
+   176→        return (
+   177→          bd >= today &&
+   178→          !['cancelled', 'completed'].includes(b.status)
+   179→        )
+   180→      case 'completed':
+   181→        return b.status === 'completed'
+   182→      case 'cancelled':
+   183→        return b.status === 'cancelled'
+   184→      default:
+   185→        return true
+   186→    }
+   187→  })
+   188→
+   189→  /* ─── actions ─── */
+   190→  // FIX P2-12: Add loading state to prevent double-click
+   191→  const [cancellingId, setCancellingId] = useState<string | null>(null)
+   192→
+   193→  const handleCancel = async (id: string) => {
+   194→    if (cancellingId) return // Prevent double-click
+   195→    setCancellingId(id)
+   196→    try {
+   197→      const res = await fetch('/api/bookings', {
+   198→        method: 'PUT',
+   199→        headers: getAuthHeaders(),
+   200→        body: JSON.stringify({ id, status: 'cancelled' }),
+   201→      })
+   202→      if (res.ok) {
+   203→        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
+   204→        setExpandedId(null)
+   205→        toast({ title: 'Reserva cancelada', description: 'Tu reserva ha sido cancelada exitosamente.' })
+   206→      }
+   207→    } catch {
+   208→      toast({ title: 'Error', description: 'No se pudo cancelar la reserva', variant: 'destructive' })
+   209→    } finally {
+   210→      setCancellingId(null)
+   211→    }
+   212→  }
+   213→
+   214→  const handlePayRemaining = async () => {
+   215→    if (!payModal) return
+   216→    setPaying(true)
+   217→    try {
+   218→      const res = await fetch('/api/payments', {
+   219→        method: 'POST',
+   220→        headers: getAuthHeaders(),
+   221→        body: JSON.stringify({
+   222→          bookingId: payModal.id,
+   223→          type: 'remaining',
+   224→          amount: payModal.remainingAmount,
+   225→          method: payMethod,
+   226→        }),
+   227→      })
+   228→      if (res.ok) {
+   229→        toast({ title: 'Pago registrado', description: `Se registró el pago restante de ${fmtCurrency(payModal.remainingAmount)}` })
+   230→        setVoucherData(constructVoucherFromBooking(payModal, paymentMethodLabels[payMethod] || payMethod))
+   231→        setPayModal(null)
+   232→        fetchBookings()
+   233→        setTimeout(() => setShowVoucher(true), 500)
+   234→      } else {
+   235→        const err = await res.json()
+   236→        toast({ title: 'Error', description: err.error || 'No se pudo procesar el pago', variant: 'destructive' })
+   237→      }
+   238→    } catch {
+   239→      toast({ title: 'Error', description: 'No se pudo procesar el pago', variant: 'destructive' })
+   240→    } finally {
+   241→      setPaying(false)
+   242→    }
+   243→  }
+   244→
+   245→  const constructVoucherFromBooking = (b: any, methodDisplay?: string) => {
+   246→    const now = new Date()
+   247→    return {
+   248→      payment_id: '',
+   249→      booking_code: getRefCode(b.id),
+   250→      user_name: user?.name || '',
+   251→      user_email: user?.email || '',
+   252→      user_phone: (user as any)?.phone || null,
+   253→      user_document: null,
+   254→      court_name: b.court?.name || '',
+   255→      sport: b.court?.sport || '',
+   256→      booking_date: b.date || '',
+   257→      booking_start_time: b.startTime || '',
+   258→      booking_end_time: b.endTime || '',
+   259→      payment_type: 'remaining',
+   260→      amount_paid: b.remainingAmount || 0,
+   261→      remaining_balance: 0,
+   262→      payment_method_display: methodDisplay || 'Yape QR',
+   263→      payment_status: 'completed',
+   264→      payment_date: now.toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' }),
+   265→      payment_time: now.toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+   266→      total_price: b.totalPrice || 0,
+   267→    }
+   268→  }
+   269→
+   270→  /* ─── tab counts ─── */
+   271→  const tabCounts = {
+   272→    upcoming: bookings.filter((b) => {
+   273→      const bd = parseLocalDate(b.date)
+   274→      return bd >= tomorrow && ['reserved', 'payment_pending', 'remaining_payment_pending'].includes(b.status)
+   275→    }).length,
+   276→    completed: bookings.filter((b) => b.status === 'completed').length,
+   277→    cancelled: bookings.filter((b) => b.status === 'cancelled').length,
+   278→  }
+   279→
+   280→  return (
+   281→    <div className="px-4 py-6 pb-28">
+   282→      <div className="max-w-4xl mx-auto">
+   283→        {/* Header */}
+   284→        <div className="flex items-center justify-between mb-6">
+   285→          <div>
+   286→            <h1 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface">
+   287→              Mis Reservas
+   288→            </h1>
+   289→            <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   290→              Gestiona tus reservas de canchas
+   291→            </p>
+   292→          </div>
+   293→          <div className="flex items-center gap-2">
+   294→          <button
+   295→              type="button"
+   296→              onClick={() => setUse12hFormat(!use12hFormat)}
+   297→              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+   298→              title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
+   299→            >
+   300→              <span className="material-symbols-outlined text-[16px]">schedule</span>
+   301→              <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
+   302→            </button>
+   303→          <button type="button"
+   304→            onClick={() => setView('search')}
+   305→            className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors"
+   306→          >
+   307→            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
+   308→            <span className="hidden sm:inline">Nueva Reserva</span>
+   309→          </button>
+   310→          </div>
+   311→        </div>
+   312→
+   313→        {/* Tabs */}
+   314→        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6">
+   315→          {tabs.map((tab) => (
+   316→            <button type="button"
+   317→              key={tab.key}
+   318→              onClick={() => setActiveTab(tab.key)}
+   319→              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+   320→                activeTab === tab.key
+   321→                  ? 'bg-cm-primary/10 text-cm-primary font-semibold'
+   322→                  : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   323→              }`}
+   324→            >
+   325→              {tab.label}
+   326→              {tabCounts[tab.key] > 0 && (
+   327→                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+   328→                  activeTab === tab.key ? 'bg-cm-primary/20 text-cm-primary' : 'bg-cm-surface-container-highest text-cm-on-surface-variant'
+   329→                }`}>
+   330→                  {tabCounts[tab.key]}
+   331→                </span>
+   332→              )}
+   333→            </button>
+   334→          ))}
+   335→        </div>
+   336→
+   337→        {/* Content */}
+   338→        {loading ? (
+   339→          <div className="space-y-3">
+   340→            {[1, 2, 3].map((i) => (
+   341→              <div key={i} className="glass-card rounded-xl p-4 animate-pulse">
+   342→                <div className="flex items-center gap-3">
+   343→                  <div className="w-12 h-12 bg-cm-surface-container-highest rounded-xl" />
+   344→                  <div className="flex-1 space-y-2">
+   345→                    <div className="h-4 bg-cm-surface-container-highest rounded w-3/4" />
+   346→                    <div className="h-3 bg-cm-surface-container-highest rounded w-1/2" />
+   347→                  </div>
+   348→                </div>
+   349→              </div>
+   350→            ))}
+   351→          </div>
+   352→        ) : filtered.length === 0 ? (
+   353→          <div className="text-center py-16">
+   354→            <div className="w-20 h-20 rounded-full bg-cm-surface-container-highest/60 flex items-center justify-center mx-auto mb-4">
+   355→              <span className="material-symbols-outlined text-4xl text-cm-on-surface-variant/40">event_busy</span>
+   356→            </div>
+   357→            <p className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] text-base">
+   358→              No tienes reservas {activeTab === 'upcoming' ? 'próximas' : activeTab === 'completed' ? 'completadas' : 'canceladas'}
+   359→            </p>
+   360→            <button type="button"
+   361→              onClick={() => setView('search')}
+   362→              className="mt-4 text-cm-primary text-sm font-semibold hover:underline"
+   363→            >
+   364→              Buscar canchas
+   365→            </button>
+   366→          </div>
+   367→        ) : (
+   368→          <div className="space-y-3">
+   369→            <AnimatePresence mode="popLayout">
+   370→              {filtered.map((booking) => {
+   371→                const status = statusConfig[booking.status] || statusConfig.reserved
+   372→                const isExpanded = expandedId === booking.id
+   373→                const progressPercent = booking.totalPrice > 0
+   374→                  ? (booking.advanceAmount / booking.totalPrice) * 100
+   375→                  : 0
+   376→
+   377→                return (
+   378→                  <motion.div
+   379→                    key={booking.id}
+   380→                    layout
+   381→                    initial={{ opacity: 0, y: 10 }}
+   382→                    animate={{ opacity: 1, y: 0 }}
+   383→                    exit={{ opacity: 0, y: -10 }}
+   384→                    transition={{ duration: 0.2 }}
+   385→                    className={`glass-card rounded-xl overflow-hidden transition-all ${
+   386→                      isExpanded ? 'border-cm-primary/30 glow-accent' : 'hover:border-white/15'
+   387→                    }`}
+   388→                  >
+   389→                    {/* Main row */}
+   390→                    <div
+   391→                      className="p-4 cursor-pointer"
+   392→                      onClick={() => setExpandedId(isExpanded ? null : booking.id)}
+   393→                    >
+   394→                      <div className="flex items-start gap-3">
+   395→                        {/* Sport icon */}
+   396→                        <div className="w-12 h-12 rounded-xl bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
+   397→                          <span className="material-symbols-outlined text-cm-primary text-[24px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   398→                            {sportIcons[booking.court.sport] || 'sports'}
+   399→                          </span>
+   400→                        </div>
+   401→
+   402→                        {/* Info */}
+   403→                        <div className="flex-1 min-w-0">
+   404→                          <div className="flex items-start justify-between gap-2">
+   405→                            <div className="min-w-0">
+   406→                              <div className="flex items-center gap-2">
+   407→                                <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">
+   408→                                  {booking.court.name}
+   409→                                </h3>
+   410→                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest text-cm-on-surface-variant border border-cm-outline-variant/50 whitespace-nowrap">
+   411→                                  {sportLabels[booking.court.sport] || booking.court.sport}
+   412→                                </span>
+   413→                              </div>
+   414→                              <div className="flex items-center gap-3 mt-1.5 text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+   415→                                <span className="flex items-center gap-1">
+   416→                                  <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+   417→                                  {fmt(booking.date)}
+   418→                                </span>
+   419→                                <span className="flex items-center gap-1">
+   420→                                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+   421→                                  {formatTimeRange(booking.startTime, booking.endTime, use12hFormat)}
+   422→                                </span>
+   423→                              </div>
+   424→                            </div>
+   425→                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+   426→                              <p className="font-[family-name:var(--font-sora)] font-bold text-cm-primary text-sm">
+   427→                                {fmtCurrency(booking.totalPrice)}
+   428→                              </p>
+   429→                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${status.color}`}>
+   430→                                <span className="material-symbols-outlined text-[12px]">{status.icon}</span>
+   431→                                {status.label}
+   432→                              </span>
+   433→                            </div>
+   434→                          </div>
+   435→                        </div>
+   436→                      </div>
+   437→
+   438→                      {/* Progress bar (always visible for payment statuses) */}
+   439→                      {['reserved', 'payment_pending', 'remaining_payment_pending', 'completed'].includes(booking.status) && (
+   440→                        <div className="mt-3 ml-[60px]">
+   441→                          <div className="flex items-center justify-between mb-1">
+   442→                            <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   443→                              Adelanto {fmtCurrency(booking.advanceAmount)}
+   444→                            </span>
+   445→                            <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   446→                              {Math.round(progressPercent)}%
+   447→                            </span>
+   448→                          </div>
+   449→                          <div className="h-1.5 bg-cm-surface-container-highest rounded-full overflow-hidden">
+   450→                            <motion.div
+   451→                              initial={{ width: 0 }}
+   452→                              animate={{ width: `${progressPercent}%` }}
+   453→                              transition={{ duration: 0.6, ease: 'easeOut' }}
+   454→                              className={`h-full rounded-full ${
+   455→                                progressPercent >= 100
+   456→                                  ? 'bg-cm-primary'
+   457→                                  : 'bg-gradient-to-r from-cm-primary to-cm-primary-dim'
+   458→                              }`}
+   459→                            />
+   460→                          </div>
+   461→                        </div>
+   462→                      )}
+   463→
+   464→                      {/* Expand chevron */}
+   465→                      <div className="flex justify-center mt-2">
+   466→                        <motion.span
+   467→                          animate={{ rotate: isExpanded ? 180 : 0 }}
+   468→                          transition={{ duration: 0.2 }}
+   469→                          className="material-symbols-outlined text-cm-on-surface-variant/40 text-[18px]"
+   470→                        >
+   471→                          expand_more
+   472→                        </motion.span>
+   473→                      </div>
+   474→                    </div>
+   475→
+   476→                    {/* Expanded detail */}
+   477→                    <AnimatePresence>
+   478→                      {isExpanded && (
+   479→                        <motion.div
+   480→                          initial={{ height: 0, opacity: 0 }}
+   481→                          animate={{ height: 'auto', opacity: 1 }}
+   482→                          exit={{ height: 0, opacity: 0 }}
+   483→                          transition={{ duration: 0.25 }}
+   484→                          className="overflow-hidden"
+   485→                        >
+   486→                          <div className="px-4 pb-4 pt-1 border-t border-white/5 space-y-3">
+   487→                            {/* Details */}
+   488→                            <div className="grid grid-cols-2 gap-3 text-sm">
+   489→                              <div>
+   490→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Sede</p>
+   491→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">{booking.court.branch.name}</p>
+   492→                              </div>
+   493→                              <div>
+   494→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Método de pago</p>
+   495→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">
+   496→                                  {paymentMethodLabels[booking.paymentMethod || ''] || booking.paymentMethod || 'No definido'}
+   497→                                </p>
+   498→                              </div>
+   499→                              <div>
+   500→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Adelanto</p>
+   501→                                <p className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)]">{fmtCurrency(booking.advanceAmount)}</p>
+   502→                              </div>
+   503→                              <div>
+   504→                                <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mb-0.5">Restante</p>
+   505→                                <p className={`font-medium font-[family-name:var(--font-sora)] ${booking.remainingAmount > 0 ? 'text-orange-400' : 'text-green-400'}`}>
+   506→                                  {fmtCurrency(booking.remainingAmount)}
+   507→                                </p>
+   508→                              </div>
+   509→                            </div>
+   510→
+   511→                            {/* Remaining payment warning */}
+   512→                            {['reserved', 'payment_pending', 'remaining_payment_pending'].includes(booking.status) && booking.remainingAmount > 0 && (
+   513→                              <div className="flex items-center gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+   514→                                <span className="material-symbols-outlined text-orange-400 text-[20px]">warning</span>
+   515→                                <p className="text-sm text-orange-300 font-[family-name:var(--font-inter)]">
+   516→                                  Falta pagar <span className="font-semibold">{fmtCurrency(booking.remainingAmount)}</span>
+   517→                                </p>
+   518→                              </div>
+   519→                            )}
+   520→
+   521→                            {/* Actions */}
+   522→                            <div className="flex gap-2 pt-1">
+   523→                              {['reserved', 'payment_pending', 'remaining_payment_pending'].includes(booking.status) && booking.remainingAmount > 0 && (
+   524→                                <button type="button"
+   525→                                  onClick={(e) => {
+   526→                                    e.stopPropagation()
+   527→                                    setPayModal(booking)
+   528→                                  }}
+   529→                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-cm-primary text-cm-on-primary rounded-xl text-sm font-semibold hover:brightness-110 transition-all font-[family-name:var(--font-sora)]"
+   530→                                >
+   531→                                  <span className="material-symbols-outlined text-[18px]">payments</span>
+   532→                                  Pagar Restante
+   533→                                </button>
+   534→                              )}
+   535→                              {['reserved', 'payment_pending'].includes(booking.status) && (
+   536→                                <button type="button"
+   537→                                  onClick={(e) => {
+   538→                                    e.stopPropagation()
+   539→                                    handleCancel(booking.id)
+   540→                                  }}
+   541→                                  disabled={cancellingId === booking.id}
+   542→                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-500/30 text-red-400 rounded-xl text-sm font-semibold hover:bg-red-500/10 transition-colors font-[family-name:var(--font-sora)] disabled:opacity-50 disabled:cursor-not-allowed"
+   543→                                >
+   544→                                  <span className="material-symbols-outlined text-[18px]">{cancellingId === booking.id ? 'progress_activity' : 'cancel'}</span>
+   545→                                  {cancellingId === booking.id ? 'Cancelando...' : 'Cancelar'}
+   546→                                </button>
+   547→                              )}
+   548→                            </div>
+   549→                          </div>
+   550→                        </motion.div>
+   551→                      )}
+   552→                    </AnimatePresence>
+   553→                  </motion.div>
+   554→                )
+   555→              })}
+   556→            </AnimatePresence>
+   557→          </div>
+   558→        )}
+   559→      </div>
+   560→
+   561→      {/* ─── Pay Remaining Modal ─── */}
+   562→      <AnimatePresence>
+   563→        {payModal && (
+   564→          <motion.div
+   565→            initial={{ opacity: 0 }}
+   566→            animate={{ opacity: 1 }}
+   567→            exit={{ opacity: 0 }}
+   568→            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+   569→            onClick={() => !paying && !yapeRemainingPaid && setPayModal(null)}
+   570→          >
+   571→            <motion.div
+   572→              initial={{ y: 100, opacity: 0 }}
+   573→              animate={{ y: 0, opacity: 1 }}
+   574→              exit={{ y: 100, opacity: 0 }}
+   575→              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+   576→              className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto"
+   577→              onClick={(e) => e.stopPropagation()}
+   578→            >
+   579→              {/* Modal header */}
+   580→              <div className="flex items-center justify-between mb-5">
+   581→                <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">
+   582→                  Pagar Restante
+   583→                </h3>
+   584→                {!paying && !yapeRemainingPaid && (
+   585→                  <button type="button"
+   586→                    onClick={() => setPayModal(null)}
+   587→                    className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"
+   588→                  >
+   589→                    <span className="material-symbols-outlined text-cm-on-surface-variant">close</span>
+   590→                  </button>
+   591→                )}
+   592→              </div>
+   593→
+   594→              {/* Booking summary */}
+   595→              <div className="p-3 rounded-xl bg-cm-surface-container-highest/40 space-y-2 mb-5">
+   596→                <div className="flex items-center justify-between">
+   597→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Cancha</span>
+   598→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{payModal.court.name}</span>
+   599→                </div>
+   600→                <div className="flex items-center justify-between">
+   601→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Fecha</span>
+   602→                  <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)]">{fmt(payModal.date)} · {formatTimeRange(payModal.startTime, payModal.endTime, use12hFormat)}</span>
+   603→                </div>
+   604→                <div className="border-t border-white/5 pt-2 flex items-center justify-between">
+   605→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+   606→                  <span className="text-lg font-bold text-cm-primary font-[family-name:var(--font-sora)]">{fmtCurrency(payModal.remainingAmount)}</span>
+   607→                </div>
+   608→              </div>
+   609→
+   610→              {/* Tabs: show available payment methods */}
+   611→              {(() => {
+   612→                const hasOnline = paymentMethods.yape_qr || paymentMethods.culqi
+   613→                const hasManual = true // always available
+   614→
+   615→                if (paymentMethods.yape_qr && !paymentMethods.culqi) {
+   616→                  // Only Yape QR: show directly without tabs
+   617→                  return (
+   618→                    <YapeQRPayButton
+   619→                      bookingIds={[payModal.id]}
+   620→                      amount={payModal.remainingAmount}
+   621→                      userEmail={payModal.user.email}
+   622→                      paymentType="remaining"
+   623→                      onPaymentMarked={() => {
+   624→                        setYapeRemainingPaid(true)
+   625→                        setVoucherData(constructVoucherFromBooking(payModal))
+   626→                        fetchBookings()
+   627→                        setTimeout(() => setShowVoucher(true), 500)
+   628→                      }}
+   629→                      onBack={() => setPayModal(null)}
+   630→                    />
+   631→                  )
+   632→                }
+   633→
+   634→                return (
+   635→                  <>
+   636→                    {/* Tab bar */}
+   637→                    {hasOnline && (
+   638→                      <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-4">
+   639→                        {paymentMethods.culqi && (
+   640→                          <button type="button"
+   641→                            onClick={() => setPayModalTab('online')}
+   642→                            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
+   643→                              payModalTab === 'online'
+   644→                                ? 'bg-cm-primary text-cm-on-primary shadow-sm'
+   645→                                : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   646→                            }`}
+   647→                          >
+   648→                            <span className="material-symbols-outlined text-[16px]">credit_card</span>
+   649→                            Tarjeta
+   650→                          </button>
+   651→                        )}
+   652→                        {paymentMethods.yape_qr && (
+   653→                          <button type="button"
+   654→                            onClick={() => setPayModalTab('yape')}
+   655→                            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
+   656→                              payModalTab === 'yape'
+   657→                                ? 'bg-cm-primary text-cm-on-primary shadow-sm'
+   658→                                : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   659→                            }`}
+   660→                          >
+   661→                            <span className="material-symbols-outlined text-[16px]">qr_code_2</span>
+   662→                            Yape QR
+   663→                          </button>
+   664→                        )}
+   665→                        <button type="button"
+   666→                          onClick={() => setPayModalTab('manual')}
+   667→                          className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all font-[family-name:var(--font-inter)] flex items-center justify-center gap-1.5 ${
+   668→                            payModalTab === 'manual'
+   669→                              ? 'bg-cm-primary text-cm-on-primary shadow-sm'
+   670→                              : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   671→                          }`}
+   672→                        >
+   673→                          <span className="material-symbols-outlined text-[16px]">storefront</span>
+   674→                          Manual
+   675→                        </button>
+   676→                      </div>
+   677→                    )}
+   678→
+   679→                    {/* Culqi tab */}
+   680→                    {payModalTab === 'online' && paymentMethods.culqi && (
+   681→                      <CulqiPayButton
+   682→                        bookingId={payModal.id}
+   683→                        totalAmount={payModal.totalPrice}
+   684→                        remainingAmount={payModal.remainingAmount}
+   685→                        paymentType="remaining"
+   686→                        userEmail={payModal.user.email}
+   687→                        buttonText={`Pagar {fmtCurrency(payModal.remainingAmount)}`}
+   688→                        onSuccess={() => {
+   689→                          toast({ title: 'Pago exitoso', description: 'Tu reserva ha sido actualizada.' })
+   690→                          setVoucherData(constructVoucherFromBooking(payModal, 'Tarjeta'))
+   691→                          setPayModal(null)
+   692→                          fetchBookings()
+   693→                          setTimeout(() => setShowVoucher(true), 500)
+   694→                        }}
+   695→                        onError={(error) => {
+   696→                          toast({ title: 'Error en el pago', description: error, variant: 'destructive' })
+   697→                        }}
+   698→                        onClose={() => {}}
+   699→                      />
+   700→                    )}
+   701→
+   702→                    {/* Yape QR tab */}
+   703→                    {payModalTab === 'yape' && paymentMethods.yape_qr && (
+   704→                      <YapeQRPayButton
+   705→                        bookingIds={[payModal.id]}
+   706→                        amount={payModal.remainingAmount}
+   707→                        userEmail={payModal.user.email}
+   708→                        paymentType="remaining"
+   709→                        onPaymentMarked={() => {
+   710→                          setYapeRemainingPaid(true)
+   711→                          setVoucherData(constructVoucherFromBooking(payModal))
+   712→                          fetchBookings()
+   713→                          setTimeout(() => setShowVoucher(true), 500)
+   714→                        }}
+   715→                        onBack={() => setPayModal(null)}
+   716→                      />
+   717→                    )}
+   718→
+   719→                    {/* Manual tab */}
+   720→                    {payModalTab === 'manual' && (
+   721→                      <>
+   722→                        <div className="space-y-2 mb-4">
+   723→                          <label className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Método de pago manual</label>
+   724→                          <div className="grid grid-cols-2 gap-2">
+   725→                            {[
+   726→                              { key: 'yape', label: 'Yape', icon: 'account_balance_wallet' },
+   727→                              { key: 'plin', label: 'Plin', icon: 'phone_android' },
+   728→                              { key: 'cash', label: 'Efectivo', icon: 'payments' },
+   729→                              { key: 'transfer', label: 'Transferencia', icon: 'account_balance' },
+   730→                            ].map((m) => (
+   731→                              <button type="button"
+   732→                                key={m.key}
+   733→                                onClick={() => setPayMethod(m.key)}
+   734→                                className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
+   735→                                  payMethod === m.key
+   736→                                    ? 'bg-cm-primary/10 border-cm-primary/40 text-cm-primary'
+   737→                                    : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
+   738→                                }`}
+   739→                              >
+   740→                                <span className="material-symbols-outlined text-[18px]">{m.icon}</span>
+   741→                                {m.label}
+   742→                              </button>
+   743→                            ))}
+   744→                          </div>
+   745→                        </div>
+   746→                        <button type="button"
+   747→                          onClick={handlePayRemaining}
+   748→                          disabled={paying}
+   749→                          className="w-full py-3 bg-cm-primary text-cm-on-primary rounded-xl font-semibold font-[family-name:var(--font-sora)] hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+   750→                        >
+   751→                          {paying ? (
+   752→                            <>
+   753→                              <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
+   754→                              Procesando...
+   755→                            </>
+   756→                          ) : (
+   757→                            <>
+   758→                              <span className="material-symbols-outlined text-[20px]">check_circle</span>
+   759→                              Confirmar Pago {fmtCurrency(payModal.remainingAmount)}
+   760→                            </>
+   761→                          )}
+   762→                        </button>
+   763→                      </>
+   764→                    )}
+   765→                  </>
+   766→                )
+   767→              })()}
+   768→            </motion.div>
+   769→          </motion.div>
+   770→        )}
+   771→      </AnimatePresence>
+   772→
+   773→      {/* ─── Payment Voucher Modal ─── */}
+   774→      <PaymentVoucher data={voucherData} open={showVoucher} onClose={() => setShowVoucher(false)} />
+   775→    </div>
+   776→  )
+   777→}
+   778→
