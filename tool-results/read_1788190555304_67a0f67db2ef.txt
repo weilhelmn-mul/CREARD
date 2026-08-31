@@ -1,0 +1,701 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import { toast } from '@/hooks/use-toast'
+     6→import { useContentStore, type SiteSettings, type Court, type NewsItem, type GalleryImage, type SellingPoint, type HowStep, type PaymentMethodItem } from '@/store/useContentStore'
+     7→
+     8→/* ═══════════════════════════════════════════════════
+     9→   CONFIG
+    10→   ═══════════════════════════════════════════════════ */
+    11→type ContentTab = 'secciones' | 'canchas' | 'fotos' | 'noticias'
+    12→
+    13→const contentTabs: { key: ContentTab; label: string; icon: string }[] = [
+    14→  { key: 'secciones', label: 'Secciones', icon: 'dashboard_customize' },
+    15→  { key: 'canchas', label: 'Canchas', icon: 'sports_soccer' },
+    16→  { key: 'fotos', label: 'Fotos', icon: 'photo_library' },
+    17→  { key: 'noticias', label: 'Noticias', icon: 'newspaper' },
+    18→]
+    19→
+    20→const categoryLabels: Record<string, string> = {
+    21→  cancha: 'Cancha', evento: 'Evento', instalacion: 'Instalación', promo: 'Promo', general: 'General',
+    22→  futbol: 'Fútbol 5', voley: 'Vóley', basket: 'Basket',
+    23→  mantenimiento: 'Mantenimiento', general_news: 'General',
+    24→}
+    25→
+    26→const newsCategoryLabels: Record<string, string> = {
+    27→  general: 'General', promo: 'Promoción', evento: 'Evento', mantenimiento: 'Mantenimiento',
+    28→}
+    29→
+    30→const fmtCurrency = (n: number) => `S/ ${n.toFixed(2)}`
+    31→
+    32→const inputCls = 'w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]'
+    33→
+    34→/* ═══════════════════════════════════════════════════
+    35→   SUB-COMPONENT: CANCHAS MANAGEMENT
+    36→   ═══════════════════════════════════════════════════ */
+    37→function CourtsPanel({ courts }: { courts: Court[] }) {
+    38→  const { updateCourt } = useContentStore()
+    39→  const [editingId, setEditingId] = useState<string | null>(null)
+    40→  const [editForm, setEditForm] = useState<Partial<Court>>({})
+    41→
+    42→  const startEdit = (court: Court) => {
+    43→    setEditingId(court.id)
+    44→    setEditForm({ ...court })
+    45→  }
+    46→
+    47→  const handleSave = () => {
+    48→    if (!editingId) return
+    49→    updateCourt(editingId, editForm)
+    50→    toast({ title: 'Cancha actualizada', description: `${editForm.name} guardada correctamente. Se refleja en la Home.` })
+    51→    setEditingId(null)
+    52→  }
+    53→
+    54→  return (
+    55→    <div className="space-y-4">
+    56→      <div>
+    57→        <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">
+    58→          Gestión de Canchas y Precios
+    59→        </h2>
+    60→        <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+    61→          {courts.length} canchas registradas · Los cambios se reflejan al instante en la Home
+    62→        </p>
+    63→      </div>
+    64→
+    65→      <div className="grid gap-3">
+    66→        {courts.map((court) => (
+    67→          <motion.div
+    68→            key={court.id}
+    69→            initial={{ opacity: 0, y: 10 }}
+    70→            animate={{ opacity: 1, y: 0 }}
+    71→            className="glass-card rounded-xl p-4"
+    72→          >
+    73→            {editingId === court.id ? (
+    74→              <div className="space-y-3">
+    75→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    76→                  <div>
+    77→                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Nombre</label>
+    78→                    <input value={editForm.name || ''} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+    79→                  </div>
+    80→                  <div>
+    81→                    <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Precio/Hora (S/)</label>
+    82→                    <input type="number" step="0.5" value={editForm.price_per_hour || ''} onChange={(e) => setEditForm(f => ({ ...f, price_per_hour: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+    83→                  </div>
+    84→                </div>
+    85→                <div>
+    86→                  <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Deporte</label>
+    87→                  <select value={editForm.sport || 'futbol'} onChange={(e) => setEditForm(f => ({ ...f, sport: e.target.value }))} className={inputCls}>
+    88→                    <option value="futbol">Fútbol 5</option>
+    89→                    <option value="voley">Vóley</option>
+    90→                    <option value="eventos">Eventos</option>
+    91→                  </select>
+    92→                </div>
+    93→                <div>
+    94→                  <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Descripción</label>
+    95→                  <textarea value={editForm.description || ''} onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))} rows={2} className={`${inputCls} resize-none`} />
+    96→                </div>
+    97→                <div>
+    98→                  <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">URLs de Imágenes (una por línea)</label>
+    99→                  <textarea value={(editForm.images || []).join('\n')} onChange={(e) => setEditForm(f => ({ ...f, images: e.target.value.split('\n').filter(Boolean) }))} rows={3} placeholder="https://ejemplo.com/imagen1.jpg" className={`${inputCls} resize-none`} />
+   100→                </div>
+   101→                <div>
+   102→                  <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Servicios (separados por coma)</label>
+   103→                  <input value={(editForm.amenities || []).join(', ')} onChange={(e) => setEditForm(f => ({ ...f, amenities: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))} className={inputCls} placeholder="Cesped sintetico, Iluminacion LED, Vestuarios" />
+   104→                </div>
+   105→                <div className="flex items-center gap-3">
+   106→                  <label className="flex items-center gap-2 cursor-pointer">
+   107→                    <input type="checkbox" checked={editForm.is_active ?? true} onChange={(e) => setEditForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 rounded accent-[#00ff41]" />
+   108→                    <span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">Activa</span>
+   109→                  </label>
+   110→                </div>
+   111→                <div className="flex gap-2">
+   112→                  <button onClick={handleSave} className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors">
+   113→                    <span className="material-symbols-outlined text-[16px]">save</span>
+   114→                    Guardar
+   115→                  </button>
+   116→                  <button onClick={() => setEditingId(null)} className="px-4 py-2 border border-white/10 text-cm-on-surface-variant text-sm rounded-xl hover:bg-white/5 transition-colors">Cancelar</button>
+   117→                </div>
+   118→              </div>
+   119→            ) : (
+   120→              <div className="flex items-start justify-between gap-4">
+   121→                <div className="flex-1 min-w-0">
+   122→                  <div className="flex items-center gap-2 mb-1">
+   123→                    <span className="material-symbols-outlined text-cm-primary text-[18px]">
+   124→                      {court.sport === 'futbol' ? 'sports_soccer' : court.sport === 'voley' ? 'sports_volleyball' : 'sports'}
+   125→                    </span>
+   126→                    <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">{court.name}</h3>
+   127→                    {!court.is_active && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400">Inactiva</span>}
+   128→                  </div>
+   129→                  <p className="text-cm-primary font-[family-name:var(--font-sora)] font-bold text-lg">{fmtCurrency(court.price_per_hour)}</p>
+   130→                  <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)] mt-0.5">{court.amenities?.join(', ') || 'Sin servicios adicionales'}</p>
+   131→                </div>
+   132→                <button onClick={() => startEdit(court)} className="flex items-center gap-1 px-3 py-2 bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:text-cm-primary rounded-xl text-xs font-medium transition-colors">
+   133→                  <span className="material-symbols-outlined text-[16px]">edit</span>Editar
+   134→                </button>
+   135→              </div>
+   136→            )}
+   137→          </motion.div>
+   138→        ))}
+   139→      </div>
+   140→    </div>
+   141→  )
+   142→}
+   143→
+   144→/* ═══════════════════════════════════════════════════
+   145→   SUB-COMPONENT: FOTOS (GALLERY) MANAGEMENT
+   146→   ═══════════════════════════════════════════════════ */
+   147→function GalleryPanel({ images }: { images: GalleryImage[] }) {
+   148→  const { addGalleryImage, updateGalleryImage, deleteGalleryImage } = useContentStore()
+   149→  const [showForm, setShowForm] = useState(false)
+   150→  const [editingId, setEditingId] = useState<string | null>(null)
+   151→  const [form, setForm] = useState({ title: '', description: '', url: '', thumbnail_url: '', category: 'general', is_active: true, display_order: 0 })
+   152→  const [filterCategory, setFilterCategory] = useState('all')
+   153→
+   154→  const resetForm = () => { setForm({ title: '', description: '', url: '', thumbnail_url: '', category: 'general', is_active: true, display_order: 0 }); setEditingId(null) }
+   155→
+   156→  const handleSave = () => {
+   157→    if (!form.title || !form.url) { toast({ title: 'Error', description: 'Título y URL son obligatorios', variant: 'destructive' }); return }
+   158→    if (editingId) {
+   159→      updateGalleryImage(editingId, form)
+   160→      toast({ title: 'Imagen actualizada', description: form.title })
+   161→    } else {
+   162→      addGalleryImage(form)
+   163→      toast({ title: 'Imagen agregada', description: form.title })
+   164→    }
+   165→    resetForm(); setShowForm(false)
+   166→  }
+   167→
+   168→  const handleDelete = (id: string) => {
+   169→    if (!confirm('¿Eliminar esta imagen?')) return
+   170→    deleteGalleryImage(id)
+   171→    toast({ title: 'Imagen eliminada' })
+   172→  }
+   173→
+   174→  const startEdit = (img: GalleryImage) => {
+   175→    setEditingId(img.id)
+   176→    setForm({ title: img.title, description: img.description || '', url: img.url, thumbnail_url: img.thumbnail_url || '', category: img.category, is_active: img.is_active, display_order: img.display_order })
+   177→    setShowForm(true)
+   178→  }
+   179→
+   180→  const filteredImages = filterCategory === 'all' ? images : images.filter(i => i.category === filterCategory)
+   181→  const categories = [...new Set(images.map(i => i.category))]
+   182→
+   183→  return (
+   184→    <div className="space-y-4">
+   185→      <div className="flex items-center justify-between">
+   186→        <div>
+   187→          <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Galería de Fotos</h2>
+   188→          <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{images.length} fotos subidas</p>
+   189→        </div>
+   190→        <button onClick={() => { resetForm(); setShowForm(true) }} className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors">
+   191→          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>Agregar Foto
+   192→        </button>
+   193→      </div>
+   194→      {categories.length > 1 && (
+   195→        <div className="flex gap-2 flex-wrap">
+   196→          <button onClick={() => setFilterCategory('all')} className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${filterCategory === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent'}`}>Todas ({images.length})</button>
+   197→          {categories.map(cat => (<button key={cat} onClick={() => setFilterCategory(cat)} className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${filterCategory === cat ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent'}`}>{categoryLabels[cat] || cat} ({images.filter(i => i.category === cat).length})</button>))}
+   198→        </div>
+   199→      )}
+   200→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+   201→        {filteredImages.map((img) => (
+   202→          <motion.div key={img.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card rounded-xl overflow-hidden group">
+   203→            <div className="aspect-video bg-cm-surface-container-highest relative overflow-hidden">
+   204→              {img.url ? <img src={img.url} alt={img.title} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[40px]">image</span></div>}
+   205→              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+   206→                <button onClick={() => startEdit(img)} className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"><span className="material-symbols-outlined text-white text-[18px]">edit</span></button>
+   207→                <button onClick={() => handleDelete(img.id)} className="p-2 rounded-full bg-red-500/30 hover:bg-red-500/50 transition-colors"><span className="material-symbols-outlined text-red-300 text-[18px]">delete</span></button>
+   208→              </div>
+   209→              {!img.is_active && <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/80 text-white">Inactiva</span>}
+   210→            </div>
+   211→            <div className="p-2.5">
+   212→              <p className="font-[family-name:var(--font-sora)] text-xs font-medium text-cm-on-surface truncate">{img.title}</p>
+   213→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{categoryLabels[img.category] || img.category}</p>
+   214→            </div>
+   215→          </motion.div>
+   216→        ))}
+   217→      </div>
+   218→      {filteredImages.length === 0 && <div className="text-center py-12 text-cm-on-surface-variant font-[family-name:var(--font-inter)] text-sm">No hay fotos en esta categoría</div>}
+   219→      <AnimatePresence>
+   220→        {showForm && (
+   221→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
+   222→            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+   223→              <div className="flex items-center justify-between mb-5">
+   224→                <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">{editingId ? 'Editar Foto' : 'Agregar Foto'}</h3>
+   225→                <button onClick={() => setShowForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"><span className="material-symbols-outlined text-cm-on-surface-variant">close</span></button>
+   226→              </div>
+   227→              <div className="space-y-3">
+   228→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título *</label><input value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} className={inputCls} placeholder="Nombre de la foto" /></div>
+   229→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">URL de Imagen *</label><input value={form.url} onChange={(e) => setForm(f => ({ ...f, url: e.target.value }))} className={inputCls} placeholder="https://ejemplo.com/foto.jpg" />{form.url && <div className="mt-2 aspect-video rounded-lg overflow-hidden bg-cm-surface-container-highest"><img src={form.url} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} /></div>}</div>
+   230→                <div className="grid grid-cols-2 gap-3">
+   231→                  <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Categoría</label><select value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>{Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+   232→                  <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Orden</label><input type="number" value={form.display_order} onChange={(e) => setForm(f => ({ ...f, display_order: parseInt(e.target.value) || 0 }))} className={inputCls} /></div>
+   233→                </div>
+   234→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Descripción</label><textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className={`${inputCls} resize-none`} placeholder="Descripción opcional" /></div>
+   235→                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 rounded accent-[#00ff41]" /><span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">Foto activa (visible en la Home)</span></label>
+   236→                <div className="flex gap-2 pt-2">
+   237→                  <button onClick={handleSave} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors"><span className="material-symbols-outlined text-[16px]">{editingId ? 'save' : 'add'}</span>{editingId ? 'Guardar' : 'Agregar'}</button>
+   238→                  <button onClick={() => setShowForm(false)} className="px-4 py-2.5 border border-white/10 text-cm-on-surface-variant text-sm rounded-xl hover:bg-white/5 transition-colors">Cancelar</button>
+   239→                </div>
+   240→              </div>
+   241→            </motion.div>
+   242→          </motion.div>
+   243→        )}
+   244→      </AnimatePresence>
+   245→    </div>
+   246→  )
+   247→}
+   248→
+   249→/* ═══════════════════════════════════════════════════
+   250→   SUB-COMPONENT: NOTICIAS MANAGEMENT
+   251→   ═══════════════════════════════════════════════════ */
+   252→function NewsPanel({ news }: { news: NewsItem[] }) {
+   253→  const { addNews, updateNews, deleteNews } = useContentStore()
+   254→  const [showForm, setShowForm] = useState(false)
+   255→  const [editingId, setEditingId] = useState<string | null>(null)
+   256→  const [form, setForm] = useState({ title: '', content: '', image_url: '', category: 'general', is_active: true, is_featured: false, priority: 0, published_at: new Date().toISOString().split('T')[0], expires_at: '' })
+   257→
+   258→  const resetForm = () => { setForm({ title: '', content: '', image_url: '', category: 'general', is_active: true, is_featured: false, priority: 0, published_at: new Date().toISOString().split('T')[0], expires_at: '' }); setEditingId(null) }
+   259→
+   260→  const handleSave = () => {
+   261→    if (!form.title || !form.content) { toast({ title: 'Error', description: 'Título y contenido son obligatorios', variant: 'destructive' }); return }
+   262→    if (editingId) {
+   263→      updateNews(editingId, form)
+   264→      toast({ title: 'Noticia actualizada', description: form.title })
+   265→    } else {
+   266→      addNews(form)
+   267→      toast({ title: 'Noticia creada', description: form.title })
+   268→    }
+   269→    resetForm(); setShowForm(false)
+   270→  }
+   271→
+   272→  const handleDelete = (id: string) => {
+   273→    if (!confirm('¿Eliminar esta noticia?')) return
+   274→    deleteNews(id)
+   275→    toast({ title: 'Noticia eliminada' })
+   276→  }
+   277→
+   278→  const startEdit = (n: NewsItem) => {
+   279→    setEditingId(n.id)
+   280→    setForm({ title: n.title, content: n.content, image_url: n.image_url || '', category: n.category, is_active: n.is_active, is_featured: n.is_featured, priority: n.priority, published_at: n.published_at || '', expires_at: n.expires_at || '' })
+   281→    setShowForm(true)
+   282→  }
+   283→
+   284→  return (
+   285→    <div className="space-y-4">
+   286→      <div className="flex items-center justify-between">
+   287→        <div>
+   288→          <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">Noticias y Anuncios</h2>
+   289→          <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">{news.length} noticias · {news.filter(n => n.is_featured).length} destacadas</p>
+   290→        </div>
+   291→        <button onClick={() => { resetForm(); setShowForm(true) }} className="flex items-center gap-1.5 px-4 py-2 bg-cm-primary/10 text-cm-primary text-sm font-semibold rounded-xl hover:bg-cm-primary/20 transition-colors">
+   292→          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>Nueva Noticia
+   293→        </button>
+   294→      </div>
+   295→      <div className="grid gap-3">
+   296→        {news.map((item) => (
+   297→          <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card rounded-xl p-4 flex gap-4">
+   298→            {item.image_url && <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 bg-cm-surface-container-highest"><img src={item.image_url} alt={item.title} className="w-full h-full object-cover" /></div>}
+   299→            <div className="flex-1 min-w-0">
+   300→              <div className="flex items-center gap-2 flex-wrap">
+   301→                <h3 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm truncate">{item.title}</h3>
+   302→                {item.is_featured && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-400"><span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>star</span>Destacada</span>}
+   303→                {!item.is_active && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400">Borrador</span>}
+   304→                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">{newsCategoryLabels[item.category] || item.category}</span>
+   305→              </div>
+   306→              <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)] mt-1 line-clamp-2">{item.content}</p>
+   307→            </div>
+   308→            <div className="flex flex-col gap-1">
+   309→              <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg hover:bg-cm-surface-container-highest transition-colors"><span className="material-symbols-outlined text-cm-on-surface-variant text-[18px]">edit</span></button>
+   310→              <button onClick={() => handleDelete(item.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"><span className="material-symbols-outlined text-red-400/70 text-[18px]">delete</span></button>
+   311→            </div>
+   312→          </motion.div>
+   313→        ))}
+   314→      </div>
+   315→      {news.length === 0 && <div className="text-center py-12 text-cm-on-surface-variant font-[family-name:var(--font-inter)] text-sm">No hay noticias. Crea la primera.</div>}
+   316→      <AnimatePresence>
+   317→        {showForm && (
+   318→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
+   319→            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-lg glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+   320→              <div className="flex items-center justify-between mb-5">
+   321→                <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">{editingId ? 'Editar Noticia' : 'Nueva Noticia'}</h3>
+   322→                <button onClick={() => setShowForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"><span className="material-symbols-outlined text-cm-on-surface-variant">close</span></button>
+   323→              </div>
+   324→              <div className="space-y-3">
+   325→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título *</label><input value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} className={inputCls} placeholder="Título de la noticia" /></div>
+   326→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Contenido *</label><textarea value={form.content} onChange={(e) => setForm(f => ({ ...f, content: e.target.value }))} rows={4} className={`${inputCls} resize-none`} placeholder="Escribe el contenido de la noticia..." /></div>
+   327→                <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">URL de Imagen</label><input value={form.image_url} onChange={(e) => setForm(f => ({ ...f, image_url: e.target.value }))} className={inputCls} placeholder="https://ejemplo.com/noticia.jpg" /></div>
+   328→                <div className="grid grid-cols-2 gap-3">
+   329→                  <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Categoría</label><select value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>{Object.entries(newsCategoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+   330→                  <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Prioridad</label><input type="number" value={form.priority} onChange={(e) => setForm(f => ({ ...f, priority: parseInt(e.target.value) || 0 }))} className={inputCls} /></div>
+   331→                </div>
+   332→                <div className="flex gap-4">
+   333→                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 rounded accent-[#00ff41]" /><span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">Publicada</span></label>
+   334→                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_featured} onChange={(e) => setForm(f => ({ ...f, is_featured: e.target.checked }))} className="w-4 h-4 rounded accent-[#00ff41]" /><span className="text-xs text-cm-on-surface font-[family-name:var(--font-inter)]">Destacada</span></label>
+   335→                </div>
+   336→                <div className="flex gap-2 pt-2">
+   337→                  <button onClick={handleSave} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors"><span className="material-symbols-outlined text-[16px]">{editingId ? 'save' : 'add'}</span>{editingId ? 'Guardar' : 'Publicar'}</button>
+   338→                  <button onClick={() => setShowForm(false)} className="px-4 py-2.5 border border-white/10 text-cm-on-surface-variant text-sm rounded-xl hover:bg-white/5 transition-colors">Cancelar</button>
+   339→                </div>
+   340→              </div>
+   341→            </motion.div>
+   342→          </motion.div>
+   343→        )}
+   344→      </AnimatePresence>
+   345→    </div>
+   346→  )
+   347→}
+   348→
+   349→/* ═══════════════════════════════════════════════════
+   350→   SUB-COMPONENT: SECCIONES (HOME SECTIONS EDITOR)
+   351→   ═══════════════════════════════════════════════════ */
+   352→function SectionsPanel() {
+   353→  const { settings, updateSettings } = useContentStore()
+   354→  const [form, setForm] = useState<Partial<SiteSettings>>({})
+   355→  const [saving, setSaving] = useState<string | null>(null)
+   356→  const [openSection, setOpenSection] = useState<string | null>('hero')
+   357→
+   358→  useEffect(() => {
+   359→    if (settings) setForm(settings)
+   360→  }, [settings])
+   361→
+   362→  const saveSection = (sectionName: string, fields: Record<string, unknown>) => {
+   363→    setSaving(sectionName)
+   364→    updateSettings(fields as Partial<SiteSettings>)
+   365→    toast({ title: 'Sección guardada', description: `"${sectionName}" actualizada. Se refleja al instante en la Home.` })
+   366→    setTimeout(() => setSaving(null), 500)
+   367→  }
+   368→
+   369→  const toggleSection = (key: string) => {
+   370→    setOpenSection(openSection === key ? null : key)
+   371→  }
+   372→
+   373→  const sectionDefs = [
+   374→    {
+   375→      key: 'hero',
+   376→      label: 'Hero Principal',
+   377→      icon: 'home',
+   378→      fields: (
+   379→        <div className="space-y-3">
+   380→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   381→            <div>
+   382→              <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Badge Text</label>
+   383→              <input value={form.hero_badge_text || ''} onChange={(e) => setForm(f => ({ ...f, hero_badge_text: e.target.value }))} className={inputCls} />
+   384→            </div>
+   385→            <div>
+   386→              <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Badge Icon (nombre de Material Icon)</label>
+   387→              <input value={form.hero_badge_icon || ''} onChange={(e) => setForm(f => ({ ...f, hero_badge_icon: e.target.value }))} className={inputCls} />
+   388→            </div>
+   389→          </div>
+   390→          <div>
+   391→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Headline (antes del highlight)</label>
+   392→            <input value={form.hero_headline || ''} onChange={(e) => setForm(f => ({ ...f, hero_headline: e.target.value }))} className={inputCls} />
+   393→          </div>
+   394→          <div>
+   395→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Headline Highlight (verde)</label>
+   396→            <input value={form.hero_headline_highlight || ''} onChange={(e) => setForm(f => ({ ...f, hero_headline_highlight: e.target.value }))} className={inputCls} />
+   397→          </div>
+   398→          <div>
+   399→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Subtítulo</label>
+   400→            <textarea value={form.hero_subtitle || ''} onChange={(e) => setForm(f => ({ ...f, hero_subtitle: e.target.value }))} rows={2} className={`${inputCls} resize-none`} />
+   401→          </div>
+   402→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   403→            <div>
+   404→              <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Ubicación</label>
+   405→              <input value={form.hero_location_text || ''} onChange={(e) => setForm(f => ({ ...f, hero_location_text: e.target.value }))} className={inputCls} />
+   406→            </div>
+   407→            <div>
+   408→              <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Promo Highlight</label>
+   409→              <input value={form.hero_promo_highlight || ''} onChange={(e) => setForm(f => ({ ...f, hero_promo_highlight: e.target.value }))} className={inputCls} />
+   410→            </div>
+   411→          </div>
+   412→          <div>
+   413→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Promo Text (antes del highlight)</label>
+   414→            <input value={form.hero_promo_text || ''} onChange={(e) => setForm(f => ({ ...f, hero_promo_text: e.target.value }))} className={inputCls} />
+   415→          </div>
+   416→          <button onClick={() => saveSection('Hero Principal', { hero_badge_text: form.hero_badge_text, hero_badge_icon: form.hero_badge_icon, hero_headline: form.hero_headline, hero_headline_highlight: form.hero_headline_highlight, hero_subtitle: form.hero_subtitle, hero_location_text: form.hero_location_text, hero_promo_text: form.hero_promo_text, hero_promo_highlight: form.hero_promo_highlight })} disabled={saving === 'hero'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   417→            {saving === 'hero' ? 'Guardando...' : 'Guardar Cambios'}
+   418→          </button>
+   419→        </div>
+   420→      ),
+   421→    },
+   422→    {
+   423→      key: 'courts',
+   424→      label: 'Canchas Destacadas',
+   425→      icon: 'sports_soccer',
+   426→      fields: (
+   427→        <div className="space-y-3">
+   428→          <div>
+   429→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título de Sección</label>
+   430→            <input value={form.courts_section_title || ''} onChange={(e) => setForm(f => ({ ...f, courts_section_title: e.target.value }))} className={inputCls} />
+   431→          </div>
+   432→          <div>
+   433→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Subtítulo</label>
+   434→            <input value={form.courts_section_subtitle || ''} onChange={(e) => setForm(f => ({ ...f, courts_section_subtitle: e.target.value }))} className={inputCls} />
+   435→          </div>
+   436→          <button onClick={() => saveSection('Canchas Destacadas', { courts_section_title: form.courts_section_title, courts_section_subtitle: form.courts_section_subtitle })} disabled={saving === 'courts'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   437→            {saving === 'courts' ? 'Guardando...' : 'Guardar Cambios'}
+   438→          </button>
+   439→        </div>
+   440→      ),
+   441→    },
+   442→    {
+   443→      key: 'sports',
+   444→      label: 'Instalaciones',
+   445→      icon: 'emoji_events',
+   446→      fields: (
+   447→        <div className="space-y-3">
+   448→          <div>
+   449→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Badge</label>
+   450→            <input value={form.sports_section_badge || ''} onChange={(e) => setForm(f => ({ ...f, sports_section_badge: e.target.value }))} className={inputCls} />
+   451→          </div>
+   452→          <div>
+   453→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título</label>
+   454→            <input value={form.sports_section_title || ''} onChange={(e) => setForm(f => ({ ...f, sports_section_title: e.target.value }))} className={inputCls} />
+   455→          </div>
+   456→          <div>
+   457→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Subtítulo</label>
+   458→            <input value={form.sports_section_subtitle || ''} onChange={(e) => setForm(f => ({ ...f, sports_section_subtitle: e.target.value }))} className={inputCls} />
+   459→          </div>
+   460→          <button onClick={() => saveSection('Instalaciones', { sports_section_badge: form.sports_section_badge, sports_section_title: form.sports_section_title, sports_section_subtitle: form.sports_section_subtitle })} disabled={saving === 'sports'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   461→            {saving === 'sports' ? 'Guardando...' : 'Guardar Cambios'}
+   462→          </button>
+   463→        </div>
+   464→      ),
+   465→    },
+   466→    {
+   467→      key: 'promo',
+   468→      label: 'Por qué elegir CREARD',
+   469→      icon: 'workspace_premium',
+   470→      fields: (
+   471→        <div className="space-y-3">
+   472→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   473→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Badge</label><input value={form.promo_section_badge || ''} onChange={(e) => setForm(f => ({ ...f, promo_section_badge: e.target.value }))} className={inputCls} /></div>
+   474→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título</label><input value={form.promo_section_title || ''} onChange={(e) => setForm(f => ({ ...f, promo_section_title: e.target.value }))} className={inputCls} /></div>
+   475→          </div>
+   476→          <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Subtítulo</label><input value={form.promo_section_subtitle || ''} onChange={(e) => setForm(f => ({ ...f, promo_section_subtitle: e.target.value }))} className={inputCls} /></div>
+   477→          <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">CTA Text</label><input value={form.promo_cta_text || ''} onChange={(e) => setForm(f => ({ ...f, promo_cta_text: e.target.value }))} className={inputCls} /></div>
+   478→          <div>
+   479→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 block font-semibold">Puntos de Venta</label>
+   480→            <div className="space-y-2">
+   481→              {(form.selling_points || []).map((point, idx) => (
+   482→                <div key={idx} className="glass-card rounded-xl p-3 space-y-2">
+   483→                  <div className="flex items-center justify-between">
+   484→                    <span className="text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)]">#{idx + 1}</span>
+   485→                    <div className="flex gap-1">
+   486→                      <button onClick={() => setForm(f => ({ ...f, selling_points: f.selling_points!.map((p, i) => i === idx ? { ...p, highlight: !p.highlight } : p) }))} className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${point.highlight ? 'bg-cm-primary/20 text-cm-primary' : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant'}`}>{point.highlight ? 'Destacado' : 'Normal'}</button>
+   487→                      <button onClick={() => setForm(f => ({ ...f, selling_points: f.selling_points!.filter((_, i) => i !== idx) }))} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors"><span className="material-symbols-outlined text-red-400/70 text-[16px]">delete</span></button>
+   488→                    </div>
+   489→                  </div>
+   490→                  <div className="grid grid-cols-2 gap-2">
+   491→                    <div><input value={point.icon} onChange={(e) => setForm(f => ({ ...f, selling_points: f.selling_points!.map((p, i) => i === idx ? { ...p, icon: e.target.value } : p) }))} className={inputCls} placeholder="Icon" /></div>
+   492→                    <div><input value={point.title} onChange={(e) => setForm(f => ({ ...f, selling_points: f.selling_points!.map((p, i) => i === idx ? { ...p, title: e.target.value } : p) }))} className={inputCls} placeholder="Título" /></div>
+   493→                  </div>
+   494→                  <textarea value={point.description} onChange={(e) => setForm(f => ({ ...f, selling_points: f.selling_points!.map((p, i) => i === idx ? { ...p, description: e.target.value } : p) }))} rows={2} className={`${inputCls} resize-none`} placeholder="Descripción" />
+   495→                </div>
+   496→              ))}
+   497→              <button onClick={() => setForm(f => ({ ...f, selling_points: [...(f.selling_points || []), { icon: 'star', title: '', description: '', highlight: false }] }))} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 text-cm-on-surface-variant text-xs hover:text-cm-primary hover:border-cm-primary/30 transition-colors w-full justify-center">
+   498→                <span className="material-symbols-outlined text-[16px]">add</span>Agregar punto
+   499→              </button>
+   500→            </div>
+   501→          </div>
+   502→          <button onClick={() => saveSection('Por qué elegir CREARD', { promo_section_badge: form.promo_section_badge, promo_section_title: form.promo_section_title, promo_section_subtitle: form.promo_section_subtitle, promo_cta_text: form.promo_cta_text, selling_points: form.selling_points })} disabled={saving === 'promo'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   503→            {saving === 'promo' ? 'Guardando...' : 'Guardar Cambios'}
+   504→          </button>
+   505→        </div>
+   506→      ),
+   507→    },
+   508→    {
+   509→      key: 'how',
+   510→      label: 'Cómo Funciona',
+   511→      icon: 'auto_awesome',
+   512→      fields: (
+   513→        <div className="space-y-3">
+   514→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   515→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Badge</label><input value={form.how_section_badge || ''} onChange={(e) => setForm(f => ({ ...f, how_section_badge: e.target.value }))} className={inputCls} /></div>
+   516→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Título</label><input value={form.how_section_title || ''} onChange={(e) => setForm(f => ({ ...f, how_section_title: e.target.value }))} className={inputCls} /></div>
+   517→          </div>
+   518→          <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">Subtítulo</label><input value={form.how_section_subtitle || ''} onChange={(e) => setForm(f => ({ ...f, how_section_subtitle: e.target.value }))} className={inputCls} /></div>
+   519→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   520→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">CTA Text</label><input value={form.how_cta_text || ''} onChange={(e) => setForm(f => ({ ...f, how_cta_text: e.target.value }))} className={inputCls} /></div>
+   521→            <div><label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1 block">CTA Subtext</label><input value={form.how_cta_subtext || ''} onChange={(e) => setForm(f => ({ ...f, how_cta_subtext: e.target.value }))} className={inputCls} /></div>
+   522→          </div>
+   523→          <div>
+   524→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 block font-semibold">Pasos</label>
+   525→            <div className="space-y-2">
+   526→              {(form.how_steps || []).map((step, idx) => (
+   527→                <div key={idx} className="glass-card rounded-xl p-3 space-y-2">
+   528→                  <div className="flex items-center justify-between">
+   529→                    <span className="text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)]">Paso {step.number || idx + 1}</span>
+   530→                    <button onClick={() => setForm(f => ({ ...f, how_steps: f.how_steps!.filter((_, i) => i !== idx) }))} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors"><span className="material-symbols-outlined text-red-400/70 text-[16px]">delete</span></button>
+   531→                  </div>
+   532→                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+   533→                    <div><input value={step.number} onChange={(e) => setForm(f => ({ ...f, how_steps: f.how_steps!.map((s, i) => i === idx ? { ...s, number: e.target.value } : s) }))} className={inputCls} placeholder="01" /></div>
+   534→                    <div><input value={step.icon} onChange={(e) => setForm(f => ({ ...f, how_steps: f.how_steps!.map((s, i) => i === idx ? { ...s, icon: e.target.value } : s) }))} className={inputCls} placeholder="Icon" /></div>
+   535→                    <div><input value={step.title} onChange={(e) => setForm(f => ({ ...f, how_steps: f.how_steps!.map((s, i) => i === idx ? { ...s, title: e.target.value } : s) }))} className={inputCls} placeholder="Título" /></div>
+   536→                  </div>
+   537→                  <textarea value={step.description} onChange={(e) => setForm(f => ({ ...f, how_steps: f.how_steps!.map((s, i) => i === idx ? { ...s, description: e.target.value } : s) }))} rows={2} className={`${inputCls} resize-none`} placeholder="Descripción" />
+   538→                  <div><input value={step.detail} onChange={(e) => setForm(f => ({ ...f, how_steps: f.how_steps!.map((s, i) => i === idx ? { ...s, detail: e.target.value } : s) }))} className={inputCls} placeholder="Detalle (badge inferior)" /></div>
+   539→                </div>
+   540→              ))}
+   541→              <button onClick={() => setForm(f => ({ ...f, how_steps: [...(f.how_steps || []), { number: String((f.how_steps?.length || 0) + 1).padStart(2, '0'), title: '', description: '', icon: 'star', detail: '' }] }))} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 text-cm-on-surface-variant text-xs hover:text-cm-primary hover:border-cm-primary/30 transition-colors w-full justify-center">
+   542→                <span className="material-symbols-outlined text-[16px]">add</span>Agregar paso
+   543→              </button>
+   544→            </div>
+   545→          </div>
+   546→          <button onClick={() => saveSection('Cómo Funciona', { how_section_badge: form.how_section_badge, how_section_title: form.how_section_title, how_section_subtitle: form.how_section_subtitle, how_cta_text: form.how_cta_text, how_cta_subtext: form.how_cta_subtext, how_steps: form.how_steps })} disabled={saving === 'how'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   547→            {saving === 'how' ? 'Guardando...' : 'Guardar Cambios'}
+   548→          </button>
+   549→        </div>
+   550→      ),
+   551→    },
+   552→    {
+   553→      key: 'payments',
+   554→      label: 'Métodos de Pago',
+   555→      icon: 'payment',
+   556→      fields: (
+   557→        <div className="space-y-3">
+   558→          <div>
+   559→            <label className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 block font-semibold">Métodos de Pago (Home)</label>
+   560→            <div className="space-y-2">
+   561→              {(form.payment_methods_items || []).map((method, idx) => (
+   562→                <div key={idx} className="glass-card rounded-xl p-3">
+   563→                  <div className="flex items-center justify-between mb-2">
+   564→                    <span className="text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)]">#{idx + 1}</span>
+   565→                    <button onClick={() => setForm(f => ({ ...f, payment_methods_items: f.payment_methods_items!.filter((_, i) => i !== idx) }))} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors"><span className="material-symbols-outlined text-red-400/70 text-[16px]">delete</span></button>
+   566→                  </div>
+   567→                  <div className="grid grid-cols-3 gap-2">
+   568→                    <div><input value={method.name} onChange={(e) => setForm(f => ({ ...f, payment_methods_items: f.payment_methods_items!.map((m, i) => i === idx ? { ...m, name: e.target.value } : m) }))} className={inputCls} placeholder="Nombre" /></div>
+   569→                    <div><input value={method.icon} onChange={(e) => setForm(f => ({ ...f, payment_methods_items: f.payment_methods_items!.map((m, i) => i === idx ? { ...m, icon: e.target.value } : m) }))} className={inputCls} placeholder="Icon" /></div>
+   570→                    <div><input value={method.color} onChange={(e) => setForm(f => ({ ...f, payment_methods_items: f.payment_methods_items!.map((m, i) => i === idx ? { ...m, color: e.target.value } : m) }))} className={inputCls} placeholder="text-purple-400" /></div>
+   571→                  </div>
+   572→                </div>
+   573→              ))}
+   574→              <button onClick={() => setForm(f => ({ ...f, payment_methods_items: [...(f.payment_methods_items || []), { name: '', icon: 'payments', color: 'text-green-400' }] }))} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 text-cm-on-surface-variant text-xs hover:text-cm-primary hover:border-cm-primary/30 transition-colors w-full justify-center">
+   575→                <span className="material-symbols-outlined text-[16px]">add</span>Agregar método
+   576→              </button>
+   577→            </div>
+   578→          </div>
+   579→          <button onClick={() => saveSection('Métodos de Pago', { payment_methods_items: form.payment_methods_items })} disabled={saving === 'payments'} className="px-4 py-2 bg-cm-primary text-cm-on-primary text-sm font-semibold rounded-xl hover:bg-cm-primary-dim transition-colors disabled:opacity-50">
+   580→            {saving === 'payments' ? 'Guardando...' : 'Guardar Cambios'}
+   581→          </button>
+   582→        </div>
+   583→      ),
+   584→    },
+   585→  ]
+   586→
+   587→  return (
+   588→    <div className="space-y-4">
+   589→      <div>
+   590→        <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg">
+   591→          Editor de Secciones
+   592→        </h2>
+   593→        <p className="text-cm-on-surface-variant text-xs font-[family-name:var(--font-inter)]">
+   594→          Personaliza el contenido de cada sección. Los cambios se reflejan al instante en la Home.
+   595→        </p>
+   596→      </div>
+   597→
+   598→      <div className="space-y-2">
+   599→        {sectionDefs.map((section) => (
+   600→          <div key={section.key} className="glass-card rounded-xl overflow-hidden">
+   601→            <button
+   602→              onClick={() => toggleSection(section.key)}
+   603→              className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-cm-surface-container-highest/40 transition-colors"
+   604→            >
+   605→              <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   606→                {section.icon}
+   607→              </span>
+   608→              <span className="font-[family-name:var(--font-sora)] font-semibold text-sm text-cm-on-surface flex-1">
+   609→                {section.label}
+   610→              </span>
+   611→              <span className={`material-symbols-outlined text-cm-on-surface-variant text-[20px] transition-transform duration-200 ${openSection === section.key ? 'rotate-180' : ''}`}>
+   612→                expand_more
+   613→              </span>
+   614→            </button>
+   615→            <AnimatePresence>
+   616→              {openSection === section.key && (
+   617→                <motion.div
+   618→                  initial={{ height: 0, opacity: 0 }}
+   619→                  animate={{ height: 'auto', opacity: 1 }}
+   620→                  exit={{ height: 0, opacity: 0 }}
+   621→                  transition={{ duration: 0.2 }}
+   622→                  className="overflow-hidden"
+   623→                >
+   624→                  <div className="px-4 pb-4 pt-1 border-t border-white/5">
+   625→                    {section.fields}
+   626→                  </div>
+   627→                </motion.div>
+   628→              )}
+   629→            </AnimatePresence>
+   630→          </div>
+   631→        ))}
+   632→      </div>
+   633→    </div>
+   634→  )
+   635→}
+   636→
+   637→/* ═══════════════════════════════════════════════════
+   638→   MAIN COMPONENT: CONTENT PANEL
+   639→   ═══════════════════════════════════════════════════ */
+   640→export default function ContentPanel() {
+   641→  const [activeTab, setActiveTab] = useState<ContentTab>('secciones')
+   642→  const settings = useContentStore(s => s.settings)
+   643→  const courts = useContentStore(s => s.courts)
+   644→  const news = useContentStore(s => s.news)
+   645→  const gallery = useContentStore(s => s.gallery)
+   646→
+   647→  return (
+   648→    <div className="space-y-4">
+   649→      {/* Status Banner */}
+   650→      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cm-primary/10 border border-cm-primary/20">
+   651→        <span className="material-symbols-outlined text-cm-primary text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>sync</span>
+   652→        <span className="text-cm-primary text-xs font-semibold font-[family-name:var(--font-inter)]">
+   653→          Modo local activo — Los cambios se guardan y reflejan al instante
+   654→        </span>
+   655→      </div>
+   656→
+   657→      {/* Tabs */}
+   658→      <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl overflow-x-auto no-scrollbar">
+   659→        {contentTabs.map((tab) => (
+   660→          <button
+   661→            key={tab.key}
+   662→            onClick={() => setActiveTab(tab.key)}
+   663→            className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+   664→              activeTab === tab.key
+   665→                ? 'bg-cm-primary/10 text-cm-primary font-semibold'
+   666→                : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+   667→            }`}
+   668→          >
+   669→            <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+   670→            {tab.label}
+   671→          </button>
+   672→        ))}
+   673→      </div>
+   674→
+   675→      {/* Tab content */}
+   676→      <AnimatePresence mode="wait">
+   677→        {activeTab === 'secciones' && (
+   678→          <motion.div key="secciones" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   679→            <SectionsPanel />
+   680→          </motion.div>
+   681→        )}
+   682→        {activeTab === 'canchas' && (
+   683→          <motion.div key="canchas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   684→            <CourtsPanel courts={courts} />
+   685→          </motion.div>
+   686→        )}
+   687→        {activeTab === 'fotos' && (
+   688→          <motion.div key="fotos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   689→            <GalleryPanel images={gallery} />
+   690→          </motion.div>
+   691→        )}
+   692→        {activeTab === 'noticias' && (
+   693→          <motion.div key="noticias" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+   694→            <NewsPanel news={news} />
+   695→          </motion.div>
+   696→        )}
+   697→      </AnimatePresence>
+   698→    </div>
+   699→  )
+   700→}
+   701→

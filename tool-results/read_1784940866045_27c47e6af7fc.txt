@@ -1,0 +1,600 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from 'react'
+     4→import { motion, useInView, AnimatePresence } from 'framer-motion'
+     5→import { useAppStore } from '@/store/useAppStore'
+     6→import { useSiteSettings } from '@/context/SiteSettingsContext'
+     7→import { SectionEditButton, EditModal, FormField, ArrayField } from './SectionEditor'
+     8→import { toast } from '@/hooks/use-toast'
+     9→import Image from 'next/image'
+    10→
+    11→// --- Animated Counter Component ---
+    12→function AnimatedCounter({ target, duration = 2, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
+    13→  const [count, setCount] = useState(0)
+    14→  const ref = useRef<HTMLSpanElement>(null)
+    15→  const isInView = useInView(ref, { once: true, margin: '-50px' })
+    16→  const hasStarted = useRef(false)
+    17→
+    18→  useEffect(() => {
+    19→    if (!isInView || hasStarted.current) return
+    20→    hasStarted.current = true
+    21→
+    22→    const startTime = performance.now()
+    23→    const from = 0
+    24→    const to = target
+    25→
+    26→    function update(currentTime: number) {
+    27→      const elapsed = currentTime - startTime
+    28→      const progress = Math.min(elapsed / (duration * 1000), 1)
+    29→      const eased = 1 - Math.pow(1 - progress, 3)
+    30→      const current = Math.round(from + (to - from) * eased)
+    31→      setCount(current)
+    32→      if (progress < 1) {
+    33→        requestAnimationFrame(update)
+    34→      }
+    35→    }
+    36→    requestAnimationFrame(update)
+    37→  }, [isInView, target, duration])
+    38→
+    39→  return (
+    40→    <span ref={ref}>
+    41→      {count}{suffix}
+    42→    </span>
+    43→  )
+    44→}
+    45→
+    46→// --- Date Chips ---
+    47→function getDateChips() {
+    48→  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    49→  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    50→  const chips: { date: Date; label: string; dayName: string; isToday: boolean }[] = []
+    51→
+    52→  for (let i = 0; i < 4; i++) {
+    53→    const d = new Date()
+    54→    d.setDate(d.getDate() + i)
+    55→    chips.push({
+    56→      date: d,
+    57→      label: `${d.getDate()} ${months[d.getMonth()]}`,
+    58→      dayName: i === 0 ? 'Hoy' : days[d.getDay()],
+    59→      isToday: i === 0,
+    60→    })
+    61→  }
+    62→  return chips
+    63→}
+    64→
+    65→// --- Sport Options ---
+    66→const sportOptions = [
+    67→  { value: 'todos', label: 'Todos los deportes', icon: 'sports' },
+    68→  { value: 'futbol', label: 'Fútbol 7', icon: 'sports_soccer' },
+    69→  { value: 'voley', label: 'Vóley', icon: 'sports_volleyball' },
+    70→]
+    71→
+    72→// --- Gradient Mesh ---
+    73→function GradientMesh() {
+    74→  return (
+    75→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    76→      <motion.div
+    77→        className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full opacity-30"
+    78→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.3) 0%, transparent 70%)' }}
+    79→        animate={{ x: [0, 50, -30, 0], y: [0, -30, 50, 0], scale: [1, 1.1, 0.95, 1] }}
+    80→        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+    81→      />
+    82→      <motion.div
+    83→        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full opacity-20"
+    84→        style={{ background: 'radial-gradient(circle, rgba(0,255,65,0.25) 0%, transparent 70%)' }}
+    85→        animate={{ x: [0, -40, 30, 0], y: [0, 40, -20, 0], scale: [1, 0.9, 1.15, 1] }}
+    86→        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+    87→      />
+    88→      <motion.div
+    89→        className="absolute -bottom-20 left-1/3 w-[350px] h-[350px] rounded-full opacity-15"
+    90→        style={{ background: 'radial-gradient(circle, rgba(0,230,57,0.2) 0%, transparent 70%)' }}
+    91→        animate={{ x: [0, 60, -40, 0], y: [0, -50, 30, 0], scale: [1, 1.2, 0.85, 1] }}
+    92→        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+    93→      />
+    94→    </div>
+    95→  )
+    96→}
+    97→
+    98→export default function HeroSection() {
+    99→  const { setView, setSportFilter, setSelectedDate } = useAppStore()
+   100→  const { settings, saveSection } = useSiteSettings()
+   101→  const { hero: defaults, heroBanners } = settings || {
+   102→    hero: {
+   103→      location: 'San Sebastián, Cusco',
+   104→      badge: 'La #1 en reservas deportivas del Cusco',
+   105→      headline: 'Reserva tu cancha',
+   106→      headlineHighlight: 'en segundos',
+   107→      subtitle: '4 canchas de fútbol 7 y 2 canchas de vóley profesional. Reserva fácil, paga con Yape y disfruta sin complicaciones.',
+   108→      promoHighlight: '50% de adelanto',
+   109→      promoText: ', paga el resto al llegar',
+   110→      backgroundImage: '',
+   111→      secondaryImage: '',
+   112→      stats: [
+   113→        { label: 'Espacios', value: 6 },
+   114→        { label: 'Fútbol 7', value: 4 },
+   115→        { label: 'Vóley', value: 2 },
+   116→      ],
+   117→    },
+   118→    heroBanners: [],
+   119→  }
+   120→
+   121→  const activeBanners = (heroBanners || []).filter((b) => b.active && b.image)
+   122→  const [currentBanner, setCurrentBanner] = useState(0)
+   123→  const bannerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   124→
+   125→  // Auto-rotate banners
+   126→  useEffect(() => {
+   127→    if (activeBanners.length <= 1) return
+   128→    bannerTimerRef.current = setInterval(() => {
+   129→      setCurrentBanner((prev) => (prev + 1) % activeBanners.length)
+   130→    }, 5000)
+   131→    return () => {
+   132→      if (bannerTimerRef.current) clearInterval(bannerTimerRef.current)
+   133→    }
+   134→  }, [activeBanners.length])
+   135→
+   136→  const [selectedSport, setSelectedSport] = useState('todos')
+   137→  const [selectedDateIdx, setSelectedDateIdx] = useState(0)
+   138→  const [availableSlots, setAvailableSlots] = useState<number | null>(null)
+   139→  const dateChips = getDateChips()
+   140→  const sectionRef = useRef<HTMLElement>(null)
+   141→  const isSectionInView = useInView(sectionRef, { once: true, margin: '-100px' })
+   142→
+   143→  // Edit state
+   144→  const [editOpen, setEditOpen] = useState(false)
+   145→  const [editForm, setEditForm] = useState(defaults)
+   146→  const [saving, setSaving] = useState(false)
+   147→
+   148→  useEffect(() => {
+   149→    if (settings) setEditForm(settings.hero)
+   150→  }, [settings])
+   151→
+   152→  // Fetch available slots
+   153→  useEffect(() => {
+   154→    fetch('/api/courts')
+   155→      .then((res) => res.json())
+   156→      .then((data) => {
+   157→        const courtCount = Array.isArray(data) ? data.length : 6
+   158→        setAvailableSlots(Math.round(courtCount * 8.5))
+   159→      })
+   160→      .catch(() => {
+   161→        setAvailableSlots(51)
+   162→      })
+   163→  }, [])
+   164→
+   165→  const handleSearch = useCallback(() => {
+   166→    setSportFilter(selectedSport)
+   167→    const date = dateChips[selectedDateIdx].date
+   168→    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+   169→    setSelectedDate(dateStr)
+   170→    setView('search')
+   171→  }, [selectedSport, selectedDateIdx, dateChips, setSportFilter, setSelectedDate, setView])
+   172→
+   173→  const handleSave = async () => {
+   174→    setSaving(true)
+   175→    const ok = await saveSection('hero', editForm)
+   176→    setSaving(false)
+   177→    if (ok) {
+   178→      setEditOpen(false)
+   179→      toast({ title: 'Sección actualizada', description: 'Los cambios del Hero fueron guardados' })
+   180→    } else {
+   181→      toast({ title: 'Error', description: 'No se pudieron guardar los cambios', variant: 'destructive' })
+   182→    }
+   183→  }
+   184→
+   185→  const updateStat = (idx: number, field: 'label' | 'value', val: string) => {
+   186→    const copy = [...editForm.stats]
+   187→    copy[idx] = { ...copy[idx], [field]: field === 'value' ? parseInt(val) || 0 : val }
+   188→    setEditForm({ ...editForm, stats: copy })
+   189→  }
+   190→  const removeStat = (idx: number) => {
+   191→    setEditForm({ ...editForm, stats: editForm.stats.filter((_, i) => i !== idx) })
+   192→  }
+   193→  const addStat = () => {
+   194→    setEditForm({ ...editForm, stats: [...editForm.stats, { label: 'Nuevo', value: 0 }] })
+   195→  }
+   196→
+   197→  const containerVariants = {
+   198→    hidden: {},
+   199→    visible: { transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+   200→  }
+   201→
+   202→  const itemVariants = {
+   203→    hidden: { opacity: 0, y: 24 },
+   204→    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] } },
+   205→  }
+   206→
+   207→  return (
+   208→    <>
+   209→      <SectionEditButton onClick={() => setEditOpen(true)} label="Editar Hero" />
+   210→
+   211→      <section ref={sectionRef} className="relative overflow-hidden pt-8 pb-12 md:pt-12 md:pb-20 px-4">
+   212→        <GradientMesh />
+   213→
+   214→        {/* Banner Carousel (shows when heroBanners exist) */}
+   215→        {activeBanners.length > 1 && (
+   216→          <div className="relative h-48 md:h-72 mb-6 rounded-2xl overflow-hidden">
+   217→            <AnimatePresence mode="wait">
+   218→              <motion.div
+   219→                key={currentBanner}
+   220→                initial={{ opacity: 0 }}
+   221→                animate={{ opacity: 1 }}
+   222→                exit={{ opacity: 0 }}
+   223→                transition={{ duration: 0.8 }}
+   224→                className="absolute inset-0"
+   225→              >
+   226→                <Image
+   227→                  src={activeBanners[currentBanner].image}
+   228→                  alt={activeBanners[currentBanner].title || 'Banner'}
+   229→                  fill
+   230→                  className="object-cover"
+   231→                  unoptimized
+   232→                />
+   233→                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+   234→                {(activeBanners[currentBanner].title || activeBanners[currentBanner].subtitle) && (
+   235→                  <div className="absolute bottom-4 left-4 right-4">
+   236→                    {activeBanners[currentBanner].subtitle && (
+   237→                      <span className="text-cm-primary text-[10px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
+   238→                    )}
+   239→                    {activeBanners[currentBanner].title && (
+   240→                      <h3 className="font-[family-name:var(--font-sora)] text-lg md:text-2xl font-bold text-white mt-0.5">
+   241→                        {activeBanners[currentBanner].title}
+   242→                      </h3>
+   243→                    )}
+   244→                  </div>
+   245→                )}
+   246→              </motion.div>
+   247→            </AnimatePresence>
+   248→
+   249→            {/* Dots */}
+   250→            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+   251→              {activeBanners.map((_, idx) => (
+   252→                <button type="button"
+   253→                  key={idx}
+   254→                  onClick={() => { setCurrentBanner(idx) }}
+   255→                  className={`w-2 h-2 rounded-full transition-all ${
+   256→                    idx === currentBanner ? 'bg-cm-primary w-4' : 'bg-white/50 hover:bg-white/70'
+   257→                  }`}
+   258→                />
+   259→              ))}
+   260→            </div>
+   261→          </div>
+   262→        )}
+   263→
+   264→        {/* Background image (uploaded by admin, only if no carousel) */}
+   265→        {!activeBanners.length && defaults.backgroundImage && (
+   266→          <div className="absolute inset-0 z-0">
+   267→            <img
+   268→              src={defaults.backgroundImage}
+   269→              alt=""
+   270→              className="w-full h-full object-cover opacity-30"
+   271→            />
+   272→            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+   273→          </div>
+   274→        )}
+   275→
+   276→        <motion.div
+   277→          className="relative max-w-4xl mx-auto text-center"
+   278→          variants={containerVariants}
+   279→          initial="hidden"
+   280→          animate={isSectionInView ? 'visible' : 'hidden'}
+   281→        >
+   282→          {/* Location Badge */}
+   283→          <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
+   284→            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   285→              location_on
+   286→            </span>
+   287→            <span className="text-cm-on-surface-variant text-xs font-medium tracking-wide uppercase font-[family-name:var(--font-inter)]">
+   288→              {defaults.location}
+   289→            </span>
+   290→          </motion.div>
+   291→
+   292→          {/* Hero Badge */}
+   293→          <motion.div
+   294→            variants={itemVariants}
+   295→            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+   296→          >
+   297→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   298→              bolt
+   299→            </span>
+   300→            <span className="text-xs font-semibold text-cm-primary uppercase tracking-wider font-[family-name:var(--font-inter)]">
+   301→              {defaults.badge}
+   302→            </span>
+   303→          </motion.div>
+   304→
+   305→          {/* Headline */}
+   306→          <motion.h1
+   307→            variants={itemVariants}
+   308→            className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
+   309→          >
+   310→            {defaults.headline}{' '}
+   311→            <span className="text-cm-primary text-glow">{defaults.headlineHighlight}</span>
+   312→          </motion.h1>
+   313→
+   314→          {/* Subtitle */}
+   315→          <motion.p
+   316→            variants={itemVariants}
+   317→            className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
+   318→          >
+   319→            {defaults.subtitle}
+   320→          </motion.p>
+   321→
+   322→          {/* Search Bar */}
+   323→          <motion.div variants={itemVariants} className="glass-card rounded-2xl p-3 md:p-4 max-w-2xl mx-auto glow-border">
+   324→            {/* Date Chips */}
+   325→            <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar px-1">
+   326→              {dateChips.map((chip, idx) => (
+   327→                <button type="button"
+   328→                  key={idx}
+   329→                  onClick={() => setSelectedDateIdx(idx)}
+   330→                  className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[64px] ${
+   331→                    selectedDateIdx === idx
+   332→                      ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/20'
+   333→                      : 'bg-cm-surface-container-highest/60 text-cm-on-surface-variant hover:bg-cm-surface-container-highest'
+   334→                  }`}
+   335→                >
+   336→                  <span className="text-[10px] uppercase tracking-wider font-bold">{chip.dayName}</span>
+   337→                  <span className="text-sm mt-0.5 font-semibold font-[family-name:var(--font-sora)]">{chip.label}</span>
+   338→                </button>
+   339→              ))}
+   340→            </div>
+   341→
+   342→            {/* Sport Select + Search */}
+   343→            <div className="flex gap-3">
+   344→              <div className="relative flex-1">
+   345→                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-cm-on-surface-variant text-[20px]">
+   346→                  {sportOptions.find((s) => s.value === selectedSport)?.icon || 'sports'}
+   347→                </span>
+   348→                <select
+   349→                  value={selectedSport}
+   350→                  onChange={(e) => setSelectedSport(e.target.value)}
+   351→                  className="w-full pl-10 pr-4 py-3.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm appearance-none cursor-pointer focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all font-[family-name:var(--font-inter)]"
+   352→                >
+   353→                  {sportOptions.map((opt) => (
+   354→                    <option key={opt.value} value={opt.value} className="bg-cm-surface-container-highest text-cm-on-surface">
+   355→                      {opt.label}
+   356→                    </option>
+   357→                  ))}
+   358→                </select>
+   359→              </div>
+   360→
+   361→              <button type="button"
+   362→                onClick={handleSearch}
+   363→                className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent font-[family-name:var(--font-sora)] active:scale-[0.97]"
+   364→              >
+   365→                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   366→                  search
+   367→                </span>
+   368→                <span className="hidden sm:inline">Buscar</span>
+   369→              </button>
+   370→            </div>
+   371→          </motion.div>
+   372→
+   373→          {/* Featured Promo Banner */}
+   374→          <motion.div
+   375→            variants={itemVariants}
+   376→            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cm-primary/10 via-cm-primary/5 to-transparent border border-cm-primary/15"
+   377→          >
+   378→            <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+   379→              local_offer
+   380→            </span>
+   381→            <span className="text-cm-on-surface text-xs md:text-sm font-medium font-[family-name:var(--font-inter)]">
+   382→              <span className="text-cm-primary font-bold">{defaults.promoHighlight}</span>{defaults.promoText}
+   383→            </span>
+   384→          </motion.div>
+   385→
+   386→          {/* Stats */}
+   387→          <motion.div
+   388→            variants={itemVariants}
+   389→            className="flex flex-wrap justify-center gap-8 md:gap-14 mt-10 md:mt-14"
+   390→          >
+   391→            {defaults.stats.map((stat, idx) => (
+   392→              <div key={idx} className="text-center">
+   393→                <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   394→                  <AnimatedCounter target={stat.value} duration={2} />
+   395→                </p>
+   396→                <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   397→                  {stat.label}
+   398→                </p>
+   399→              </div>
+   400→            ))}
+   401→            <div className="text-center">
+   402→              <p className="font-[family-name:var(--font-sora)] text-3xl md:text-4xl font-bold text-cm-primary text-glow">
+   403→                <AnimatedCounter target={availableSlots ?? 51} duration={2.5} />
+   404→              </p>
+   405→              <p className="text-cm-on-surface-variant text-sm mt-1 font-[family-name:var(--font-inter)]">
+   406→                Horarios hoy
+   407→              </p>
+   408→            </div>
+   409→          </motion.div>
+   410→        </motion.div>
+   411→      </section>
+   412→
+   413→      {/* ═══════ EDIT MODAL ═══════ */}
+   414→      <EditModal
+   415→        open={editOpen}
+   416→        onClose={() => setEditOpen(false)}
+   417→        title="Editar Sección Hero"
+   418→        onSave={handleSave}
+   419→        saving={saving}
+   420→      >
+   421→        <FormField
+   422→          label="Ubicación"
+   423→          value={editForm.location}
+   424→          onChange={(v) => setEditForm({ ...editForm, location: v })}
+   425→          placeholder="Ej. San Sebastián, Cusco"
+   426→        />
+   427→        <FormField
+   428→          label="Badge principal"
+   429→          value={editForm.badge}
+   430→          onChange={(v) => setEditForm({ ...editForm, badge: v })}
+   431→          placeholder="Ej. La #1 en reservas deportivas del Cusco"
+   432→        />
+   433→        <div className="grid grid-cols-2 gap-3">
+   434→          <FormField
+   435→            label="Título (headline)"
+   436→            value={editForm.headline}
+   437→            onChange={(v) => setEditForm({ ...editForm, headline: v })}
+   438→            placeholder="Reserva tu cancha"
+   439→          />
+   440→          <FormField
+   441→            label="Highlight"
+   442→            value={editForm.headlineHighlight}
+   443→            onChange={(v) => setEditForm({ ...editForm, headlineHighlight: v })}
+   444→            placeholder="en segundos"
+   445→          />
+   446→        </div>
+   447→        <FormField
+   448→          label="Subtítulo"
+   449→          value={editForm.subtitle}
+   450→          onChange={(v) => setEditForm({ ...editForm, subtitle: v })}
+   451→          type="textarea"
+   452→          placeholder="Descripción principal..."
+   453→        />
+   454→        <div className="grid grid-cols-2 gap-3">
+   455→          <FormField
+   456→            label="Promo highlight"
+   457→            value={editForm.promoHighlight}
+   458→            onChange={(v) => setEditForm({ ...editForm, promoHighlight: v })}
+   459→            placeholder="50% de adelanto"
+   460→          />
+   461→          <FormField
+   462→            label="Promo texto"
+   463→            value={editForm.promoText}
+   464→            onChange={(v) => setEditForm({ ...editForm, promoText: v })}
+   465→            placeholder=", paga el resto al llegar"
+   466→          />
+   467→        </div>
+   468→
+   469→        {/* Hero Images */}
+   470→        <div>
+   471→          <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1.5 block">
+   472→            Imágenes del Hero
+   473→          </label>
+   474→          <div className="grid grid-cols-2 gap-3">
+   475→            <div>
+   476→              {editForm.backgroundImage ? (
+   477→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   478→                  <img src={editForm.backgroundImage} alt="Fondo" className="w-full h-24 object-cover" />
+   479→                  <button type="button"
+   480→                    type="button"
+   481→                    onClick={() => setEditForm({ ...editForm, backgroundImage: '' })}
+   482→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   483→                  >
+   484→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   485→                  </button>
+   486→                </div>
+   487→              ) : null}
+   488→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   489→                <input
+   490→                  type="file"
+   491→                  accept="image/jpeg,image/png,image/webp"
+   492→                  className="hidden"
+   493→                  onChange={async (e) => {
+   494→                    const file = e.target.files?.[0]
+   495→                    if (!file) return
+   496→                    const fd = new FormData()
+   497→                    fd.append('file', file)
+   498→                    fd.append('folder', 'hero')
+   499→                    try {
+   500→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   501→                      if (res.ok) {
+   502→                        const data = await res.json()
+   503→                        setEditForm({ ...editForm, backgroundImage: data.url })
+   504→                      }
+   505→                    } catch { /* silent */ }
+   506→                    e.target.value = ''
+   507→                  }}
+   508→                />
+   509→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   510→                Fondo
+   511→              </label>
+   512→            </div>
+   513→            <div>
+   514→              {editForm.secondaryImage ? (
+   515→                <div className="relative rounded-xl overflow-hidden border border-white/10 mb-1.5">
+   516→                  <img src={editForm.secondaryImage} alt="Secundaria" className="w-full h-24 object-cover" />
+   517→                  <button type="button"
+   518→                    type="button"
+   519→                    onClick={() => setEditForm({ ...editForm, secondaryImage: '' })}
+   520→                    className="absolute top-1 right-1 p-1 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
+   521→                  >
+   522→                    <span className="material-symbols-outlined text-[14px]">close</span>
+   523→                  </button>
+   524→                </div>
+   525→              ) : null}
+   526→              <label className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-primary cursor-pointer transition-all text-xs font-medium">
+   527→                <input
+   528→                  type="file"
+   529→                  accept="image/jpeg,image/png,image/webp"
+   530→                  className="hidden"
+   531→                  onChange={async (e) => {
+   532→                    const file = e.target.files?.[0]
+   533→                    if (!file) return
+   534→                    const fd = new FormData()
+   535→                    fd.append('file', file)
+   536→                    fd.append('folder', 'hero')
+   537→                    try {
+   538→                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+   539→                      if (res.ok) {
+   540→                        const data = await res.json()
+   541→                        setEditForm({ ...editForm, secondaryImage: data.url })
+   542→                      }
+   543→                    } catch { /* silent */ }
+   544→                    e.target.value = ''
+   545→                  }}
+   546→                />
+   547→                <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+   548→                Secundaria
+   549→              </label>
+   550→            </div>
+   551→          </div>
+   552→        </div>
+   553→
+   554→        {/* Stats */}
+   555→        <div>
+   556→          <div className="flex items-center justify-between mb-1.5">
+   557→            <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)]">
+   558→              Estadísticas
+   559→            </label>
+   560→            <button type="button"
+   561→              type="button"
+   562→              onClick={addStat}
+   563→              className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+   564→            >
+   565→              <span className="material-symbols-outlined text-[14px]">add</span>
+   566→              Agregar
+   567→            </button>
+   568→          </div>
+   569→          <div className="space-y-2">
+   570→            {editForm.stats.map((stat, idx) => (
+   571→              <div key={idx} className="flex items-center gap-2">
+   572→                <input
+   573→                  value={stat.label}
+   574→                  onChange={(e) => updateStat(idx, 'label', e.target.value)}
+   575→                  placeholder="Etiqueta"
+   576→                  className="flex-1 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface placeholder:text-cm-on-surface-variant/50 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   577→                />
+   578→                <input
+   579→                  type="number"
+   580→                  value={stat.value}
+   581→                  onChange={(e) => updateStat(idx, 'value', e.target.value)}
+   582→                  placeholder="0"
+   583→                  className="w-20 px-3 py-2 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-sm text-cm-on-surface text-center focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+   584→                />
+   585→                <button type="button"
+   586→                  type="button"
+   587→                  onClick={() => removeStat(idx)}
+   588→                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+   589→                >
+   590→                  <span className="material-symbols-outlined text-[16px]">delete</span>
+   591→                </button>
+   592→              </div>
+   593→            ))}
+   594→          </div>
+   595→        </div>
+   596→      </EditModal>
+   597→    </>
+   598→  )
+   599→}
+   600→

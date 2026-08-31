@@ -1,0 +1,466 @@
+     1→   801→                    return (
+     2→   802→                      <button key={slot} type="button" disabled={!clickAllowed}
+     3→   803→                        onClick={() => handleSlotToggle(slot)}
+     4→   804→                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+     5→   805→                        {slot} - {nextHour}
+     6→   806→                      </button>
+     7→   807→                    )
+     8→   808→                  })}
+     9→   809→                </div>
+    10→   810→              </div>
+    11→   811→              {selectedTimeSlots.length > 0 && (
+    12→   812→                <button type="button" onClick={clearTimeSlots}
+    13→   813→                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+    14→   814→                  Limpiar selección
+    15→   815→                </button>
+    16→   816→              )}
+    17→   817→            </div>
+    18→   818→          )}
+    19→   819→          {/* ── Empty state: no courts selected ── */}
+    20→   820→          {selectedCourtIds.length === 0 && (
+    21→   821→            <div className="flex flex-col items-center justify-center py-12 text-center">
+    22→   822→              <span className="material-symbols-outlined text-[48px] text-cm-on-surface-variant/20 mb-3">sports</span>
+    23→   823→              <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+    24→   824→                Selecciona al menos una cancha para ver los horarios disponibles
+    25→   825→              </p>
+    26→   826→            </div>
+    27→   827→          )}
+    28→   828→        </motion.div>
+    29→   829→      )}
+    30→   830→
+    31→   831→      {/* ═══ STEP 2: SUMMARY ═══ */}
+    32→   832→      {formStep === 'summary' && (
+    33→   833→        <motion.div key="summary" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+    34→   834→          transition={{ type: 'tween', duration: 0.3 }}
+    35→   835→          className="max-w-2xl mx-auto px-4 pb-40">
+    36→   836→
+    37→   837→          {/* Courts & Slots Summary */}
+    38→   838→          <div className="glass-card rounded-2xl p-4 mb-4">
+    39→   839→            <h3 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-3 flex items-center gap-2">
+    40→   840→              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">sports</span>
+    41→   841→              {totalCourts} cancha{totalCourts > 1 ? 's' : ''} x {totalSlots} hora{totalSlots > 1 ? 's' : ''} = {totalItems} bloque{totalItems > 1 ? 's' : ''}
+    42→   842→            </h3>
+    43→   843→            <div className="space-y-2">
+    44→   844→              {selectedCourtIds.map((cId) => {
+    45→   845→                const court = courts.find((c) => c.id === cId)
+    46→   846→                if (!court) return null
+    47→   847→                const cfg = sportConfig[court.sport] || { icon: 'sports', label: court.sport }
+    48→   848→                const courtSlots = selectedTimeSlots.sort()
+    49→   849→                const courtTotal = pricingBreakdown
+    50→   850→                  .filter((p) => p.courtId === cId)
+    51→   851→                  .reduce((s, p) => s + p.price, 0)
+    52→   852→                return (
+    53→   853→                  <div key={cId} className="bg-cm-surface-container-highest/30 rounded-xl p-3">
+    54→   854→                    <div className="flex items-center gap-2 mb-2">
+    55→   855→                      <span className="material-symbols-outlined text-[20px] text-[#00ff41]">{cfg.icon}</span>
+    56→   856→                      <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{court.name}</span>
+    57→   857→                      <span className="ml-auto text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+    58→   858→                    </div>
+    59→   859→                    <div className="flex flex-wrap gap-1.5">
+    60→   860→                      {courtSlots.map((s) => (
+    61→   861→                        <span key={s} className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400 font-[family-name:var(--font-inter)] font-medium">
+    62→   862→                          {formatHour(s)}
+    63→   863→                        </span>
+    64→   864→                      ))}
+    65→   865→                    </div>
+    66→   866→                  </div>
+    67→   867→                )
+    68→   868→              })}
+    69→   869→            </div>
+    70→   870→          </div>
+    71→   871→
+    72→   872→          {/* Date & Time Info */}
+    73→   873→          <div className="grid grid-cols-2 gap-3 mb-4">
+    74→   874→            <div className="glass-card rounded-xl p-3">
+    75→   875→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+    76→   876→                <span className="material-symbols-outlined text-[12px]">calendar_month</span> Fecha
+    77→   877→              </p>
+    78→   878→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+    79→   879→                {bookingDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+    80→   880→              </p>
+    81→   881→            </div>
+    82→   882→            <div className="glass-card rounded-xl p-3">
+    83→   883→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5 flex items-center gap-1">
+    84→   884→                <span className="material-symbols-outlined text-[12px]">schedule</span> Horario
+    85→   885→              </p>
+    86→   886→              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+    87→   887→                {[...selectedTimeSlots].sort()[0]} - {String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00
+    88→   888→              </p>
+    89→   889→            </div>
+    90→   890→          </div>
+    91→   891→
+    92→   892→          {/* Payment Breakdown */}
+    93→   893→          <div className="glass-card rounded-2xl p-4 mb-4">
+    94→   894→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-4 flex items-center gap-2">
+    95→   895→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>receipt_long</span>
+    96→   896→              Resumen de Pago
+    97→   897→            </h2>
+    98→   898→            <div className="space-y-2">
+    99→   899→              {selectedCourtIds.map((cId) => {
+   100→   900→                const court = courts.find((c) => c.id === cId)
+   101→   901→                if (!court) return null
+   102→   902→                const courtTotal = pricingBreakdown.filter((p) => p.courtId === cId).reduce((s, p) => s + p.price, 0)
+   103→   903→                return (
+   104→   904→                  <div key={cId} className="flex items-center justify-between">
+   105→   905→                    <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{court.name} ({totalSlots}h)</span>
+   106→   906→                    <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {courtTotal.toFixed(2)}</span>
+   107→   907→                  </div>
+   108→   908→                )
+   109→   909→              })}
+   110→   910→
+   111→   911→              {/* Payment Type Selector */}
+   112→   912→              <div className="mb-4">
+   113→   913→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-2 font-medium">Selecciona el monto a pagar</p>
+   114→   914→                <div className="space-y-2">
+   115→   915→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'advance' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   116→   916→                    <input type="radio" name="paymentType" value="advance" checked={paymentType === 'advance'} onChange={() => setPaymentType('advance')} className="accent-[#00ff41] w-4 h-4" />
+   117→   917→                    <div className="flex-1">
+   118→   918→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar adelanto (50%)</p>
+   119→   919→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Pago minimo obligatorio para confirmar la reserva</p>
+   120→   920→                    </div>
+   121→   921→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</span>
+   122→   922→                  </label>
+   123→   923→                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${paymentType === 'full_payment' ? 'border-[#00ff41]/50 bg-[#00ff41]/5' : 'border-white/10 hover:border-white/20'}`}>
+   124→   924→                    <input type="radio" name="paymentType" value="full_payment" checked={paymentType === 'full_payment'} onChange={() => setPaymentType('full_payment')} className="accent-[#00ff41] w-4 h-4" />
+   125→   925→                    <div className="flex-1">
+   126→   926→                      <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Pagar el total (100%)</p>
+   127→   927→                      <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Tu reserva quedara completamente pagada</p>
+   128→   928→                    </div>
+   129→   929→                    <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   130→   930→                  </label>
+   131→   931→                </div>
+   132→   932→              </div>
+   133→   933→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   134→   934→                <div className="flex items-center gap-2">
+   135→   935→                  <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</span>
+   136→   936→                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#00ff41]/15 text-[#00ff41] border border-[#00ff41]/30 font-[family-name:var(--font-inter)]">
+   137→   937→                    {paymentType === 'full_payment' ? 'PAGO TOTAL' : 'ADELANTO'}
+   138→   938→                  </span>
+   139→   939→                </div>
+   140→   940→                <span className="text-sm font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+   141→   941→              </div>
+   142→   942→              <div className="border-t border-dashed border-white/10 pt-2 flex items-center justify-between">
+   143→   943→                <span className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Saldo pendiente</span>
+   144→   944→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {paymentRemaining.toFixed(2)}</span>
+   145→   945→              </div>
+   146→   946→              <div className="border-t border-white/5 pt-2 flex items-center justify-between">
+   147→   947→                <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
+   148→   948→                <span className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {totalPrice.toFixed(2)}</span>
+   149→   949→              </div>
+   150→   950→            </div>
+   151→   951→          </div>
+   152→   952→
+   153→   953→          {/* Contact Info */}
+   154→   954→          <div className="glass-card rounded-2xl p-4 mb-4">
+   155→   955→            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-sm mb-3 flex items-center gap-2">
+   156→   956→              <span className="material-symbols-outlined text-[#00ff41] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>person</span>
+   157→   957→              Datos de contacto
+   158→   958→            </h2>
+   159→   959→            <div className="space-y-3">
+   160→   960→              <div>
+   161→   961→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Nombre completo <span className="text-red-400">*</span></label>
+   162→   962→                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Tu nombre"
+   163→   963→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   164→   964→              </div>
+   165→   965→              <div>
+   166→   966→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Email</label>
+   167→   967→                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="tu@email.com"
+   168→   968→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   169→   969→              </div>
+   170→   970→              <div>
+   171→   971→                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Teléfono <span className="text-red-400">*</span></label>
+   172→   972→                <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+51 999 999 999"
+   173→   973→                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+   174→   974→              </div>
+   175→   975→            </div>
+   176→   976→          </div>
+   177→   977→        </motion.div>
+   178→   978→      )}
+   179→   979→
+   180→   980→      {/* ═══ STEP 3: PAYMENT ═══ */}
+   181→   981→      {formStep === 'payment' && !success && createdBookings.length > 0 && (
+   182→   982→        <motion.div key="payment" initial={{ opacity: 0, x: '100%' }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: '-100%' }}
+   183→   983→          transition={{ type: 'tween', duration: 0.3 }}
+   184→   984→          className="max-w-2xl mx-auto px-4 pb-40">
+   185→   985→
+   186→   986→          {/* Booking summary card */}
+   187→   987→          <div className="glass-card rounded-2xl p-4 mb-6">
+   188→   988→            <div className="flex items-center gap-3 mb-3">
+   189→   989→              <div className="w-10 h-10 rounded-lg bg-[#00ff41]/10 flex items-center justify-center flex-shrink-0">
+   190→   990→                <span className="material-symbols-outlined text-[#00ff41] text-[22px]">sports</span>
+   191→   991→              </div>
+   192→   992→              <div className="flex-1 min-w-0">
+   193→   993→                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   194→   994→                  {totalCourts} cancha{totalCourts > 1 ? 's' : ''} · {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })} · {totalSlots}h
+   195→   995→                </p>
+   196→   996→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   197→   997→                  {selectedTimeSlots.sort().map(formatHour).join(', ')}
+   198→   998→                </p>
+   199→   999→              </div>
+   200→  1000→              <p className="text-base font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</p>
+   201→  1001→            </div>
+   202→  1002→            <div className="bg-cm-surface-container-highest/40 rounded-lg p-2.5 text-center">
+   203→  1003→              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   204→  1004→                {paymentType === 'full_payment' ? 'Pago total de la reserva' : 'Adelanto 50% requerido'}
+   205→  1005→              </p>
+   206→  1006→              {paymentRemaining > 0 && (
+   207→  1007→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Restante S/ {paymentRemaining.toFixed(2)} se paga en el local</p>
+   208→  1008→              )}
+   209→  1009→            </div>
+   210→  1010→          </div>
+   211→  1011→
+   212→  1012→          <YapeQRPayButton
+   213→  1013→            bookingIds={createdBookings.map((b: any) => b.id)}
+   214→  1014→            amount={paymentAmount}
+   215→  1015→            userEmail={clientEmail || user?.email || ''}
+   216→  1016→            onPaymentMarked={() => {
+   217→  1017→              setFormStep('done')
+   218→  1018→              setSuccess(true)
+   219→  1019→            }}
+   220→  1020→            onBack={() => setFormStep('summary')}
+   221→  1021→          />
+   222→  1022→          <div className="flex items-center justify-center gap-2 mt-4">
+   223→  1023→            <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/40" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+   224→  1024→            <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">
+   225→  1025→              Pago seguro mediante Yape
+   226→  1026→            </span>
+   227→  1027→          </div>
+   228→  1028→        </motion.div>
+   229→  1029→      )}
+   230→  1030→
+   231→  1031→      {/* ═══ STEP 4: SUCCESS ═══ */}
+   232→  1032→      {formStep === 'done' && success && (
+   233→  1033→        <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+   234→  1034→          transition={{ duration: 0.4 }}
+   235→  1035→          className="max-w-lg mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[80vh]">
+   236→  1036→
+   237→  1037→          {activePaymentMethod === 'yape_qr' ? (
+   238→  1038→            /* ── Yape: Pago Registrado (premium design) ── */
+   239→  1039→            <>
+   240→  1040→              {/* Icon with emerald glow + pulse */}
+   241→  1041→              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+   242→  1042→                className="relative mb-8">
+   243→  1043→                <div className="w-24 h-24 rounded-full bg-cm-primary/20 border-2 border-cm-primary flex items-center justify-center animate-pulse"
+   244→  1044→                  style={{ filter: 'drop-shadow(0 0 20px rgba(0,255,65,0.35))', animationDuration: '3s' }}>
+   245→  1045→                  <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+   246→  1046→                </div>
+   247→  1047→              </motion.div>
+   248→  1048→
+   249→  1049→              {/* Title + Description */}
+   250→  1050→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="text-center mb-8">
+   251→  1051→                <h2 className="font-[family-name:var(--font-sora)] text-3xl font-extrabold text-cm-on-surface mb-3 tracking-tight"
+   252→  1052→                  style={{ filter: 'drop-shadow(0 0 12px rgba(0,255,65,0.3))' }}>
+   253→  1053→                  ¡Pago Registrado!
+   254→  1054→                </h2>
+   255→  1055→                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] leading-relaxed max-w-sm mx-auto">
+   256→  1056→                  Tu solicitud está <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>siendo procesada</span>. Por favor, espera la confirmación de nuestro administrador para{' '}
+   257→  1057→                  <span className="text-[#00ff41] font-bold" style={{ filter: 'drop-shadow(0 0 8px rgba(0,255,65,0.25))' }}>asegurar tu turno</span>.
+   258→  1058→                </p>
+   259→  1059→              </motion.div>
+   260→  1060→
+   261→  1061→              {/* Info card: check reservations */}
+   262→  1062→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+   263→  1063→                className="w-full glass-card rounded-2xl p-5 mb-5 relative overflow-hidden">
+   264→  1064→                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-cm-primary/5 -translate-y-1/2 translate-x-1/2" />
+   265→  1065→                <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-cm-primary/5 translate-y-1/2 -translate-x-1/2" />
+   266→  1066→                <div className="relative flex items-start gap-3">
+   267→  1067→                  <div className="w-10 h-10 rounded-xl bg-cm-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+   268→  1068→                    <span className="material-symbols-outlined text-[#00ff41] text-[22px]">info</span>
+   269→  1069→                  </div>
+   270→  1070→                  <div>
+   271→  1071→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] mb-1.5">
+   272→  1072→                      Revisa tu bandeja de reservas
+   273→  1073→                    </p>
+   274→  1074→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] leading-relaxed">
+   275→  1075→                      Cuando el administrador valide tu pago, tu reserva cambiará a{' '}
+   276→  1076→                      <span className="text-green-400 font-semibold">"Reservado"</span>.{' '}
+   277→  1077→                      Si el pago no puede ser verificado, aparecerá como{' '}
+   278→  1078→                      <span className="text-red-400 font-semibold">"Rechazado"</span>.
+   279→  1079→                    </p>
+   280→  1080→                  </div>
+   281→  1081→                </div>
+   282→  1082→              </motion.div>
+   283→  1083→            </>
+   284→  1084→          ) : (
+   285→  1085→            /* ── Non-Yape: Reserva confirmada ── */
+   286→  1086→            <>
+   287→  1087→              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+   288→  1088→                className="w-24 h-24 rounded-full bg-[#00ff41]/10 border-2 border-[#00ff41]/30 flex items-center justify-center mb-6">
+   289→  1089→                <span className="material-symbols-outlined text-[#00ff41] text-[48px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+   290→  1090→              </motion.div>
+   291→  1091→              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-center mb-8">
+   292→  1092→                <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">Reserva Confirmada</h2>
+   293→  1093→                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">Tu reserva ha sido registrada exitosamente</p>
+   294→  1094→              </motion.div>
+   295→  1095→            </>
+   296→  1096→          )}
+   297→  1097→
+   298→  1098→          {/* Booking details card (shared) - Bento Glassmorphism */}
+   299→  1099→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+   300→  1100→            className="w-full rounded-2xl p-6 mb-6 relative overflow-hidden"
+   301→  1101→            style={{ background: 'rgba(30,41,59,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+   302→  1102→
+   303→  1103→            {/* Section label */}
+   304→  1104→            <div className="flex items-center gap-2 mb-5 opacity-60">
+   305→  1105→              <span className="material-symbols-outlined text-[14px] text-[#00ff41]">receipt_long</span>
+   306→  1106→              <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-[0.15em]">Resumen de la Transacción</span>
+   307→  1107→            </div>
+   308→  1108→
+   309→  1109→            {/* Bento grid */}
+   310→  1110→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
+   311→  1111→              {/* Cancha */}
+   312→  1112→              <div className="flex flex-col gap-1">
+   313→  1113→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Cancha</span>
+   314→  1114→                <div className="flex items-center gap-2">
+   315→  1115→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">sports</span>
+   316→  1116→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   317→  1117→                    {selectedCourtIds.map((id) => courts.find((c) => c.id === id)?.name || id).join(', ')}
+   318→  1118→                  </span>
+   319→  1119→                </div>
+   320→  1120→              </div>
+   321→  1121→              {/* Fecha */}
+   322→  1122→              <div className="flex flex-col gap-1">
+   323→  1123→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Fecha</span>
+   324→  1124→                <div className="flex items-center gap-2">
+   325→  1125→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">calendar_today</span>
+   326→  1126→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] capitalize">
+   327→  1127→                    {bookingDate.toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+   328→  1128→                  </span>
+   329→  1129→                </div>
+   330→  1130→              </div>
+   331→  1131→              {/* Horario */}
+   332→  1132→              <div className="flex flex-col gap-1">
+   333→  1133→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">Horario</span>
+   334→  1134→                <div className="flex items-center gap-2">
+   335→  1135→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">schedule</span>
+   336→  1136→                  <span className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
+   337→  1137→                    {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : '-'}
+   338→  1138→                  </span>
+   339→  1139→                </div>
+   340→  1140→              </div>
+   341→  1141→              {/* Monto */}
+   342→  1142→              <div className="flex flex-col gap-1">
+   343→  1143→                <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] opacity-70">
+   344→  1144→                  {paymentType === 'full_payment' ? 'Monto Pagado' : (activePaymentMethod === 'yape_qr' ? 'Monto Pagado' : 'Adelanto')}
+   345→  1145→                </span>
+   346→  1146→                <div className="flex items-center gap-2">
+   347→  1147→                  <span className="material-symbols-outlined text-[#00ff41] text-[18px]">payments</span>
+   348→  1148→                  <span className="text-lg font-black text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {paymentAmount.toFixed(2)}</span>
+   349→  1149→                </div>
+   350→  1150→              </div>
+   351→  1151→            </div>
+   352→  1152→
+   353→  1153→            {/* Footer: status + ref */}
+   354→  1154→            <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+   355→  1155→              <div className="flex items-center gap-2">
+   356→  1156→                <span className="w-2 h-2 rounded-full bg-[#00ff41]" style={{ filter: 'drop-shadow(0 0 6px rgba(0,255,65,0.5))' }} />
+   357→  1157→                <span className="text-[10px] text-[#00ff41] font-[family-name:var(--font-inter)] font-semibold uppercase tracking-wider">
+   358→  1158→                  {activePaymentMethod === 'yape_qr' ? 'Pendiente de Verificación' : 'Confirmado'}
+   359→  1159→                </span>
+   360→  1160→              </div>
+   361→  1161→              <span className="text-[10px] text-cm-on-surface-variant font-mono opacity-40">#{bookingRefs.join('-')}</span>
+   362→  1162→            </div>
+   363→  1163→
+   364→  1164→            {/* Restante (only for Yape) */}
+   365→  1165→            {paymentRemaining > 0 && (
+   366→  1166→              <div className="mt-3 pt-3 border-t border-dashed border-white/5">
+   367→  1167→                <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   368→  1168→                  Pago restante: <span className="font-semibold text-cm-on-surface">S/ {paymentRemaining.toFixed(2)}</span> (en el local)
+   369→  1169→                </p>
+   370→  1170→              </div>
+   371→  1171→            )}
+   372→  1172→          </motion.div>
+   373→  1173→
+   374→  1174→          {/* Action Buttons */}
+   375→  1175→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="w-full space-y-3">
+   376→  1176→            <button type="button" onClick={() => setShowVoucher(true)}
+   377→  1177→              className="w-full py-3 bg-white/10 text-cm-on-surface font-semibold rounded-xl hover:bg-white/15 transition-all border border-white/10 font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+   378→  1178→              <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+   379→  1179→              Imprimir Voucher de Pago
+   380→  1180→            </button>
+   381→  1181→            <button type="button" onClick={handleBack}
+   382→  1182→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2 shadow-lg"
+   383→  1183→              style={{ boxShadow: '0 8px 24px rgba(0,255,65,0.15)' }}>
+   384→  1184→              <span className="material-symbols-outlined text-[20px]">event_available</span> Ver mis Reservas
+   385→  1185→            </button>
+   386→  1186→            <button type="button" onClick={() => { clearTimeSlots(); clearSelectedCourtIds(); setSelectedCourt(null); setView('home') }}
+   387→  1187→              className="w-full py-3 text-cm-on-surface-variant text-sm font-medium font-[family-name:var(--font-inter)] hover:text-cm-on-surface transition-colors rounded-xl border border-white/10 hover:border-white/20 flex items-center justify-center gap-2">
+   388→  1188→              <span className="material-symbols-outlined text-[18px]">home</span> Volver al Inicio
+   389→  1189→            </button>
+   390→  1190→          </motion.div>
+   391→  1191→        </motion.div>
+   392→  1192→      )}
+   393→  1193→      </AnimatePresence>
+   394→  1194→
+   395→  1195→      {/* ═══ BOTTOM ACTION BAR ═══ */}
+   396→  1196→      {formStep === 'select' && (
+   397→  1197→        <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
+   398→  1198→          <div className="max-w-2xl mx-auto p-4">
+   399→  1199→            {totalItems > 0 ? (
+   400→  1200→              <>
+   401→  1201→                <div className="flex items-center justify-between mb-3">
+   402→  1202→                  <div>
+   403→  1203→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   404→  1204→                      {totalCourts} cancha{totalCourts > 1 ? 's' : ''} x {totalSlots}h
+   405→  1205→                    </p>
+   406→  1206→                    <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">
+   407→  1207→                      S/ {totalPrice.toFixed(2)}
+   408→  1208→                    </p>
+   409→  1209→                  </div>
+   410→  1210→                  <div className="text-right">
+   411→  1211→                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Adelanto 50%</p>
+   412→  1212→                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">S/ {advanceAmount.toFixed(2)}</p>
+   413→  1213→                  </div>
+   414→  1214→                </div>
+   415→  1215→                <button type="button" onClick={handleProceed}
+   416→  1216→                  className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+   417→  1217→                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>arrow_forward</span>
+   418→  1218→                  Continuar ({totalItems} bloque{totalItems > 1 ? 's' : ''})
+   419→  1219→                </button>
+   420→  1220→              </>
+   421→  1221→            ) : (
+   422→  1222→              <div className="text-center py-1">
+   423→  1223→                <p className="text-xs text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">
+   424→  1224→                  Selecciona canchas y horarios para continuar
+   425→  1225→                </p>
+   426→  1226→              </div>
+   427→  1227→            )}
+   428→  1228→          </div>
+   429→  1229→        </div>
+   430→  1230→      )}
+   431→  1231→
+   432→  1232→      {/* ═══ SUMMARY BOTTOM BAR ═══ */}
+   433→  1233→      {formStep === 'summary' && (
+   434→  1234→        <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
+   435→  1235→          <div className="max-w-2xl mx-auto p-4">
+   436→  1236→            <div className="flex items-center justify-between mb-3">
+   437→  1237→              <div>
+   438→  1238→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</p>
+   439→  1239→                <p className="font-[family-name:var(--font-sora)] font-bold text-[#00ff41] text-lg">S/ {paymentAmount.toFixed(2)}</p>
+   440→  1240→              </div>
+   441→  1241→              <div className="text-right">
+   442→  1242→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
+   443→  1243→                  {bookingDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+   444→  1244→                </p>
+   445→  1245→                <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+   446→  1246→                  {selectedTimeSlots.length > 0 ? `${[...selectedTimeSlots].sort()[0]} - ${String(parseInt([...selectedTimeSlots].sort().pop() || '0') + 1).padStart(2, '0')}:00` : ''}
+   447→  1247→                </p>
+   448→  1248→              </div>
+   449→  1249→            </div>
+   450→  1250→            <button type="button" disabled={submitting || !clientName.trim() || !clientPhone.trim()}
+   451→  1251→              onClick={handleSubmit}
+   452→  1252→              className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
+   453→  1253→              {submitting ? (
+   454→  1254→                <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creando reserva...</>
+   455→  1255→              ) : (
+   456→  1256→                <><span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified_payment</span> Confirmar Reserva y Pagar</>
+   457→  1257→              )}
+   458→  1258→            </button>
+   459→  1259→          </div>
+   460→  1260→        </div>
+   461→  1261→      )}
+   462→  1262→      <PaymentVoucher data={voucherData} open={showVoucher} onClose={() => setShowVoucher(false)} />
+   463→  1263→    </motion.div>
+   464→  1264→  )
+   465→  1265→}
+   466→  1266→
