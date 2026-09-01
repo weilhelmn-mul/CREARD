@@ -11,12 +11,13 @@ import { createUser as createUserInDb, getUserById, updateUser } from '@/lib/db'
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
 const SETUP_SECRET = process.env.SETUP_SECRET;
+
+export async function POST(request: NextRequest) {
   // P0-14 FIX: No default secret - must be explicitly set
   if (!SETUP_SECRET) {
     return NextResponse.json({ error: 'SETUP_SECRET no configurado.' }, { status: 500 });
   }
 
-export async function POST(request: NextRequest) {
   try {
     // P0-14 FIX: Block in production entirely
     if (process.env.NODE_ENV === 'production') {
