@@ -10,10 +10,19 @@ import { adminAuth } from '@/lib/firebase-admin';
 import { createUser as createUserInDb, getUserById, updateUser } from '@/lib/db';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
-const SETUP_SECRET = process.env.SETUP_SECRET || 'creard-setup-2025';
+const SETUP_SECRET = process.env.SETUP_SECRET;
+  // P0-14 FIX: No default secret - must be explicitly set
+  if (!SETUP_SECRET) {
+    return NextResponse.json({ error: 'SETUP_SECRET no configurado.' }, { status: 500 });
+  }
 
 export async function POST(request: NextRequest) {
   try {
+    // P0-14 FIX: Block in production entirely
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Endpoint deshabilitado en produccion.' }, { status: 403 });
+    }
+
     // Verify setup secret
     const authHeader = request.headers.get('authorization');
     const body = await request.json().catch(() => ({}));
@@ -34,8 +43,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ADMIN_EMAIL = 'weilhelmn@gmail.com';
-    const ADMIN_PASSWORD = 'Creard2025!';
+    // P0-14 FIX: Credentials from environment
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@creard.com';
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+    if (!ADMIN_PASSWORD) {
+      return NextResponse.json({ error: 'ADMIN_PASSWORD no configurado.' }, { status: 500 });
+    }
     const ADMIN_NAME = 'Weilhelm';
 
     // Check if user already exists
@@ -103,8 +116,8 @@ export async function POST(request: NextRequest) {
       message: 'Super Administrador creado exitosamente',
       uid: userRecord.uid,
       email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-      warning: 'GUARDA ESTAS CREDENCIALES. Este endpoint debe eliminarse antes de produccion.',
+      // P0-14 FIX: Password removed from response
+      warning: 'Endpoint ejecutado. Elimina antes de produccion.',
     });
   } catch (error: unknown) {
     console.error('[SETUP] Error creating admin:', error);

@@ -97,12 +97,19 @@ export async function requireAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // Fall through to legacy header check
+      // P0-01 FIX: In production, reject invalid tokens
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Token invalido o expirado.' }, { status: 401 });
+      }
+      // Fall through to legacy header check (development/demo only)
     }
   }
 
-  // --- Fallback: Legacy header-based auth ---
-  // Works in demo mode AND when Firebase Client SDK failed (no token available).
+  // --- Fallback: Legacy header-based auth (DEVELOPMENT/DEMO ONLY) ---
+  // P0-01 FIX: DISABLED in production to prevent identity spoofing
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Autenticacion requerida.' }, { status: 401 });
+  }
   // SECURITY: x-user-role is NEVER trusted for admin/super_admin — those roles
   // must come from a verified Firebase token or Firestore lookup.
   const userId = request.headers.get('x-user-id');
@@ -212,11 +219,19 @@ export async function requireAnyAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // Fall through to fallback check
+      // P0-01 FIX: In production, reject invalid tokens
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Token invalido o expirado.' }, { status: 401 });
+      }
+      // Fall through to fallback check (development/demo only)
     }
   }
 
-  // --- Fallback: Legacy header-based auth ---
+  // --- Fallback: Legacy header-based auth (DEVELOPMENT/DEMO ONLY) ---
+  // P0-01 FIX: DISABLED in production to prevent identity spoofing
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Autenticacion requerida.' }, { status: 401 });
+  }
   // SECURITY: x-user-role is NEVER trusted — role is looked up from Firestore.
   const userId = request.headers.get('x-user-id');
   const userEmail = request.headers.get('x-user-email');

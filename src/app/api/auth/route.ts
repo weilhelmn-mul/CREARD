@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Demo mode: create a mock user (auto-approved) and save to JSON storage
-      if (!isFirebaseAvailable()) {
+      // Demo mode disabled in production (P0-13)
+      if (!isFirebaseAvailable() && process.env.NODE_ENV !== 'production') {
         const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
 
         // Save user to JSON storage for persistence
@@ -111,15 +111,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Demo mode: accept any login
-      if (!isFirebaseAvailable()) {
+      // P0-13 FIX: Demo mode disabled in production
+      if (!isFirebaseAvailable() && process.env.NODE_ENV !== 'production') {
         // Use a STABLE ID based on email hash (not random) so bookings persist across sessions
         const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
 
         // Super admin hardcoded credentials for demo mode
-        const DEMO_ADMIN_EMAIL = 'weilhelmn@gmail.com';
-        const DEMO_ADMIN_PASSWORD = 'Creard2025!';
-        if (email === DEMO_ADMIN_EMAIL && password === DEMO_ADMIN_PASSWORD) {
+        const DEMO_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'weilhelmn@gmail.com';
+        const DEMO_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+        if (process.env.NODE_ENV === 'production') {
+          return NextResponse.json({ error: 'Modo demo no disponible en produccion.' }, { status: 403 });
+        }
+        if (DEMO_ADMIN_PASSWORD && email === DEMO_ADMIN_EMAIL && password === DEMO_ADMIN_PASSWORD) {
           // Ensure super admin exists in JSON storage
           await jsonCreateUser({
             id: 'demo-super-admin',
@@ -200,8 +203,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Auto-fix: si el rol en Firestore es solo 'admin' pero es el super admin configurado, promover
-      const ADMIN_EMAIL = 'weilhelmn@gmail.com';
-      if (email === ADMIN_EMAIL && userRole !== 'super_admin') {
+      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
+      if (ADMIN_EMAIL && email === ADMIN_EMAIL && userRole !== 'super_admin') {
         // Auto-upgrading super admin role
         try {
           const { updateUser } = await import('@/lib/db');
@@ -268,7 +271,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Demo mode
-      if (!isFirebaseAvailable()) {
+      // P0-13 FIX: Demo mode disabled in production
+      if (!isFirebaseAvailable() && process.env.NODE_ENV !== 'production') {
         const stableUserId = `demo-${Buffer.from(email).toString('base64url')}`;
         const existingUser = await jsonGetUserByEmail(email);
         return NextResponse.json({

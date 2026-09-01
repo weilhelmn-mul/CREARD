@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCourts, getCourtById, createCourt } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-middleware';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
@@ -209,6 +210,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication for court creation
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     if (!isFirebaseAvailable()) {
       return NextResponse.json(

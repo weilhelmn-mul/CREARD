@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth-middleware';
 import { getCount, getAllFromCollection, getBookings, getCourtById } from '@/lib/db';
 
 /** Migrate legacy status values to the 3-status system */
@@ -35,7 +36,10 @@ function getDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication for stats endpoint
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
   try {
     const todayStr = getTodayStr();
     const now = new Date();

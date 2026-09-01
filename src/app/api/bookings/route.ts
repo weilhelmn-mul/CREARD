@@ -575,6 +575,11 @@ export async function POST(request: NextRequest) {
             const bCourtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : [b.court_id];
             if (!bCourtIds.includes(cId)) continue;
             if (migrateStatus(b.status || '') === 'cancelled') continue;
+            // P0-08 FIX: Skip expired reservations (ghost reservations)
+            if (b.expires_at) {
+              const expMs = b.expires_at.toMillis?.() || new Date(b.expires_at).getTime();
+              if (expMs <= Date.now() && migrateStatus(b.status || '') === 'reserved') continue;
+            }
             if ((b.start_time || '') < endTime && (b.end_time || '') > startTime) {
               let courtName = cId;
               try {

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFromCollection, getBookings } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-middleware';
 
 export async function GET(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication - clients endpoint exposes PII
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

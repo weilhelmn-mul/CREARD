@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getExpenses, createExpense, deleteDocById } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-middleware';
 
 // Transformar snake_case (Firestore) a camelCase (frontend)
 function toCamelExpense(e: Record<string, unknown>) {
@@ -16,6 +17,10 @@ function toCamelExpense(e: Record<string, unknown>) {
 }
 
 export async function GET(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
@@ -36,6 +41,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const body = await request.json();
     const { description, amount, category, date, notes } = body;
@@ -63,6 +72,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  // P0-03 FIX: Require admin authentication
+  const authResult = await requireAuth(request, 'admin');
+  if (authResult instanceof NextResponse) return authResult;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

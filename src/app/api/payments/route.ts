@@ -20,8 +20,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Demo mode: accept payment without Firebase
+    // Demo mode: P0-13 FIX - disabled in production
     if (!isFirebaseAvailable()) {
+      if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Servicio no disponible.' }, { status: 503 });
+      }
       return NextResponse.json({
         id: `pay-${Date.now()}`,
         success: true,
@@ -42,7 +45,33 @@ export async function POST(request: NextRequest) {
 
     // Get the booking directly (O(1) instead of fetching all bookings)
     const booking = await getBookingById(bookingId);
-    const effectiveUserId = userId || booking?.user_id || authUser.id;
+    if (!booking) {
+      return NextResponse.json({ error: 'Reserva no encontrada.' }, { status: 404 });
+    }
+
+    // P0-06 FIX: Validate amount against booking (server-side, never trust client)
+    const parsedAmount = parseFloat(amount) || 0;
+    if (parsedAmount <= 0) {
+      return NextResponse.json({ error: 'El monto debe ser mayor a cero.' }, { status: 400 });
+    }
+    if (type === 'remaining') {
+      const remaining = booking.remaining_amount || 0;
+      if (parsedAmount > remaining + 0.5) { // 0.5 tolerance for rounding
+        return NextResponse.json({ error: `El monto excede el saldo pendiente (S/ ${remaining.toFixed(2)}).` }, { status: 400 });
+      }
+    } else if (type === 'advance') {
+      const total = booking.total_price || 0;
+      if (parsedAmount > total) {
+        return NextResponse.json({ error: `El adelanto no puede exceder el total (S/ ${total.toFixed(2)}).` }, { status: 400 });
+      }
+    }
+    // P0-06 FIX: Never accept status from client - derive from business logic
+    const derivedStatus = parsedAmount > 0 ? 'completed' : 'pending';
+
+    // P0-06 FIX: For non-admin users, always use authUser.id (never trust client userId)
+    const effectiveUserId = (authUser.role === 'admin' || authUser.role === 'super_admin') 
+      ? (userId || booking.user_id || authUser.id) 
+      : authUser.id;
 
     // Generate unique payment ID and audit data
     const payId = await generatePaymentId();
@@ -112,10 +141,10 @@ export async function POST(request: NextRequest) {
     // Crear el pago en la subcolección con datos de auditoría completos
     const paymentId = await createPayment(bookingId, {
       user_id: effectiveUserId,
-      amount: parseFloat(amount) || 0,
+      amount: parsedAmount,
       type: type || 'remaining',
       method,
-      status: status || 'completed',
+      status: derivedStatus,
       external_ref: externalRef || null,
       payment_id: payId,
       booking_code: bookingCode,
@@ -132,7 +161,7 @@ export async function POST(request: NextRequest) {
       amount_paid: parseFloat(amount) || 0,
       remaining_balance: 0,
       payment_method_display: paymentMethodDisplay,
-      payment_status: status || 'completed',
+      payment_status: derivedStatus,
       payment_date: payDateParts,
       payment_time: payTimeParts,
       total_price: totalPrice,
@@ -144,11 +173,11 @@ export async function POST(request: NextRequest) {
         booking_id: bookingId,
         payment_id: payId,
         action: 'created',
-        new_status: status || 'completed',
+        new_status: derivedStatus,
         performed_by: effectiveUserId,
         performed_by_name: userName || userEmail || effectiveUserId,
         performed_by_role: authUser.role || 'user',
-        details: `Pago ${type === 'remaining' ? 'del saldo' : type === 'advance' ? 'adelanto' : type} de S/ ${(parseFloat(amount) || 0).toFixed(2)} registrado para reserva ${bookingCode}. Metodo: ${paymentMethodDisplay}`,
+        details: `Pago ${type === 'remaining' ? 'del saldo' : type === 'advance' ? 'adelanto' : type} de S/ ${parsedAmount.toFixed(2)} registrado para reserva ${bookingCode}. Metodo: ${paymentMethodDisplay}`,
       });
     } catch (auditErr) {
       console.warn('[PAYMENTS] Warning: could not log payment audit:', auditErr);
@@ -156,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     // Si es pago restante, actualizar la reserva
     if (type === 'remaining' && booking) {
-      const newAdvance = (booking.advance_amount || 0) + (parseFloat(amount) || 0);
+      const newAdvance = (booking.advance_amount || 0) + parsedAmount;
       let newRemaining = (booking.total_price || 0) - newAdvance;
       let newStatus = booking.status || 'partially_paid';
 
@@ -178,7 +207,7 @@ export async function POST(request: NextRequest) {
         status: 'partially_paid' as any,
         slot_status: 'reserved',
         payment_method: method,
-        advance_amount: parseFloat(amount) || 0,
+        advance_amount: parsedAmount,
       });
     }
 

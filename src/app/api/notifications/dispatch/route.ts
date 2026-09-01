@@ -2,6 +2,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 
+// P0-04 FIX: SSRF protection - validate URLs to prevent internal network access
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    // Only allow HTTPS
+    if (parsed.protocol !== 'https:') return false;
+    // Block internal/private IPs
+    const hostname = parsed.hostname.toLowerCase();
+    // IPv4 private ranges
+    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.)/.test(hostname)) return false;
+    // IPv6 private
+    if (hostname === '::1' || hostname === '[::1]' || hostname.startsWith('fe80:') || hostname.startsWith('fc') || hostname.startsWith('fd')) return false;
+    // Block localhost variants
+    if (hostname === 'localhost' || hostname === 'localhost.localdomain' || hostname.endsWith('.local')) return false;
+    // Block metadata endpoints
+    if (hostname.endsWith('.amazonaws.com') && parsed.pathname.includes('meta-data')) return false;
+    // Allow known safe domains for Google Chat and WhatsApp
+    const ALLOWED_DOMAINS = [
+      'chat.googleapis.com',
+      'hooks.chat.googleapis.com', 
+      'graph.facebook.com',
+    ];
+    if (ALLOWED_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))) return true;
+    // If not in allowlist, reject
+    console.warn('[SSRF] URL blocked - not in allowlist:', url);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 interface AlertPayload {
   bookingId: string;
   courtName: string;
@@ -36,15 +67,19 @@ export async function POST(request: NextRequest) {
     // ── 1. Google Chat Webhook ──
     const webhookUrl = settings.googleChatWebhookUrl as string;
     if (webhookUrl) {
-      try {
-        for (const alert of alerts) {
-          const isExpired = alert.alertType === 'expired';
-          const emoji = isExpired ? '\u{1F6D1}' : '\u{26A0}\u{FE0F}';
-          const text = isExpired
+      // P0-04 FIX: Validate URL to prevent SSRF
+      if (!isSafeUrl(webhookUrl)) {
+        results.googleChat = { ok: false, error: 'URL no permitida (posible SSRF bloqueado)' };
+      } else {
+        try {
+          for (const alert of alerts) {
+            const isExpired = alert.alertType === 'expired';
+                    const emoji = isExpired ? '\u{1F6D1}' : '\u{26A0}\u{FE0F}';
+                    const text = isExpired
             ? `${emoji} *TURNO FINALIZADO*\nCancha: ${alert.courtName}\nHora fin: ${alert.endTime}`
             : `${emoji} *Tiempo por terminar*\nCancha: ${alert.courtName}\nRestante: ${alert.remainingMinutes} min\nHora fin: ${alert.endTime}`;
 
-          if (test) {
+                    if (test) {
             // Test message
             const testText = `\u{2705} *TEST - Sistema de Alertas CREARD*\n${text}\n_Las notificaciones estan funcionando correctamente._`;
             await fetch(webhookUrl, {
@@ -52,18 +87,19 @@ export async function POST(request: NextRequest) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: testText }),
             });
-          } else {
+                    } else {
             await fetch(webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text }),
             });
-          }
+                    }
         }
-        results.googleChat = { ok: true };
-      } catch (err: any) {
-        console.warn('[Notifications] Google Chat failed:', err.message);
-        results.googleChat = { ok: false, error: err.message };
+          results.googleChat = { ok: true };
+        } catch (err: any) {
+          console.warn('[Notifications] Google Chat failed:', err.message);
+          results.googleChat = { ok: false, error: err.message };
+        }
       }
     }
 
@@ -100,7 +136,7 @@ export async function POST(request: NextRequest) {
                 text: { body: msgText },
               }),
             });
-          }
+                    }
           results.whatsapp_admin = { ok: true };
         }
       } catch (err: any) {

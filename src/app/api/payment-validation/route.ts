@@ -77,6 +77,28 @@ export async function POST(request: NextRequest) {
     const db = getAdminDb();
     const batch = db.batch();
 
+    // P0-07 FIX: Verify ownership of each booking
+    for (const bookingId of bookingIds) {
+      const bookingRef = db.collection('bookings').doc(bookingId);
+      const bookingSnap = await bookingRef.get();
+      if (!bookingSnap.exists) {
+        return NextResponse.json({ error: `Reserva ${bookingId} no encontrada.` }, { status: 404 });
+      }
+      const bookingData = bookingSnap.data();
+      // Non-admin users can only mark their own bookings
+      if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
+        if (bookingData.user_id !== authUser.id && bookingData.user_email !== authUser.email) {
+          return NextResponse.json({ error: 'No puedes marcar pagos de reservas de otros usuarios.' }, { status: 403 });
+        }
+      }
+    }
+
+    // P0-07 FIX: Require proof data (transaction ID) for Yape payments
+    // The frontend should collect and send this, but we log a warning if missing
+    if (!body.transactionId && !body.operationNumber) {
+      console.warn('[P0-07] Yape payment marked without transaction ID. User:', authUser.email);
+    }
+
     for (const bookingId of bookingIds) {
       const ref = db.collection('bookings').doc(bookingId);
 

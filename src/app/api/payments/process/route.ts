@@ -259,43 +259,72 @@ export async function POST(request: NextRequest) {
       charge.source?.brand
     );
 
-    // ── 12. Registrar el pago en Firestore ──
-    const paymentId = await createPayment(bookingId, {
-      user_id: authUser.id,
-      amount: amountInSoles,
-      type: type || 'remaining',
-      method: paymentMethod,
-      status: paymentStatus,
-      external_ref: charge.id,
-    });
+    // ── 12-13. P0-11 FIX: Atomic payment + booking update via Firestore transaction ──
+    let paymentId: string;
+    try {
+      const { getAdminDb } = await import('@/lib/firebase-admin');
+      const { Timestamp } = await import('firebase-admin/firestore');
+      const pDb = getAdminDb();
+      
+      paymentId = await pDb.runTransaction(async (transaction) => {
+        // Re-read booking inside transaction for fresh data
+        const bookingRef = pDb.collection('bookings').doc(bookingId);
+        const bookingSnap = await transaction.get(bookingRef);
+        if (!bookingSnap.exists) throw new Error('Booking not found');
+        const freshBooking = bookingSnap.data();
 
-    // ── 13. Actualizar la reserva según el tipo de pago ──
-    // FIX P1-8: Use canonical status values (reserved/completed)
-    if (paymentStatus === 'completed' && booking) {
-      if (type === 'remaining') {
-        const newAdvance = (booking.advance_amount || 0) + amountInSoles;
-        let newRemaining = (booking.total_price || 0) - newAdvance;
-        let newStatus = 'reserved'; // FIX: canonical status
+        // Create payment record inside transaction (top-level + subcollection)
+        const paymentData: Record<string, any> = {
+          user_id: authUser.id,
+          amount: amountInSoles,
+          type: type || 'remaining',
+          method: paymentMethod,
+          status: paymentStatus,
+          external_ref: charge.id,
+          booking_id: bookingId,
+          created_at: Timestamp.now(),
+          updated_at: Timestamp.now(),
+        };
+        
+        const payDocRef = pDb.collection('payments').doc();
+        transaction.set(payDocRef, paymentData);
+        const subRef = pDb.collection('bookings').doc(bookingId).collection('payments').doc();
+        transaction.set(subRef, paymentData);
 
-        if (newRemaining <= 0.5) { // Tolerancia de 0.5 soles
-          newRemaining = 0;
-          newStatus = 'completed'; // FIX: canonical status for fully paid
+        // Update booking atomically
+        if (paymentStatus === 'completed') {
+          if (type === 'remaining') {
+            const newAdvance = (freshBooking.advance_amount || 0) + amountInSoles;
+            let newRemaining = (freshBooking.total_price || 0) - newAdvance;
+            let newStatus = 'reserved';
+            if (newRemaining <= 0.5) { newRemaining = 0; newStatus = 'completed'; }
+            transaction.update(bookingRef, {
+              advance_amount: Math.round(newAdvance * 100) / 100,
+              remaining_amount: Math.round(Math.max(0, newRemaining) * 100) / 100,
+              status: newStatus,
+              updated_at: Timestamp.now(),
+            });
+          } else if (type === 'advance') {
+            transaction.update(bookingRef, {
+              status: 'reserved',
+              slot_status: 'reserved',
+              payment_method: paymentMethod,
+              advance_amount: amountInSoles,
+              remaining_amount: (freshBooking.total_price || 0) - amountInSoles,
+              updated_at: Timestamp.now(),
+            });
+          }
         }
-
-        await updateBooking(bookingId, {
-          advance_amount: Math.round(newAdvance * 100) / 100,
-          remaining_amount: Math.round(Math.max(0, newRemaining) * 100) / 100,
-          status: newStatus,
-        });
-      } else if (type === 'advance') {
-        await updateBooking(bookingId, {
-          status: 'reserved', // FIX: canonical status (not 'partially_paid')
-          slot_status: 'reserved',
-          payment_method: paymentMethod,
-          advance_amount: amountInSoles,
-          remaining_amount: (booking.total_price || 0) - amountInSoles,
-        });
-      }
+        return payDocRef.id;
+      });
+    } catch (txErr: any) {
+      console.error('[P0-11] Transaction failed:', txErr.message);
+      console.error('[P0-11] Charge', charge.id, 'completed but booking update failed. Manual reconciliation needed.');
+      return NextResponse.json({
+        error: 'Pago procesado pero error al actualizar reserva. Contacta soporte.',
+        chargeId: charge.id,
+        code: 'BOOKING_UPDATE_FAILED'
+      }, { status: 502 });
     }
 
     // ── 14. Respuesta exitosa ──

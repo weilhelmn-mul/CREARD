@@ -155,15 +155,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No se generaron fechas con los parámetros dados.' }, { status: 400 });
     }
 
-    // Price per booking — frontend sends grand total (court + equipment), avoid double-counting
+    // P0-10 FIX: Server-side price calculation from court rates
     const eqItems = Array.isArray(equipmentItems) ? equipmentItems : [];
     let equipmentSubtotal = 0;
     for (const eq of eqItems) {
       equipmentSubtotal += (eq.quantity || 0) * (eq.unit_price || eq.unitPrice || 0);
     }
-    const providedTotal = parseFloat(totalPrice) || 0;
-    const courtPrice = providedTotal > 0 ? Math.max(0, providedTotal - equipmentSubtotal) : 0;
-    const price = courtPrice + equipmentSubtotal;
+    
+    let courtPriceTotal = 0;
+    for (const cId of allCourtIds) {
+      try {
+        const court = await getCourtById(cId);
+        if (court?.pricing_schedule && Array.isArray(court.pricing_schedule) && court.pricing_schedule.length > 0) {
+          for (const slot of court.pricing_schedule) {
+            const overlapStart = Math.max(parseFloat(startTime), slot.startHour);
+            const overlapEnd = Math.min(parseFloat(endTime), slot.endHour);
+            if (overlapStart < overlapEnd) {
+              courtPriceTotal += (overlapEnd - overlapStart) * (slot.pricePerHour || court.price_per_hour || 0);
+            }
+          }
+        } else if (court?.price_per_hour) {
+          const hours = parseFloat(endTime) - parseFloat(startTime);
+          courtPriceTotal += hours * court.price_per_hour;
+        }
+      } catch (err) {
+        console.warn('[RECURRING] Could not calculate court price for', cId);
+        const providedTotal = parseFloat(totalPrice) || 0;
+        courtPriceTotal = Math.max(0, providedTotal - equipmentSubtotal);
+        break;
+      }
+    }
+    const price = courtPriceTotal + equipmentSubtotal;
     const adv = parseFloat(advanceAmount) || price * 0.5;
 
     // Check each date for conflicts (no time restrictions — admin-only endpoint)
@@ -247,33 +269,65 @@ export async function POST(request: NextRequest) {
       if (clientUser?.email) clientEmail = clientUser.email;
     } catch { /* fallback to admin email */ }
 
+    // P0-09 FIX: Create each booking in a Firestore transaction
+    const { adminDb: recDb, Timestamp: recTs } = await import('@/lib/firebase-admin');
+    
     for (let i = 0; i < dates.length; i++) {
       const item = previewItems[i];
       if (!item.available) continue;
 
-      const id = await createBooking({
-        court_ids: allCourtIds,
-        user_id: userId,
-        user_email: clientEmail,
-        date: dates[i],
-        start_time: startTime,
-        end_time: endTime,
-        total_price: price,
-        court_subtotal: courtPrice,
-        equipment_subtotal: equipmentSubtotal,
-        equipment_items: eqItems,
-        advance_amount: adv,
-        remaining_amount: price - adv,
-        status: bookingStatus,
-        slot_status: 'available',
-        payment_method: normalizedPaymentMethod || null,
-        notes: notes || null,
-        recurring_group_id: groupId,
-        recurring_index: createdBookings.length,
-        selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
-      });
-
-      createdBookings.push({ id, date: dates[i] });
+      try {
+        const bookingId = await recDb.runTransaction(async (transaction) => {
+          // Re-check conflicts inside transaction
+          for (const cId of allCourtIds) {
+            const existingRef = recDb.collection('bookings')
+              .where('date', '==', dates[i])
+              .where('court_ids', 'array-contains', cId);
+            const existingSnap = await transaction.get(existingRef);
+            for (const doc of existingSnap.docs) {
+              const b = doc.data();
+              if (b.status === 'cancelled') continue;
+              if ((b.start_time || '') < endTime && (b.end_time || '') > startTime) {
+                throw new Error(`Conflicto en ${dates[i]} para cancha ${cId}`);
+              }
+            }
+          }
+          const now = recTs.now();
+          const docRef = recDb.collection('bookings').doc();
+          transaction.set(docRef, {
+            court_id: allCourtIds[0],
+            court_ids: allCourtIds,
+            user_id: userId,
+            user_email: clientEmail,
+            date: dates[i],
+            start_time: startTime,
+            end_time: endTime,
+            total_price: price,
+            court_subtotal: courtPriceTotal,
+            equipment_subtotal: equipmentSubtotal,
+            equipment_items: eqItems,
+            advance_amount: adv,
+            remaining_amount: price - adv,
+            status: bookingStatus,
+            slot_status: 'available',
+            payment_method: normalizedPaymentMethod || null,
+            notes: notes || null,
+            recurring_group_id: groupId,
+            recurring_index: createdBookings.length,
+            selected_slots: Array.isArray(selectedSlots) ? selectedSlots : [],
+            created_at: now,
+            updated_at: now,
+          });
+          return docRef.id;
+        });
+        createdBookings.push({ id: bookingId, date: dates[i] });
+      } catch (txErr: any) {
+        if (txErr?.message?.includes('Conflicto')) {
+          console.warn('[RECURRING] Skipping', dates[i], ':', txErr.message);
+          continue;
+        }
+        throw txErr;
+      }
     }
 
     return NextResponse.json({
