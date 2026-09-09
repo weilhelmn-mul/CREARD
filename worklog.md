@@ -151,3 +151,12 @@ Stage Summary:
 - Cualquier usuario logueado puede reservar aunque su navegador no tenga Firebase token (cookie server-side de 30 días, revocable, hash en Firestore).
 - P0 cerrado: contraseña ahora se verifica en el login server-only.
 - Pendiente: verificar producción tras auto-deploy (login+cookie, 401 password, spoof x-user-* -> 401).
+
+---
+Task ID: 7 (verificación producción)
+Work Log:
+- Deploy 7f6b2e2f READY. Producción verificada: login setea creard_session (HttpOnly+Secure); POST /api/bookings SOLO con cookie -> 201 awaiting_payment; password incorrecto -> 401; spoofing x-user-* con role=admin falso -> 401 "Autenticacion requerida"; flujo visual completo carlos en creard.vercel.app: reserva 22 Sep 09:00 Cancha Fútbol 1 creada sin error -> pantalla "Pagar Adelanto". Booking de prueba AjJVU6yN3oot7icSYdaf eliminado.
+- Screenshots: download/creard_prod_reserva_ok.png
+
+Stage Summary:
+- FIX desplegado y verificado en producción: usuarios logueados pueden reservar (cookie server-side 30d revocable); contraseña verificada en login; anti-spoofing intacto; Tarea 5 sin regresiones (E2E 21/21 local).
