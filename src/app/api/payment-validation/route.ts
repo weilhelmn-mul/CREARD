@@ -163,10 +163,11 @@ export async function PATCH(request: NextRequest) {
     // Hora de pago = hora de validación: el pago se considera oficialmente recibido
     // en el momento en que el administrador lo valida (no cuando el usuario lo declaró
     // ni cuando se creó la reserva). Se registra en hora Lima con los formatos del sistema.
-    const limaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
-    const vDateParts = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(limaNow);
+    // FIX TZ: se formatea Date.now() DIRECTAMENTE con timeZone America/Lima — el patrón
+    // antiguo new Date(toLocaleString(...)) re-parseaba en UTC del server y restaba 5h.
+    const vDateParts = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(new Date());
     const validatedPayDate = `${vDateParts.find(p => p.type === 'day')?.value || '01'}/${vDateParts.find(p => p.type === 'month')?.value || '01'}/${vDateParts.find(p => p.type === 'year')?.value || '2026'}`;
-    const vTimeParts = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(limaNow);
+    const vTimeParts = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(new Date());
     const validatedPayTime = `${vTimeParts.find(p => p.type === 'hour')?.value || '00'}:${vTimeParts.find(p => p.type === 'minute')?.value || '00'}:${vTimeParts.find(p => p.type === 'second')?.value || '00'}`;
 
     // Get booking

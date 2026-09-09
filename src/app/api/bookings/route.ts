@@ -723,10 +723,12 @@ export async function POST(request: NextRequest) {
         const bookingCode = `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`;
 
         // Current date/time in Lima timezone
-        const limaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
-        const payDateParts = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(limaNow);
+        // FIX TZ: se formatea Date.now() DIRECTAMENTE con timeZone America/Lima. El patrón
+        // antiguo new Date(toLocaleString(...)) re-parseaba la hora de Lima como UTC del
+        // server y guardaba payment_time con -5h respecto a la hora real de Lima.
+        const payDateParts = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(new Date());
         const payDate = `${payDateParts.find(p => p.type === 'day')?.value || '01'}/${payDateParts.find(p => p.type === 'month')?.value || '01'}/${payDateParts.find(p => p.type === 'year')?.value || '2026'}`;
-        const payTimeParts = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(limaNow);
+        const payTimeParts = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(new Date());
         const payTime = `${payTimeParts.find(p => p.type === 'hour')?.value || '00'}:${payTimeParts.find(p => p.type === 'minute')?.value || '00'}:${payTimeParts.find(p => p.type === 'second')?.value || '00'}`;
 
         // Fetch court data for audit
