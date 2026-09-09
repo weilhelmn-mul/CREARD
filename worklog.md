@@ -110,3 +110,24 @@ Stage Summary:
 - Requisito cumplido: una reserva solo aparece como CONFIRMADA en el panel y bloquea horario cuando el pago fue realizado Y validado por admin/superadmin
 - Cambios en 11 archivos (4 API routes modificadas a fondo + 5 componentes + db.ts + scripts E2E)
 - NOTA DESPLIEGUE: estos cambios están SOLO en local (cc473770 + commits plataforma). Producción (creard.vercel.app) corre 6fa3d66b más nuevo — desplegar local lo revertiría; requerirá decisión del usuario (push a GitHub o deploy CLI consciente)
+
+---
+Task ID: 6
+Agent: Super Z (main agent)
+Task: Push a GitHub (token nuevo) + deploy a Vercel con la Tarea 5 incluida
+
+Work Log:
+- Intento de recuperar "split payments" (6fa3d66b) desde Vercel: el deployment solo contiene output compilado; el fuente existe SOLO en la otra máquina del usuario. No recuperable por API.
+- Escaneo de secretos pre-push: .env trackeado solo tiene DATABASE_URL local; sin private keys; única API key web (pública por diseño) en e2e_validacion_reservas.py -> limpiada (lee .env.local).
+- Historial limpio: git reset --soft cc47377 + squash de 4 commits de plataforma en 1 commit "feat(bookings): require completed payment + admin validation before confirmation" (8259f20).
+- Dejaron de trackearse artefactos internos (.zscripts/, tool-results/, .git-platform-backup/, screenshots download/*.png, tests/*.sh) + .gitignore actualizado; docs de download/ (PDFs/SQL) se mantienen.
+- Push a GitHub: cc47377..8259f20 main->main (token usado one-shot, remote URL limpio). Vercel auto-deploy disparado por la integración GitHub (productionBranch=main).
+- Deploy dpl_7kPenkzY86owyGfM91FS3LSUTCWW READY en ~1.5 min (commit 8259f205).
+- E2E PRODUCCIÓN 21/21 OK (scripts/e2e_validacion_reservas.py, ahora admite E2E_BASE_URL): awaiting_payment no bloquea; segunda reserva mismo horario permitida; ya pagué->payment_pending no bloquea; admin la ve; validate->reserved bloquea; 409 posteriores; Firestore: reserved + expires_at eliminado + pago completed + payment_validations creado.
+- Limpieza: reservas de prueba V5DHhBuUx3phZROar9o4 y bf3KpSgdiR0hFU7rLftG eliminadas via DELETE super_admin (horario 2026-09-30 06:00 liberado).
+- Verificación visual producción: login super_admin OK; Panel Admin muestra pestañas Todos(142)/Pago Pendiente(1)/Reservado(62)/Completo(63)/Cancelado(16); pestaña Pago Pendiente lista reserva REAL de Weilhelmn (Cancha Fútbol 1, 2 Sep, S/17.50) NO confirmada esperando validación.
+- Screenshots: download/creard_prod_tab_pago_pendiente.png, download/creard_prod_tabs_estados.png
+
+Stage Summary:
+- GitHub (weilhelmn-mul/CREARD) y producción (creard.vercel.app) sincronizados en 8259f20 con el flujo "pago validado -> reserva confirmada" operativo y verificado E2E en producción.
+- IMPORTANTE: los commits 628690f4, f094bf29, 6fa3d66b (split payment cash+Yape/Plin) siguen SOLO en la otra máquina del usuario. Al hacer pull en esa máquina habrá conflictos en las rutas de pagos (Tarea 5 reescribió el flujo): rebase/cherry-pick con resolución consciente; el nuevo modelo (payment_pending -> validación admin) manda.

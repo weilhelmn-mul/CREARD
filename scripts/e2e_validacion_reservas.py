@@ -11,13 +11,14 @@ Verifica el requisito:
   6. El pago asociado nace 'pending' y se completa al validar
 """
 import json
+import os
 import subprocess
 import sys
 import urllib.request
 import urllib.error
 from datetime import date, timedelta
 
-BASE = "http://localhost:3000"
+BASE = os.environ.get("E2E_BASE_URL", "http://localhost:3000")
 
 
 def _firebase_api_key() -> str:
