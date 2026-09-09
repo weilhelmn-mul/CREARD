@@ -131,3 +131,23 @@ Work Log:
 Stage Summary:
 - GitHub (weilhelmn-mul/CREARD) y producción (creard.vercel.app) sincronizados en 8259f20 con el flujo "pago validado -> reserva confirmada" operativo y verificado E2E en producción.
 - IMPORTANTE: los commits 628690f4, f094bf29, 6fa3d66b (split payment cash+Yape/Plin) siguen SOLO en la otra máquina del usuario. Al hacer pull en esa máquina habrá conflictos en las rutas de pagos (Tarea 5 reescribió el flujo): rebase/cherry-pick con resolución consciente; el nuevo modelo (payment_pending -> validación admin) manda.
+
+---
+Task ID: 7
+Agent: Super Z (main agent)
+Task: Corregir "Error al crear reserva, autenticación requerida" en producción
+
+Work Log:
+- Causa raíz: en producción el middleware solo aceptaba Firebase Bearer; sesiones sin token (login donde Firebase Client falla) o con Bearer expirado (1 h, nunca se refresca) -> 401. Los commits 628690f4/f094bf29 del usuario (revertidos por el deploy) parcheaban esto con un fallback inseguro.
+- Hallazgo crítico adicional: /api/auth?action=login NUNCA verificaba la contraseña (solo getUserByEmail) — cualquiera podía loguearse con el email de otro.
+- FIX implementado (3 archivos):
+  * src/app/api/auth/route.ts: verificación server-side de contraseña via Identity Toolkit REST (fallback config-error solo dev); creación de sesión server-side (token aleatorio 256-bit, en Firestore user_sessions solo SHA-256, TTL 30d) + cookie creard_session httpOnly/SameSite=lax/Secure(prod); acción logout que elimina la sesión y limpia cookie.
+  * src/lib/auth-middleware.ts: requireAuth/requireAnyAuth ahora: Bearer -> cookie de sesión (verificada contra Firestore, rol y status siempre desde Firestore) -> 401; x-user-* sigue SOLO en dev. Bearer inválido ya no corta: cae a cookie.
+  * src/lib/auth-helpers.ts: signOutFirebase llama POST /api/auth?action=logout (best-effort).
+- Tests locales: login setea cookie; POST /api/bookings SOLO con cookie -> 201 awaiting_payment; password incorrecto -> 401 (antes logueaba); E2E Bearer 21/21 intacto; flujo visual completo carlos: reserva -> "Ya realicé el pago" -> "Pago Registrado ... pendiente de validación"; booking queda payment_pending (visto por admin). Reservas de prueba eliminadas (zrR6wn0…, E3u5wAE5…, mLJCdxOq…, riY2vOk5…).
+- Screenshots: download/creard_fix_pago_adelanto.png
+
+Stage Summary:
+- Cualquier usuario logueado puede reservar aunque su navegador no tenga Firebase token (cookie server-side de 30 días, revocable, hash en Firestore).
+- P0 cerrado: contraseña ahora se verifica en el login server-only.
+- Pendiente: verificar producción tras auto-deploy (login+cookie, 401 password, spoof x-user-* -> 401).

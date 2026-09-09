@@ -1,6 +1,11 @@
 // ============================================================
 // CREARD - Middleware de Autenticación para Admin API Routes
-// Ahora verifica Firebase ID Tokens reales via Admin SDK
+// Orden de autenticación:
+//   1. Firebase ID Token (Authorization: Bearer) — verificado con Admin SDK
+//   2. Cookie de sesión server-side (creard_session) — token aleatorio,
+//      guarda SHA-256 en Firestore (user_sessions) — funciona incluso si
+//      el login por Firebase Client falló o el Bearer expiró (1 h)
+//   3. Fallback x-user-* — SOLO desarrollo (desactivado en producción)
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,6 +17,70 @@ interface AuthenticatedUser {
   email: string;
   name: string;
   role: UserRole;
+}
+
+const SESSION_COOKIE = 'creard_session';
+
+/**
+ * Autentica vía cookie de sesión server-side (creard_session).
+ * El token aleatorio va en cookie httpOnly; en Firestore (user_sessions)
+ * solo se guarda su SHA-256. El rol SIEMPRE se lee de Firestore.
+ */
+async function sessionCookieUser(
+  request: NextRequest
+): Promise<{ user: AuthenticatedUser } | null> {
+  const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+  if (!cookieToken || cookieToken.length < 32) return null;
+
+  try {
+    const [{ getAdminDb }, dbModule, crypto] = await Promise.all([
+      import('@/lib/firebase-admin'),
+      import('@/lib/db'),
+      import('node:crypto'),
+    ]);
+
+    const db = getAdminDb();
+    const tokenHash = crypto.createHash('sha256').update(cookieToken).digest('hex');
+    const sessSnap = await db.collection('user_sessions').doc(tokenHash).get();
+
+    if (!sessSnap.exists) return null;
+
+    const sess = sessSnap.data() as {
+      user_id?: string;
+      email?: string;
+      expires_at?: { toMillis?: () => number } | Date;
+    };
+
+    const expMs =
+      sess?.expires_at && typeof (sess.expires_at as any)?.toMillis === 'function'
+        ? (sess.expires_at as any).toMillis()
+        : sess?.expires_at instanceof Date
+          ? sess.expires_at.getTime()
+          : 0;
+
+    if (!sess?.user_id || !expMs || expMs < Date.now()) {
+      // Sesión inválida o expirada — limpieza perezosa
+      db.collection('user_sessions').doc(tokenHash).delete().catch(() => {});
+      return null;
+    }
+
+    const userData = await dbModule.getUserById(sess.user_id).catch(() => null);
+
+    // Usuarios pendientes/rechazados/deshabilitados no autentican por sesión
+    if (userData?.status && userData.status !== 'approved') return null;
+
+    return {
+      user: {
+        id: sess.user_id,
+        email: sess.email || userData?.email || '',
+        name: userData?.name || (sess.email || '').split('@')[0],
+        role: (userData?.role || 'user') as UserRole,
+      },
+    };
+  } catch (err) {
+    console.warn('[AUTH] Session cookie check failed:', err);
+    return null;
+  }
 }
 
 /**
@@ -97,15 +166,34 @@ export async function requireAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // P0-01 FIX: In production, reject invalid tokens
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Token invalido o expirado.' }, { status: 401 });
-      }
-      // Fall through to legacy header check (development/demo only)
+      // Continuar: puede autenticar por cookie de sesión (p.ej. Bearer expirado)
     }
   }
 
-  // --- Fallback: Legacy header-based auth (DEVELOPMENT/DEMO ONLY) ---
+  // --- Fallback: cookie de sesión server-side (producción + desarrollo) ---
+  const sessionResult = await sessionCookieUser(request);
+  if (sessionResult) {
+    const { user } = sessionResult;
+
+    // Check if user has required role (super_admin always has access)
+    if (requiredRole && user.role !== requiredRole && user.role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'No tienes permisos de administrador.' },
+        { status: 403 }
+      );
+    }
+
+    if (requiredRole === 'super_admin' && user.role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Esta accion requiere permisos de Super Administrador.' },
+        { status: 403 }
+      );
+    }
+
+    return sessionResult;
+  }
+
+  // --- Último recurso: headers legacy (DEVELOPMENT/DEMO ONLY) ---
   // P0-01 FIX: DISABLED in production to prevent identity spoofing
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Autenticacion requerida.' }, { status: 401 });
@@ -219,15 +307,17 @@ export async function requireAnyAuth(
       };
     } catch (tokenError: any) {
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
-      // P0-01 FIX: In production, reject invalid tokens
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Token invalido o expirado.' }, { status: 401 });
-      }
-      // Fall through to fallback check (development/demo only)
+      // Continuar: puede autenticar por cookie de sesión (p.ej. Bearer expirado)
     }
   }
 
-  // --- Fallback: Legacy header-based auth (DEVELOPMENT/DEMO ONLY) ---
+  // --- Fallback: cookie de sesión server-side (producción + desarrollo) ---
+  const sessionResult = await sessionCookieUser(request);
+  if (sessionResult) {
+    return sessionResult;
+  }
+
+  // --- Último recurso: headers legacy (DEVELOPMENT/DEMO ONLY) ---
   // P0-01 FIX: DISABLED in production to prevent identity spoofing
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Autenticacion requerida.' }, { status: 401 });

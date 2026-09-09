@@ -25,6 +25,13 @@ export function isFirebaseClientAvailable(): boolean {
 export async function signOutFirebase(): Promise<void> {
   const store = useAppStore.getState();
 
+  // Invalidar la sesion server-side y limpiar la cookie httpOnly
+  try {
+    await fetch('/api/auth?action=logout', { method: 'POST' });
+  } catch (err) {
+    console.warn('[CREARD] Error al cerrar sesion server-side:', err);
+  }
+
   // Try to sign out from Firebase Auth
   if (isFirebaseClientAvailable()) {
     try {

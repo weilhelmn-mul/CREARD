@@ -1,11 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import {
   createUser as createUserInDb,
   getUserById,
 } from '@/lib/db';
-import { adminAuth } from '@/lib/firebase-admin';
+import { adminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 import { jsonCreateUser, jsonGetUserByEmail, jsonUpdateUser } from '@/lib/json-storage';
+
+// ============================================================
+// Sesiones server-side (cookie httpOnly) — P0 FIX
+// El login server-only antes NO verificaba contrasena y las
+// sesiones sin Firebase client token no podian llamar APIs
+// autenticadas en produccion ("Autenticacion requerida").
+// ============================================================
+
+const SESSION_COOKIE = 'creard_session';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+function sha256(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+/**
+ * Verifica email+password contra Firebase Auth via Identity Toolkit REST
+ * (el Admin SDK no permite verificar contrasenas directamente).
+ */
+async function verifyPassword(
+  email: string,
+  password: string
+): Promise<{ status: 'ok' | 'bad-credentials' | 'config-error'; uid?: string }> {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '';
+  if (!apiKey || apiKey.includes('TU_') || apiKey.includes('AQUI')) {
+    return { status: 'config-error' };
+  }
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return { status: 'ok', uid: data.localId };
+    }
+    const err = await res.json().catch(() => ({}) as { error?: { message?: string } });
+    const msg = err?.error?.message || '';
+    if (
+      msg.includes('API_KEY') ||
+      msg.includes('PERMISSION_DENIED') ||
+      msg.includes('OPERATION_NOT_ALLOWED') ||
+      msg.includes('ADMIN_ONLY_OPERATION')
+    ) {
+      return { status: 'config-error' };
+    }
+    return { status: 'bad-credentials' };
+  } catch {
+    return { status: 'config-error' };
+  }
+}
+
+/** Crea una sesion server-side: token aleatorio, en Firestore solo el SHA-256. */
+async function createSession(uid: string, email: string): Promise<{ token: string } | null> {
+  try {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await getAdminDb().collection('user_sessions').doc(sha256(token)).set({
+      user_id: uid,
+      email,
+      created_at: new Date(),
+      expires_at: expiresAt,
+    });
+    return { token };
+  } catch (err) {
+    console.warn('[AUTH] No se pudo crear sesion server-side:', err);
+    return null;
+  }
+}
+
+function sessionCookieOptions(maxAgeSeconds: number) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: maxAgeSeconds,
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -173,17 +257,37 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      let userRecord;
-      try {
-        userRecord = await adminAuth.getUserByEmail(email);
-      } catch {
+      // P0 FIX: verificar contrasena server-side (antes solo se buscaba el email)
+      const pwResult = await verifyPassword(email, password);
+      let uid: string;
+      if (pwResult.status === 'ok' && pwResult.uid) {
+        uid = pwResult.uid;
+      } else if (pwResult.status === 'bad-credentials') {
         return NextResponse.json(
           { error: 'Correo o contrasena invalidos' },
           { status: 401 }
         );
+      } else {
+        // config-error: API key ausente/restringida — fallback legacy SOLO en dev
+        console.error('[AUTH] verifyPassword config-error; usando fallback legacy SIN verificacion de contrasena (solo aceptable en desarrollo)');
+        if (process.env.NODE_ENV === 'production') {
+          return NextResponse.json(
+            { error: 'Error de configuracion de autenticacion' },
+            { status: 500 }
+          );
+        }
+        try {
+          uid = (await adminAuth.getUserByEmail(email)).uid;
+        } catch {
+          return NextResponse.json(
+            { error: 'Correo o contrasena invalidos' },
+            { status: 401 }
+          );
+        }
       }
+      const userRecord = { uid, email };
 
-      let userData = await getUserById(userRecord.uid);
+      let userData = await getUserById(uid);
 
       // Verificar si el usuario esta aprobado
       let userStatus = userData?.status || 'pending';
@@ -194,8 +298,8 @@ export async function POST(request: NextRequest) {
         // Auto-fixing admin user status
         try {
           const { updateUser } = await import('@/lib/db');
-          await updateUser(userRecord.uid, { status: 'approved', is_active: true });
-          await adminAuth.setCustomUserClaims(userRecord.uid, { role: userRole, status: 'approved' });
+          await updateUser(uid, { status: 'approved', is_active: true });
+          await adminAuth.setCustomUserClaims(uid, { role: userRole, status: 'approved' });
           userStatus = 'approved';
         } catch (fixErr) {
           console.error('[AUTH] Auto-fix failed:', fixErr);
@@ -208,8 +312,8 @@ export async function POST(request: NextRequest) {
         // Auto-upgrading super admin role
         try {
           const { updateUser } = await import('@/lib/db');
-          await updateUser(userRecord.uid, { role: 'super_admin', status: 'approved', is_active: true });
-          await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'super_admin', status: 'approved' });
+          await updateUser(uid, { role: 'super_admin', status: 'approved', is_active: true });
+          await adminAuth.setCustomUserClaims(uid, { role: 'super_admin', status: 'approved' });
           userData = await getUserById(userRecord.uid);
           userStatus = 'approved';
         } catch (fixErr) {
@@ -247,16 +351,37 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({
+      // Login OK — crear sesion server-side y setear cookie httpOnly
+      const response = NextResponse.json({
         user: {
-          id: userRecord.uid,
-          name: userData?.name || userRecord.displayName || '',
+          id: uid,
+          name: userData?.name || '',
           email: userRecord.email || '',
           phone: userData?.phone || null,
           role: userData?.role || 'user',
           status: 'approved',
         },
       });
+      const session = await createSession(uid, userRecord.email || email);
+      if (session) {
+        response.cookies.set(SESSION_COOKIE, session.token, sessionCookieOptions(SESSION_TTL_MS / 1000));
+      }
+      return response;
+    }
+
+    // ── LOGOUT ──
+    if (action === 'logout') {
+      try {
+        const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+        if (cookieToken && isFirebaseAvailable()) {
+          await getAdminDb().collection('user_sessions').doc(sha256(cookieToken)).delete();
+        }
+      } catch (logoutErr) {
+        console.warn('[AUTH] Error al eliminar sesion:', logoutErr);
+      }
+      const res = NextResponse.json({ success: true });
+      res.cookies.set(SESSION_COOKIE, '', sessionCookieOptions(0));
+      return res;
     }
 
     // ── GET USER ──
