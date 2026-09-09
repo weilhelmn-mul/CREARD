@@ -195,3 +195,21 @@ Work Log:
 
 Stage Summary:
 - El admin puede registrar el pago total (o adelantos) con efectivo y/o Yape/Plin en una sola operación, con desglose persistido por método para contabilidad. Tooltip corregido. Desplegado y verificado en producción.
+
+---
+Task ID: 8-b
+Agent: Super Z (main agent)
+Task: Hora de pago = hora de validación del admin + alerta de color en pestaña "Pagos"
+
+Work Log:
+- API (src/app/api/payment-validation/route.ts PATCH validate): la hora oficial del pago ahora es el momento de la VALIDACIÓN del administrador (hora Lima, formatos DD/MM/YYYY + HH:mm:ss). Se persiste payment_date/payment_time en la reserva y en el registro de pagos (top-level payments). Añadidos validated_at/validated_by/validated_by_name a la reserva. La validación del SALDO (remaining) no sobreescribe la hora del adelanto ya validado. "Fecha/Hora Registro en Sistema" (created_at) se preserva para auditoría.
+- UI (AdminDashboard.tsx): contador paymentsToValidate (payment_pending + saldos reserved con remaining pending, camelCase+snake_case). Pestaña "Pagos" cambia a naranja (texto activo e inactivo) y muestra badge naranja pulsante con el número de pagos por validar (99+ tope). El badge se limpia solo al validar (onValidationChange → fetchData).
+- UI (AdminDashboard.tsx): polling silencioso cada 60s que refresca solo la lista de reservas (sin flicker de loading, solo con la pestaña visible) para que la alerta aparezca en ≤60s aunque el admin no interactúe.
+- FIX latente (PaymentValidationTab.tsx): el filtro de "Pagos Restantes" comparaba remaining_payment_status (snake_case) pero /api/bookings devuelve remainingPaymentStatus (camelCase) — la sección de saldos pendientes NUNCA aparecía. Acepta ambos.
+- Verificación local: build de producción OK (npx next start; npm start usa standalone y falla con "Cannot find package 'jose'" — problema pre-existente del bundle standalone, no relacionado). tsc: 33 TS18048 pre-existentes en payment-validation, 0 nuevos.
+- BLOQUEO ENTORNO: el reset de la sesión borró .env.local (credenciales Firebase, imposible reconstruir la service account key), token GitHub y token Vercel. Push a GitHub falla ("could not read Username"). Commits listos en local: c881ffa + 89da4c9 sobre ea10cbc.
+- Preparado para verificación producción: API key web pública extraída del bundle desplegado (AIzaSyC1veqyqqIFoggI5sW0tb6UvDhDyNRmf); E2E lista (login cookie → reserva carlos → ya pagué → validar admin → verificar payment_date/time en payments-list → DELETE super_admin).
+
+Stage Summary:
+- Implementado y compilado: hora de pago = hora de validación + alerta naranja con badge en pestaña Pagos (con polling en vivo) + fix latente de saldos pendientes.
+- Pendiente del usuario: token GitHub nuevo (Contents: Read+Write sobre weilhelmn-mul/CREARD) para push → Vercel auto-deploy → E2E producción. Recomendado además regenerar la service account key de Firebase (la anterior quedó expuesta) para restaurar .env.local local.

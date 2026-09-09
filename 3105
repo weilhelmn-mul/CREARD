@@ -1,0 +1,14 @@
+▲ Next.js 16.1.3
+- Local:         http://localhost:3105
+- Network:       http://0.0.0.0:3105
+
+✓ Starting...
+✓ Ready in 82ms
+⨯ Error: Failed to load external module firebase-admin-a14c8a5423a75469/auth: ResolveMessage: Cannot find package 'jose' from '/home/z/my-project/.next/standalone/node_modules/jwks-rsa/src/utils.js'
+    at externalImport (.next/server/chunks/[turbopack]_runtime.js:518:19)
+    at async <anonymous> (.next/server/chunks/[root-of-the-server]__08964ad6._.js:1:1144)
+    at processTicksAndRejections (unknown:7:39)
+⨯ Error: Failed to load external module firebase-admin-a14c8a5423a75469/auth: ResolveMessage: Cannot find package 'jose' from '/home/z/my-project/.next/standalone/node_modules/jwks-rsa/src/utils.js'
+    at externalImport (.next/server/chunks/[turbopack]_runtime.js:518:19)
+    at async <anonymous> (.next/server/chunks/[root-of-the-server]__08964ad6._.js:1:1144)
+    at processTicksAndRejections (unknown:7:39)
