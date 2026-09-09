@@ -211,11 +211,12 @@ export default function UnifiedBookingView() {
   }, [courts])
 
   // ── Availability map: "courtId:HH:00" → true if occupied ──
-
+  // Pago-validado → confirmada: solo reservas CONFIRMADAS (reserved/completed)
+  // bloquean el horario. Las awaiting_payment/payment_pending NO bloquean.
   const occupiedMap = useMemo(() => {
     const map = new Map<string, boolean>()
     for (const b of bookings) {
-      if (b.status === 'cancelled') continue
+      if (b.status !== 'reserved' && b.status !== 'completed') continue
       const courtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : (b.court_id ? [b.court_id] : [])
       const startH = parseInt((b.start_time || '').split(':')[0] || '0', 10)
       const endH = parseInt((b.end_time || '').split(':')[0] || '0', 10)
@@ -448,7 +449,8 @@ export default function UnifiedBookingView() {
           advanceAmount: adv,
           remainingAmount: rem,
           paymentType: paymentType,
-          status: 'reserved',
+          // El server decide el status según rol: usuarios → awaiting_payment
+          // (no confirmada hasta validación de pago por admin)
           paymentMethod: activePaymentMethod === 'yape_qr' ? 'Yape QR' : 'culqi',
           selectedSlots: sortedSlots,
         }),

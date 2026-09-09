@@ -147,10 +147,11 @@ type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 're
    CONFIG
    ═══════════════════════════════════════════════════ */
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
+  awaiting_payment: { label: 'Esperando Pago', color: 'bg-sky-500/20 text-sky-400',   dot: 'bg-sky-400' },
+  payment_pending: { label: 'Pago Pendiente',  color: 'bg-orange-500/20 text-orange-400',    dot: 'bg-orange-400' },
   reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
   completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
   cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
-  payment_pending: { label: 'Pago Pendiente',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
 }
 
 const sportIcons: Record<string, string> = {
@@ -3507,6 +3508,13 @@ export default function AdminDashboard() {
     return result
   }, [bookings, statusFilter, showPastBookings, searchQuery, dateFrom, dateTo, courtFilter, sportFilter, sortBy])
 
+  // Conteo de la pestaña "Todos": respeta el toggle de pasadas pero NO el statusFilter activo
+  const allBookingsCount = useMemo(() => {
+    if (showPastBookings) return bookings.length
+    const today = todayStr()
+    return bookings.filter((b) => typeof b.date === 'string' && b.date >= today).length
+  }, [bookings, showPastBookings])
+
   // Bug fix #8: Pagination
   const paginatedBookings = useMemo(() => {
     const start = (bookingsPage - 1) * BOOKINGS_PER_PAGE
@@ -4006,7 +4014,7 @@ export default function AdminDashboard() {
               {/* Status filter */}
               <div className="flex flex-wrap gap-2 mb-4">
                 <button type="button" onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${statusFilter === 'all' ? 'bg-cm-primary/10 text-cm-primary border border-cm-primary/30' : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border border-transparent hover:border-white/10'}`}>
-                  Todos ({filteredBookings.length})
+                  Todos ({allBookingsCount})
                 </button>
                 {Object.entries(statusConfig).map(([key, val]) => {
                   // Bug fix #5: Count respects showPastBookings toggle

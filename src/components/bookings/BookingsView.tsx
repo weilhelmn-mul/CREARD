@@ -39,7 +39,8 @@ type TabType = 'upcoming' | 'completed' | 'cancelled'
 /* ─── config ─── */
 const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
   reserved:       { label: 'Reservado',            color: 'bg-green-500/20 text-green-400 border-green-500/30',   icon: 'check_circle' },
-  payment_pending: { label: 'Pendiente de reserva', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: 'hourglass_top' },
+  awaiting_payment: { label: 'Esperando pago',    color: 'bg-sky-500/20 text-sky-400 border-sky-500/30',         icon: 'schedule' },
+  payment_pending: { label: 'Pago en validación', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: 'hourglass_top' },
   remaining_payment_pending: { label: 'Pago restante pendiente', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'pending' },
   completed:      { label: 'Completo',             color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',     icon: 'verified' },
   cancelled:      { label: 'Cancelado',            color: 'bg-red-500/20 text-red-400 border-red-500/30',       icon: 'cancel' },
@@ -271,7 +272,7 @@ export default function BookingsView() {
   const tabCounts = {
     upcoming: bookings.filter((b) => {
       const bd = parseLocalDate(b.date)
-      return bd >= tomorrow && ['reserved', 'payment_pending', 'remaining_payment_pending'].includes(b.status)
+      return bd >= tomorrow && ['reserved', 'awaiting_payment', 'payment_pending', 'remaining_payment_pending'].includes(b.status)
     }).length,
     completed: bookings.filter((b) => b.status === 'completed').length,
     cancelled: bookings.filter((b) => b.status === 'cancelled').length,

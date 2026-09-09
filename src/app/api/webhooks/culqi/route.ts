@@ -5,6 +5,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { FieldValue } from 'firebase-admin/firestore';
 import {
   updatePaymentStatus,
   updateBooking,
@@ -148,12 +149,16 @@ async function handleSuccessfulCharge(chargeId: string, chargeData: Record<strin
         ? getPaymentMethodLabel(chargeData.source.type, chargeData.source.brand)
         : payment.method;
 
+      // Pago-validado → confirmada: Culqi cobró el adelanto (pago acreditado), pero la
+      // reserva sigue SIN confirmarse ni bloquear el horario hasta que un admin la
+      // valide en el panel. Equivalente a "ya pagué": pasa a 'payment_pending'.
       await updateBooking(bookingId, {
-        status: 'reserved', // FIX P1-8: canonical status (not 'partially_paid')
-        slot_status: 'reserved',
+        status: 'payment_pending',
+        slot_status: 'available',
         payment_method: methodLabel,
         advance_amount: paymentAmount,
         remaining_amount: (booking.total_price || 0) - paymentAmount,
+        expires_at: FieldValue.delete() as any,
       });
     }
 

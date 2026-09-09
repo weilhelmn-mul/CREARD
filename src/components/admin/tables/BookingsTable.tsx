@@ -38,6 +38,8 @@ interface Booking {
 }
 
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
+  awaiting_payment: { label: 'Esperando Pago', color: 'bg-sky-500/20 text-sky-400',   dot: 'bg-sky-400' },
+  payment_pending: { label: 'Pago Pendiente',  color: 'bg-orange-500/20 text-orange-400',    dot: 'bg-orange-400' },
   reserved:  { label: 'Reservado',  color: 'bg-amber-500/20 text-amber-400',    dot: 'bg-amber-400' },
   completed: { label: 'Completo',   color: 'bg-green-500/20 text-green-400',    dot: 'bg-green-400' },
   cancelled: { label: 'Cancelado',  color: 'bg-red-500/20 text-red-400',        dot: 'bg-red-400' },
@@ -243,7 +245,9 @@ export default function BookingsTable({
                         onChange={(e) => handleUpdateStatus(b, e.target.value)}
                         className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
                       >
-                        <option value="reserved">Reservado</option>
+                        <option value="awaiting_payment">Esperando Pago</option>
+                        <option value="payment_pending">Pago Pendiente</option>
+                        <option value="reserved">Reservado (confirmada)</option>
                         <option value="completed">Completo</option>
                         <option value="cancelled">Cancelado</option>
                       </select>

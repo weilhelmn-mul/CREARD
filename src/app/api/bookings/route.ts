@@ -15,9 +15,9 @@ import {
 import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 
-// Migrate old status values to the new 3-status system
+// Migrate old status values to the canonical status system
 function migrateStatus(s: string): string {
   switch (s) {
     case 'confirmed':
@@ -31,8 +31,29 @@ function migrateStatus(s: string): string {
     case 'expired':
       return 'cancelled';
     default:
-      return s; // 'reserved', 'completed', 'cancelled' pass through
+      return s; // 'reserved', 'awaiting_payment', 'payment_pending', 'cancelled' pass through
   }
+}
+
+// ── Pago-validado → confirmada ──
+// Solo una reserva CONFIRMADA (pago validado por admin/superadmin, o creada por admin)
+// bloquea el horario y cuenta como reserva efectiva para disponibilidad.
+// 'awaiting_payment' (creada, sin pagar) y 'payment_pending' (pago declarado,
+// esperando validación admin) NO bloquean ni son confirmadas.
+function isBlockingStatus(s: string): boolean {
+  const st = migrateStatus(s || '');
+  return st === 'reserved' || st === 'completed';
+}
+
+// Safely read expires_at as epoch ms (Firestore Timestamp | Date | string | number)
+function expiryToMs(exp: unknown): number | null {
+  if (!exp) return null;
+  const anyExp = exp as { toMillis?: () => number };
+  if (typeof anyExp.toMillis === 'function') {
+    try { return anyExp.toMillis(); } catch { return null; }
+  }
+  const t = new Date(exp as string | number).getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
 // Transformar snake_case (Firestore) a camelCase (frontend)
@@ -260,21 +281,47 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
 
     // Court availability check (courtId + date) is public — no auth required
+    // Solo se devuelven reservas CONFIRMADAS (reserved/completed): una reserva cuyo pago
+    // no ha sido validado (awaiting_payment / payment_pending) NO bloquea el horario.
     if (courtId && date && !userId) {
       if (!firebaseOk) {
         return NextResponse.json({ error: 'Firebase no configurado', code: 'NO_FIREBASE' }, { status: 503 });
       }
       const bookings = await getBookings({ courtId, date });
-      // FIX P0-4: Filter out expired reserved bookings (ghost reservations)
       const now = Date.now();
       const active = bookings.filter((b: any) => {
-        if (migrateStatus(b.status || 'reserved') !== 'reserved') return true;
-        const exp = b.expires_at;
-        if (!exp) return true;
-        const expMs = exp.toMillis?.()?.() || new Date(exp).getTime();
+        if (!isBlockingStatus(b.status || '')) return false;
+        const expMs = expiryToMs(b.expires_at);
+        if (expMs === null) return true;
         return expMs > now;
       });
       return NextResponse.json(active.map(toCamelBooking));
+    }
+
+    // Availability-only query (date without courtId, e.g. UnifiedBookingView):
+    // public endpoint that returns ONLY blocking bookings with a minimal payload
+    // (no user personal data) so the client can paint occupied slots.
+    if (date && !courtId && !userId && !dateFrom && !dateTo && !status) {
+      if (!firebaseOk) {
+        return NextResponse.json({ error: 'Firebase no configurado', code: 'NO_FIREBASE' }, { status: 503 });
+      }
+      const allDay = await getBookings({ date });
+      const now = Date.now();
+      const blocking = allDay.filter((b: any) => {
+        if (!isBlockingStatus(b.status || '')) return false;
+        const expMs = expiryToMs(b.expires_at);
+        if (expMs === null) return true;
+        return expMs > now;
+      });
+      return NextResponse.json(blocking.map((b: Record<string, unknown>) => ({
+        id: b.id,
+        courtId: b.court_id || null,
+        courtIds: Array.isArray(b.court_ids) ? b.court_ids : (b.court_id ? [b.court_id] : []),
+        date: b.date,
+        startTime: b.start_time,
+        endTime: b.end_time,
+        status: migrateStatus(b.status || ''),
+      })));
     }
 
     // All other queries require authentication
@@ -393,26 +440,37 @@ export async function GET(request: NextRequest) {
       return String(a.startTime || '').localeCompare(String(b.startTime || ''));
     });
 
-    // FIX P0-4: Lazy-expire reserved bookings past their TTL
+    // FIX P0-4: Lazy-expire unpaid bookings past their TTL (reserved sin validar + awaiting_payment)
     try {
       const db = await getAdminDb();
       const nowMs = Date.now();
       const expiredIds: string[] = [];
       for (const b of bookings) {
-        if (migrateStatus(b.status || 'reserved') !== 'reserved') continue;
-        const exp = b.expires_at;
-        if (!exp) continue;
-        const expMs = exp.toMillis?.()?.() || new Date(exp).getTime();
+        const st = migrateStatus(b.status || 'reserved');
+        if (st !== 'reserved' && st !== 'awaiting_payment') continue;
+        const expMs = expiryToMs(b.expires_at);
+        if (expMs === null) continue;
         if (expMs <= nowMs) expiredIds.push(b.id as string);
       }
       if (expiredIds.length > 0) {
-        await Promise.all(expiredIds.map((id) =>
-          db.collection('bookings').doc(id).update({
-            status: 'cancelled',
-            slot_status: 'available',
-            updated_at: Timestamp.now(),
-          })
-        ));
+        await Promise.all(expiredIds.map(async (id) => {
+          try {
+            await db.collection('bookings').doc(id).update({
+              status: 'cancelled',
+              slot_status: 'available',
+              updated_at: Timestamp.now(),
+            });
+            // Cancel/expire pending payment records so they don't linger as zombies
+            try {
+              const paySnap = await db.collection('payments').where('booking_id', '==', id).limit(5).get();
+              await Promise.all(paySnap.docs.map((d) => d.ref.update({
+                status: 'expired',
+                payment_status: 'expired',
+                updated_at: Timestamp.now(),
+              })));
+            } catch { /* best-effort */ }
+          } catch { /* best-effort per booking */ }
+        }));
         // Remove expired from enriched results
         const expiredSet = new Set(expiredIds);
         enriched = enriched.filter((b) => !expiredSet.has(b.id as string));
@@ -547,7 +605,19 @@ export async function POST(request: NextRequest) {
     let rem = isFullPayment ? 0 : (parseFloat(remainingAmount) || price - adv);
     // Force consistency: remaining must equal total - advance
     rem = Math.max(0, Math.round((price - adv) * 100) / 100);
-    const bookingStatus = migrateStatus(status || 'reserved');
+
+    // ── Pago-validado → confirmada ──
+    // Reservas creadas por ADMIN/SUPER_ADMIN: nacen confirmadas ('reserved').
+    // Reservas creadas por usuarios finales: nacen 'awaiting_payment' — NO bloquean el
+    // horario ni aparecen como confirmadas hasta que el pago sea validado por un admin
+    // (POST /api/payment-validation "ya pagué" → 'payment_pending' → PATCH validate → 'reserved').
+    // El status enviado por el cliente NUNCA confía para usuarios finales.
+    let bookingStatus: string;
+    if (isAdmin) {
+      bookingStatus = migrateStatus(status || 'reserved');
+    } else {
+      bookingStatus = 'awaiting_payment';
+    }
 
     // Resolve client email for denormalized search
     let clientEmail = authUser.email;
@@ -574,11 +644,13 @@ export async function POST(request: NextRequest) {
             const b = doc.data();
             const bCourtIds: string[] = Array.isArray(b.court_ids) ? b.court_ids : [b.court_id];
             if (!bCourtIds.includes(cId)) continue;
-            if (migrateStatus(b.status || '') === 'cancelled') continue;
+            // Pago-validado → confirmada: solo reservas confirmadas bloquean el horario.
+            // Reservas awaiting_payment/payment_pending/cancelled NO bloquean.
+            if (!isBlockingStatus(b.status || '')) continue;
             // P0-08 FIX: Skip expired reservations (ghost reservations)
             if (b.expires_at) {
-              const expMs = b.expires_at.toMillis?.() || new Date(b.expires_at).getTime();
-              if (expMs <= Date.now() && migrateStatus(b.status || '') === 'reserved') continue;
+              const expMs = expiryToMs(b.expires_at);
+              if (expMs !== null && expMs <= Date.now()) continue;
             }
             if ((b.start_time || '') < endTime && (b.end_time || '') > startTime) {
               let courtName = cId;
@@ -635,12 +707,16 @@ export async function POST(request: NextRequest) {
     const id = bookingId;
 
     // B5 FIX: Create payment record with full audit data
+    // Pago-validado → confirmada: para reservas de usuarios el pago nace 'pending'
+    // (se completa cuando el admin valida el pago). Solo las reservas creadas por
+    // admin (pago cobrado en mano) registran el adelanto como 'completed'.
     let payId: string | undefined = undefined;
     if (adv > 0.01) {
       try {
         const payType = isFullPayment ? 'full_payment' : 'advance';
         const payAmount = adv;
         const payRemaining = rem;
+        const payStatus = isAdmin ? 'completed' : 'pending';
         payId = await generatePaymentId();
         const hash = id.slice(-8).toUpperCase();
         const bookingCode = `CRE-${hash.slice(0, 4)}-${hash.slice(4)}`;
@@ -668,7 +744,7 @@ export async function POST(request: NextRequest) {
           amount: payAmount,
           type: payType,
           method: normalizedPaymentMethod || 'EFECTIVO',
-          status: 'completed',
+          status: payStatus,
           payment_id: payId,
           payment_code: payId,
           booking_code: bookingCode,
@@ -685,7 +761,7 @@ export async function POST(request: NextRequest) {
           amount_paid: payAmount,
           remaining_balance: payRemaining,
           payment_method_display: normalizedPaymentMethod === 'CULQI' ? 'Culqi' : normalizedPaymentMethod === 'YAPE' ? 'Yape' : normalizedPaymentMethod || 'Efectivo',
-          payment_status: payType === 'full_payment' ? 'completed' : 'parcial',
+          payment_status: payStatus === 'completed' ? (payType === 'full_payment' ? 'completed' : 'parcial') : 'pending',
           payment_date: payDate,
           payment_time: payTime,
           total_price: price,
@@ -697,7 +773,7 @@ export async function POST(request: NextRequest) {
             booking_id: id,
             payment_id: payId,
             action: 'created',
-            new_status: payType === 'full_payment' ? 'completed' : 'parcial',
+            new_status: payStatus === 'completed' ? (payType === 'full_payment' ? 'completed' : 'parcial') : 'pending',
             performed_by: userId,
             performed_by_name: clientUser?.name || clientUser?.email || userId,
             performed_by_role: 'user',
@@ -780,6 +856,45 @@ export async function PUT(request: NextRequest) {
     // Bug fix #7: Only set status from generic handler if NOT in editBooking mode
     // (editBooking handles status via its own branch to avoid double-processing)
     if (status && !editBooking) updateData.status = migrateStatus(status);
+
+    // Pago-validado → confirmada: si un admin confirma manualmente una reserva que no
+    // estaba confirmada, verificar que el horario siga libre (otra reserva pudo haber
+    // sido confirmada mientras esta esperaba validación) y limpiar el TTL de expiración.
+    if (updateData.status === 'reserved' && !editBooking) {
+      try {
+        const current = await getBookingById(id);
+        const currentStatus = migrateStatus(((current?.status as string) || ''));
+        if (current && currentStatus !== 'reserved') {
+          const curCourtIds: string[] = Array.isArray(current.court_ids)
+            ? (current.court_ids as string[])
+            : (current.court_id ? [current.court_id as string] : []);
+          const curDate = current.date as string;
+          const curStart = current.start_time as string;
+          const curEnd = current.end_time as string;
+          if (curCourtIds.length > 0 && curDate && curStart && curEnd) {
+            const conflictQueries = curCourtIds.map(cid => getBookings({ courtId: cid, date: curDate }));
+            const conflictResults = await Promise.all(conflictQueries);
+            const conflicts = conflictResults.flat().filter((ob: Record<string, unknown>) => {
+              if ((ob.id as string) === id) return false;
+              if (!isBlockingStatus(ob.status || '')) return false;
+              const obCourtIds: string[] = Array.isArray(ob.court_ids)
+                ? (ob.court_ids as string[])
+                : (ob.court_id ? [ob.court_id as string] : []);
+              if (!obCourtIds.some((cid: string) => curCourtIds.includes(cid))) return false;
+              return (ob.start_time as string) < curEnd && (ob.end_time as string) > curStart;
+            });
+            if (conflicts.length > 0) {
+              return NextResponse.json({
+                error: 'No se puede confirmar: el horario ya está ocupado por otra reserva confirmada. Rechaza esta reserva o elige otro horario.',
+                detail: `Conflicto con reserva ${(conflicts[0].start_time as string)}-${(conflicts[0].end_time as string)}`,
+              }, { status: 409 });
+            }
+          }
+          updateData.expires_at = FieldValue.delete();
+          updateData.slot_status = 'reserved';
+        }
+      } catch { /* non-blocking: proceed with status update */ }
+    }
     if (slot_status) updateData.slot_status = slot_status;
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
@@ -812,8 +927,8 @@ export async function PUT(request: NextRequest) {
           const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
             const obId = ob.id as string;
             if (obId === id) return false;
-            // B9 FIX: Use migrateStatus for legacy status values
-            if (migrateStatus(ob.status || '') === 'cancelled') return false;
+            // Pago-validado → confirmada: solo reservas confirmadas bloquean
+            if (!isBlockingStatus(ob.status || '')) return false;
             if (ob.date !== bookingDate) return false;
             const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
             if (!obCourtIds.some((cid: string) => allCourtIds.includes(cid))) return false;
@@ -959,7 +1074,8 @@ export async function PUT(request: NextRequest) {
         const conflicts = allConflicting.filter((ob: Record<string, unknown>) => {
           const obId = ob.id as string;
           if (obId === id) return false;
-          if (migrateStatus(ob.status || '') === 'cancelled') return false;
+          // Pago-validado → confirmada: solo reservas confirmadas bloquean
+          if (!isBlockingStatus(ob.status || '')) return false;
           const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : (ob.court_id ? [ob.court_id] : []);
           if (!obCourtIds.some((cid: string) => finalCourtIds.includes(cid))) return false;
           return (ob.start_time as string) < finalEnd && (ob.end_time as string) > finalStart;

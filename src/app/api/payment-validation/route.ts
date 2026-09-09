@@ -8,8 +8,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-middleware';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { logPaymentAudit } from '@/lib/db';
+
+// Pago-validado → confirmada: solo reservas confirmadas bloquean el horario
+function isBlockingStatus(s: string): boolean {
+  const st = (s || '').toString();
+  return st === 'reserved' || st === 'completed' || st === 'confirmed' || st === 'pending' || st === 'partially_paid';
+}
 
 // GET /api/payment-validation - Admin: list pending validations
 export async function GET(request: NextRequest) {
@@ -110,10 +116,15 @@ export async function POST(request: NextRequest) {
           updated_at: Timestamp.now(),
         });
       } else {
-        // For advance payments, set the whole booking to payment_pending
+        // For advance payments, set the whole booking to payment_pending.
+        // Pago-validado → confirmada: sigue SIN bloquear el horario y SIN estar
+        // confirmada hasta que un admin valide el pago (PATCH action=validate).
+        // Se elimina expires_at: el pago fue declarado, no debe expirar mientras
+        // espera la validación del administrador.
         batch.update(ref, {
           status: 'payment_pending',
           payment_method: 'Yape QR',
+          expires_at: FieldValue.delete(),
           updated_at: Timestamp.now(),
         });
       }
@@ -157,6 +168,35 @@ export async function PATCH(request: NextRequest) {
     }
     const booking = bookingSnap.data();
 
+    // Pago-validado → confirmada: re-chequeo de conflicto ANTES de confirmar.
+    // Mientras esta reserva esperaba validación (sin bloquear), otra reserva del mismo
+    // horario pudo haber sido confirmada. Si hay choque con una reserva CONFIRMADA,
+    // se rechaza la validación y el admin debe liberar esta reserva.
+    if (action === 'validate' && booking.remaining_payment_status !== 'pending') {
+      const conflictCourtIds: string[] = Array.isArray(booking.court_ids)
+        ? booking.court_ids
+        : (booking.court_id ? [booking.court_id] : []);
+      for (const cId of conflictCourtIds) {
+        const conflictSnap = await db
+          .collection('bookings')
+          .where('date', '==', booking.date)
+          .where('court_ids', 'array-contains', cId)
+          .get();
+        for (const doc of conflictSnap.docs) {
+          if (doc.id === bookingId) continue;
+          const ob = doc.data();
+          if (!isBlockingStatus(ob.status || '')) continue;
+          const obCourtIds: string[] = Array.isArray(ob.court_ids) ? ob.court_ids : [ob.court_id];
+          if (!obCourtIds.includes(cId)) continue;
+          if ((ob.start_time || '') < (booking.end_time || '') && (ob.end_time || '') > (booking.start_time || '')) {
+            return NextResponse.json({
+              error: `No se puede validar: el horario ${booking.start_time}-${booking.end_time} del ${booking.date} ya fue confirmado para otra reserva. Rechaza esta reserva o contacta al cliente.`,
+            }, { status: 409 });
+          }
+        }
+      }
+    }
+
     // Determine if this is a remaining payment validation
     const isRemainingPayment = booking.remaining_payment_status === 'pending';
 
@@ -188,6 +228,8 @@ export async function PATCH(request: NextRequest) {
       if (action === 'validate') {
         updateData.status = 'reserved';
         updateData.slot_status = 'reserved';
+        // Pago-validado → confirmada: la reserva confirmada ya no expira
+        updateData.expires_at = FieldValue.delete();
         newStatus = 'reserved';
       } else {
         // Reject: free up the slot

@@ -152,8 +152,9 @@ export async function POST(request: NextRequest) {
 
     // ── 7. Validar estado de la reserva ──
     // FIX P0-1: 'reserved' is the canonical status for newly created bookings.
-    // Without it, users cannot pay for freshly created bookings.
-    const validStatuses = ['pending', 'confirmed', 'partially_paid', 'reserved'];
+    // Pago-validado → confirmada: las reservas de usuarios nacen 'awaiting_payment' y
+    // pasan a 'payment_pending' cuando Culqi cobra el adelanto; ambas son pagables.
+    const validStatuses = ['pending', 'confirmed', 'partially_paid', 'reserved', 'awaiting_payment', 'payment_pending'];
     if (!validStatuses.includes(booking.status as string)) {
       return NextResponse.json(
         { error: `La reserva no permite pagos (estado actual: ${booking.status}).` },
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
     let paymentId: string;
     try {
       const { getAdminDb } = await import('@/lib/firebase-admin');
-      const { Timestamp } = await import('firebase-admin/firestore');
+      const { Timestamp, FieldValue } = await import('firebase-admin/firestore');
       const pDb = getAdminDb();
       
       paymentId = await pDb.runTransaction(async (transaction) => {
@@ -305,12 +306,16 @@ export async function POST(request: NextRequest) {
               updated_at: Timestamp.now(),
             });
           } else if (type === 'advance') {
+            // Pago-validado → confirmada: el cobro de Culqi acredita el pago, pero la
+            // reserva sigue SIN confirmarse ni bloquear hasta que un admin valide.
+            // Culqi cobró → equivalente a "ya pagué": pasa a 'payment_pending'.
             transaction.update(bookingRef, {
-              status: 'reserved',
-              slot_status: 'reserved',
+              status: 'payment_pending',
+              slot_status: 'available',
               payment_method: paymentMethod,
               advance_amount: amountInSoles,
               remaining_amount: (freshBooking.total_price || 0) - amountInSoles,
+              expires_at: FieldValue.delete(),
               updated_at: Timestamp.now(),
             });
           }

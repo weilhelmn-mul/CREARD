@@ -1,103 +1,112 @@
-# CREARD Worklog
+# Worklog
 
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Complete payment system overhaul with audit trail, vouchers, and 50/100% selection
+Agent: Super Z (main agent)
+Task: Clonar repositorio https://github.com/weilhelmn-mul/CREARD y configurar su base de datos Firebase (creard-8debc)
 
 Work Log:
-- Enhanced db.ts: Added PaymentRecord interface (18 new fields), enhanced createPayment with top-level payments collection, added generatePaymentId (atomic counter), getAllPayments, getPaymentsByBookingId
-- Created /api/payments-list route (admin-only, fetches from top-level payments collection with filters)
-- Enhanced /api/bookings POST: now accepts paymentType (advance/full_payment), generates PAY-NNNNNN IDs, stores full audit data (date, time, user, court, sport, etc.)
-- Enhanced /api/payments POST: remaining payments now also generate PAY-NNNNNN IDs with full audit trail
-- Modified UnifiedBookingView: Added 50%/100% radio selector in summary step, dynamic amounts, paymentType passed to API, voucher button on success screen
-- Created PaymentVoucher component: professional modal with company branding, all payment details, print/PDF/download support with @media print styles
-- Enhanced BookingsView: voucher shown after remaining payment (Yape, Culqi, manual), with getRefCode helper and constructVoucherFromBooking function
-- Enhanced PaymentValidationTab: added full "Historial de Pagos" table with 11 columns (ID Pago, Reserva, Usuario, Cancha, Tipo, Monto, Saldo, Metodo, Estado, Fecha, Hora), search/filter, pagination
-- Fixed critical bug: generatePaymentId() returned Promise but was called without await in bookings API
-- Build verified successful, deployed to creard.vercel.app
+- Clonado el repo en /home/z/my-project/CREARD (133 MB, Next.js 16 + TypeScript + Firebase)
+- Creado .env.local con credenciales Firebase Client SDK proporcionadas por el usuario (proyecto creard-8debc)
+- Detectado que el proyecto fue desarrollado en esta misma plataforma (espera estar en /home/z/my-project raíz)
+- Ejecutado init-fullstack.sh; reubicado el repo del usuario a la raíz con scripts/mover_creard_raiz.sh:
+  - .git del repo del usuario ahora en raíz (respaldo de plataforma en .git-platform-backup/)
+  - Resuelto conflicto del directorio scripts/ (quedó anidado, corregido)
+  - upload/ restaurado desde git (imágenes trackeadas)
+- bun install: 1061+ paquetes OK, sin cambios pendientes
+- Resuelto conflicto EADDRINUSE (proceso huérfano de plantilla retenía puerto 3000); reiniciado servidor gestionado vía .zscripts/dev.sh
+- Verificación con agent-browser:
+  - Home renderiza (tema verde CREARD, canchas, precios S/., date picker)
+  - GET /api/courts devuelve datos reales (fallback JSON data/*.json activo)
+  - Login admin@creard.com: OK — consola confirma "[CREARD] Firebase Client inicializado correctamente"
+  - Firebase Auth client devolvió auth/invalid-credential → app usó fallback server-only auth correctamente
+  - Responsive móvil verificado (menú admin, navegación inferior)
+- Screenshots en download/: creard_home_admin.png, creard_mobile.png
 
 Stage Summary:
-- 8 source files modified/created
-- New: payments-list API, PaymentVoucher component, PaymentRecord interface
-- Full audit trail: every payment now has unique PAY-NNNNNN ID, date/time in Lima timezone, user/court/sport info
-- 50%/100% payment selection in booking flow
-- Voucher available after both initial and remaining payments
-- Admin can view complete payment history with search and filters
-- Each payment (advance, remaining, full) creates an independent, immutable record
+- App CREARD corriendo en puerto 3000 con código del repo del usuario y .env.local configurado
+- Firebase Client SDK (navegador): CONFIGURADO Y FUNCIONANDO
+- Firebase Admin SDK (servidor/Firestore): PENDIENTE — requiere clave privada de cuenta de servicio
+  (Firebase Console → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada)
+  Sin ella, la app usa fallback JSON (datos de data/*.json) y auth server-only
+- Repo git intacto en raíz con historial original (remoto: github.com/weilhelmn-mul/CREARD)
+
 ---
-Task ID: 1
-Agent: main
-Task: Deploy date fix to creard.vercel.app
+Task ID: 2
+Agent: Super Z (main agent)
+Task: Configurar Firebase Admin SDK con la clave de cuenta de servicio proporcionada por el usuario y poblar usuarios de prueba
 
 Work Log:
-- Fixed date offset bug in 6 files (BookingsTable, PaymentValidationTab, AdminDashboard, RecurringPreviewTable, ExpensesTable, SeriesBookingsTable)
-- Root cause: Date.UTC(y,m-1,day) created midnight UTC, displayed as previous day in Lima (UTC-5)
-- Fix: Direct string parsing without Date constructor
-- Built successfully with next build
-- Pushed to GitHub main branch
+- Usuario entregó JSON de service account (firebase-adminsdk-fbsvc@creard-8debc.iam.gserviceaccount.com)
+- Configuradas variables FIREBASE_SERVICE_ACCOUNT_* en .env.local (clave PEM con \n literales; el código hace replace a saltos reales)
+- Nota: el filtro de seguridad redactaba el encabezado PEM en la VISTA del editor pero el archivo quedó intacto; validado con grep
+- Reiniciado servidor dev (dev.sh); log confirma "[CREARD] Firebase Admin inicializado correctamente"
+- Inspección de Firestore: users=67, courts=12, branches=1, bookings=143, expenses=1, settings=0 (base con datos reales de producción previa)
+- Login API fallaba: admin@creard.com NO existía en Firebase Auth
+- Creado scripts/seed_usuarios_firebase.ts (carga .env.local, nunca hardcodea secretos)
+- Seed ejecutado: admin@creard.com (admin123, role=admin) y carlos@email.com (user123, role=user) creados en Firebase Auth + perfiles Firestore + custom claims
+- Verificación API: login de ambas cuentas OK (status approved)
+- Verificación E2E browser: "Firebase Client auth succeeded", insignia ADMIN visible, Panel Admin renderiza reservas reales de Firestore (Weilhelm, Cancha Fútbol 1, Yape QR, S/ 50.00)
+- Añadido ADMIN_EMAIL=admin@creard.com pendiente en .env.local (auto-promoción a super_admin del route)
+- Screenshots: download/creard_panel_admin_firestore.png, download/creard_panel_admin_2.png
 
 Stage Summary:
-- Deployed date fix to https://creard.vercel.app/
-- 6 component files fixed
-- Build passed, git push completed
+- Firebase 100% operativo: Client SDK (browser) + Admin SDK (servidor) contra proyecto creard-8debc
+- App lee/escribe datos REALES de Firestore (12 canchas, 143 reservas, 67 usuarios)
+- Cuentas de prueba funcionando: admin@creard.com/admin123 (admin), carlos@email.com/user123 (cliente)
+- Script reutilizable: scripts/seed_usuarios_firebase.ts (idempotente, actualiza si existen)
+- RECOMENDACIÓN pendiente al usuario: rotar la clave privada (fue compartida por chat) y considerar reglas de Firestore
+
 ---
-Task ID: 2-5
-Agent: main
-Task: Panel validacion mejorado, voucher fix, audit trail
+Task ID: 4
+Agent: Super Z (main agent)
+Task: Deploy de CREARD en Vercel (proyecto weilhelmns-projects/creard → https://creard.vercel.app/)
 
 Work Log:
-- Rewrote PaymentValidationTab.tsx (626 lines) with expandable payment detail cards
-- Each payment shows: payment info, booking info, financial status, client info, validation info, evidence section, audit trail
-- Fixed PaymentVoucher print/PDF blank: replaced window.print() + @media print CSS with new window approach (buildPrintHTML)
-- Added logPaymentAudit() to db.ts for payment_audit_logs collection
-- Enhanced payment-validation PATCH to write audit logs and update payment status in top-level payments
-- Enhanced payments-list GET to include validationRecords and auditLogs per payment
-- Filters by status AND payment type added to search bar
+- Autenticado con Vercel CLI v59.14.0 usando el token proporcionado (scope limitado: /v2/user 404 pero API de proyectos OK)
+- Proyecto existente localizado: creard (prj_KwcbWj34S39BsJOfU60TPtgAKwQ1, framework nextjs, dominio creard.vercel.app verified)
+- Analizados 19 env vars existentes en Vercel: todas las NEXT_PUBLIC_FIREBASE_* y FIREBASE_SERVICE_ACCOUNT_* ya apuntan al proyecto creard-8debc del usuario (+ CULQI pagos, SETUP_SECRET)
+- Detectado: producción actual (dpl del 2026-09-05, commit 6fa3d66b "feat: add split payment support") NO proviene de GitHub (origin/main=cc473770 del 01-09) sino de deploy CLI desde otra máquina del usuario con commits nunca pusheados
+- Decisión clave: NO desplegar la copia local (cc473770+artefactos) para no REVERTIR la producción a código más antiguo sin split payments
+- Env var añadida: ADMIN_EMAIL=admin@creard.com (production/preview/development)
+- SMTP_* confirmado opcional (solo /api/claims, con defaults); ADMIN_PASSWORD solo requerido por /api/setup/create-admin (queda protegido sin configurarse)
+- Verificación API producción: GET /api/courts devuelve datos reales de Firestore (Cancha Fútbol 1, CREARD San Sebastián, Cusco)
+- Verificación API login producción: POST /api/auth?action=login con admin@creard.com/admin123 → OK (role=admin, status=approved, perfil Firestore "Administrador CREARD")
+- Verificación E2E visual (agent-browser): home renderiza con precios S/., login OK con insignia ADMIN, Panel Admin muestra reserva real (Weilhelmn, Cancha Fútbol 1, 9 Sep 9PM, S/ 50.00, Yape QR, monitoreo 15s Lima)
+- Screenshots: download/creard_prod_home.png, creard_prod_login_ok.png, creard_prod_panel.png, creard_prod_panel_full.png
+- Token de Vercel eliminado de disco por seguridad tras finalizar
 
 Stage Summary:
-- Deployed to https://creard.vercel.app/
-- Build passes, 8 files changed, +2602/-292 lines
+- https://creard.vercel.app/ ya está en producción (READY), conectado al Firebase creard-8debc del usuario, con login admin verificado E2E contra Firestore real
+- No se ejecutó un nuevo deploy de código a propósito: la producción ya corre un commit (6fa3d66b) MÁS NUEVO que GitHub/local; desplegar local habría revertido split payments
+- Pendiente para el usuario: si quiere deploy vía Git continuo, pushear sus commits locales del 05-09 (628690f4, f094bf29, 6fa3d66b) a GitHub; alternativamente puedo desplegar por CLI si confirma que quiere el estado local
+- Recomendación reiterada: rotar la clave privada de la service account (compartida por chat) y el token de Vercel (también compartido por chat)
+
 ---
-Task ID: 1
-Agent: main
-Task: Mejorar informacion mostrada en Info de Validacion de Pagos
+Task ID: 5
+Agent: Super Z (main agent)
+Task: Implementar y verificar el flujo "pago validado → reserva confirmada" en CREARD (panel admin + disponibilidad)
 
 Work Log:
-- Leido PaymentValidationTab.tsx (627 lineas), payments-list/route.ts, payment-validation/route.ts, db.ts
-- Identificados campos faltantes: total_price no se almacenaba en payments, no habia porcentaje pagado, court_names para multi-cancha
-- API payments-list mejorada: batch-fetch de bookings (chunks de 30), validaciones y audit logs en bulk, calculo de percentage_paid, court_names, booking_created_at, rejection_reason
-- db.ts: agregado campo total_price a createPayment
-- bookings/route.ts: pasar total_price y log de auditoria (logPaymentAudit) al crear pago
-- payments/route.ts: pasar total_price y log de auditoria al crear pago
-- PaymentValidationTab.tsx reescrito completamente (826 lineas) con:
-  - Tabla de 11 columnas: ID Pago, ID Reserva, Usuario, Cancha(s), Tipo Pago, Monto Pagado, Saldo Pendiente, Metodo, Estado, Fecha Pago, Hora Pago
-  - 8 secciones de detalle expandido: Informacion General, Usuario, Reserva, Pago Realizado, Estado Financiero (con barra de progreso), Validacion Administrativa, Evidencia, Auditoria
-  - Filtros por estado, tipo y metodo de pago
-  - Busqueda por ID, reserva, nombre, correo, DNI, operacion
-  - Layout responsive (desktop grid + mobile card)
-- Build exitoso, git push exitoso, deploy automatico via Vercel-GitHub
+- Exploración completa (subagente Explore): bookings API (1184 líneas), payment-validation, payments/process (Culqi), webhooks/culqi, AdminDashboard (6884 líneas), BookingsTable, UnifiedBookingView, CourtDetail, BookingsView, auth-middleware
+- Hallazgo previo: las reservas nacían 'reserved' (confirmadas y bloqueando) sin pago ni validación; se creaba un pago auto-'completed' falso al reservar
+- NUEVO MODELO implementado:
+  * awaiting_payment (Esperando Pago): reserva de usuario recién creada — NO bloquea, NO confirmada
+  * payment_pending (Pago Pendiente): usuario declaró pago ("Ya pagué" Yape / cobro Culqi) — NO bloquea, NO confirmada; aparece en pestaña Pagos
+  * reserved (Reservado): CONFIRMADA solo tras validación de admin/superadmin — SÍ bloquea
+  * completed/cancelled sin cambios; reservas creadas por admin nacen confirmadas (confianza)
+- Backend (src/app/api/bookings/route.ts): migrateStatus+isBlockingStatus+expiryToMs helpers; status inicial por rol (admin→reserved, user→awaiting_payment, ignora status del cliente); transacción POST solo bloquea confirmadas; GET público (courtId+date) devuelve solo bloqueantes + nueva rama date-only con payload mínimo (mapa de disponibilidad sin auth); lazy-expire TTL 15min aplica a reserved/awaiting_payment y expira pagos pendientes; PUT con re-chequeo de conflicto al confirmar manualmente + limpia expires_at (FieldValue.delete)
+- Backend (payment-validation): POST "ya pagué" elimina expires_at (no expira esperando validación); PATCH validate re-chequea conflicto contra reservas confirmadas → 409 si choque; validate confirma (reserved) y limpia TTL
+- Backend (Culqi): payments/process y webhook aceptan awaiting_payment/payment_pending; tras cobro del adelanto NO auto-confirman → payment_pending (espera admin)
+- Backend (payments manual): admin → reserved; user → payment_pending; restante completo → completed (antes legacy fully_paid)
+- Frontend: AdminDashboard statusConfig + pestañas (Esperando Pago/Pago Pendiente/Reservado/Completo/Cancelado) + fix conteo "Todos (N)"; BookingsTable badges + select de estados; UnifiedBookingView occupiedMap solo bloqueantes + server decide status; CourtDetail getBookedSlotHours solo confirmadas; BookingsView "Esperando pago"/"Pago en validación"; db.ts BookingStatus + expires_at
+- Fix colateral: bug latente exp.toMillis?.()?.() (double optional-call) que rompía lazy-expire y disponibilidad pública
+- Verificación E2E API (scripts/e2e_validacion_reservas.py, 21/21 OK contra Firebase creard-8debc REAL): awaiting no bloquea; 2ª reserva mismo horario permitida; ya pagué→payment_pending no bloquea; admin la ve como pendiente; validate→reserved bloquea; POST posterior→409; validar la 2ª→409 conflicto; Firestore: status reserved, expires_at eliminado, pago completed, payment_validations creado
+- Verificación visual (agent-browser): pestañas Todos(3)/Esperando Pago(1)/Pago Pendiente(1)/Reservado(1); pestaña Pagos lista solo payment_pending (awaiting NO); Validar con conflicto muestra mensaje 409 claro; Rechazar libera; disponibilidad pública refleja solo confirmadas
+- Limpieza: 3 reservas de prueba eliminadas (DELETE super_admin); la solicitud REAL de Weilhelmn (2 Sep) no fue tocada
+- Errores TS: corregidos los introducidos (expires_at en Booking, tipo BookingStatus); los pre-existentes del repo se mantienen (next.config tiene ignoreBuildErrors:true — el build de Vercel pasa)
 
 Stage Summary:
-- Panel de Validacion de Pagos completamente rediseado con toda la informacion requerida
-- Toda la auditoria usa Firebase Server Timestamp
-- Archivos modificados: payments-list/route.ts, db.ts, bookings/route.ts, payments/route.ts, PaymentValidationTab.tsx
-- Deploy: https://creard.vercel.app (auto-deploy via git push)
----
-Task ID: P0-fixes
-Agent: main
-Task: Fix 14 P0 critical security vulnerabilities
-
-Work Log:
-- Read and analyzed all 15+ source files for security vulnerabilities
-- Created and executed 3 Python fix scripts (batch1, batch2, batch3)
-- Fixed 2 syntax errors (notifications dispatch, create-admin response)
-- Verified with TypeScript compiler - 0 new errors in modified files
-- Git committed all changes
-- Git push FAILED: GitHub token expired
-
-Stage Summary:
-- All 14 P0 fixes applied and committed locally
-- Commit hash: 6220a9b
-- Deployment blocked: GitHub token needs renewal
-
+- Requisito cumplido: una reserva solo aparece como CONFIRMADA en el panel y bloquea horario cuando el pago fue realizado Y validado por admin/superadmin
+- Cambios en 11 archivos (4 API routes modificadas a fondo + 5 componentes + db.ts + scripts E2E)
+- NOTA DESPLIEGUE: estos cambios están SOLO en local (cc473770 + commits plataforma). Producción (creard.vercel.app) corre 6fa3d66b más nuevo — desplegar local lo revertiría; requerirá decisión del usuario (push a GitHub o deploy CLI consciente)

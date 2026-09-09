@@ -375,8 +375,11 @@ export default function CourtDetail() {
   /* ──── Helpers for user role (plain functions — avoids Turbopack useMemo dependency array corruption) ──── */
   const getBookedSlotHours = (): Set<number> => {
     if (isAdmin) return new Set<number>() // admin uses adminSlotMap
+    // Pago-validado → confirmada: solo reservas confirmadas bloquean para el usuario.
+    // (El GET público ya filtra, pero se defiende aquí por robustez.)
     const hours = new Set<number>()
     bookings.forEach((b) => {
+      if (b.status !== 'reserved' && b.status !== 'completed') return
       const sh = parseInt(b.startTime.split(':')[0], 10)
       const eh = parseInt(b.endTime.split(':')[0], 10)
       for (let h = sh; h < eh; h++) {

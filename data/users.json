@@ -1,1 +1,13 @@
-{}
+{
+  "demo-YWRtaW5AY3JlYXJkLmNvbQ": {
+    "id": "demo-YWRtaW5AY3JlYXJkLmNvbQ",
+    "name": "admin",
+    "email": "admin@creard.com",
+    "phone": null,
+    "role": "user",
+    "status": "approved",
+    "is_active": true,
+    "created_at": "2026-09-09T15:07:24.430Z",
+    "updated_at": "2026-09-09T15:07:24.430Z"
+  }
+}

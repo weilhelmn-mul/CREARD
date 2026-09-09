@@ -187,11 +187,12 @@ export async function POST(request: NextRequest) {
     if (type === 'remaining' && booking) {
       const newAdvance = (booking.advance_amount || 0) + parsedAmount;
       let newRemaining = (booking.total_price || 0) - newAdvance;
-      let newStatus = booking.status || 'partially_paid';
+      let newStatus = booking.status || 'reserved';
 
       if (newRemaining <= 0) {
         newRemaining = 0;
-        newStatus = 'fully_paid';
+        // FIX: canonical status (antes 'fully_paid' legacy)
+        newStatus = 'completed';
       }
 
       await updateBooking(bookingId, {
@@ -201,13 +202,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Si es adelanto, actualizar estado de la reserva
+    // Si es adelanto, actualizar estado de la reserva según quién lo registra:
+    // Pago-validado → confirmada:
+    // - ADMIN/SUPER_ADMIN (cobró el adelanto en mano): confirma la reserva directamente.
+    // - USUARIO: solo declara el pago → queda 'payment_pending' esperando validación
+    //   del admin; NO se confirma ni bloquea el horario.
     if (type === 'advance' && booking) {
-      await updateBooking(bookingId, {
-        status: 'partially_paid' as any,
+      const callerIsAdmin = authUser.role === 'admin' || authUser.role === 'super_admin';
+      await updateBooking(bookingId, callerIsAdmin ? {
+        status: 'reserved' as any,
         slot_status: 'reserved',
         payment_method: method,
         advance_amount: parsedAmount,
+        expires_at: null,
+      } : {
+        status: 'payment_pending' as any,
+        slot_status: 'available',
+        payment_method: method,
+        advance_amount: parsedAmount,
+        expires_at: null,
       });
     }
 

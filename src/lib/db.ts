@@ -57,7 +57,7 @@ export interface User {
   updated_at: Date;
 }
 
-export type BookingStatus = 'pending' | 'reserved' | 'completed' | 'cancelled';
+export type BookingStatus = 'awaiting_payment' | 'payment_pending' | 'pending' | 'reserved' | 'completed' | 'cancelled';
 export type SlotStatus = 'available' | 'reserved' | 'maintenance';
 
 export interface Booking {
@@ -83,6 +83,9 @@ export interface Booking {
   notes: string | null;
   recurring_group_id?: string;
   recurring_index?: number;
+  // TTL de reservas no confirmadas: se limpia (FieldValue.delete() | null) cuando el
+  // pago es validado por un admin y la reserva queda confirmada.
+  expires_at?: any;
   created_at: Date;
   updated_at: Date;
 }

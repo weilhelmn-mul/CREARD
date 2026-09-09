@@ -65,3 +65,11 @@ server.log
 
 # Skills directory
 /skills/tool-results/
+
+# Platform artifacts (internal, do not publish)
+/.zscripts/
+/.git-platform-backup/
+/tool-results/
+/download/*.png
+/tests/*.sh
+*.pid
