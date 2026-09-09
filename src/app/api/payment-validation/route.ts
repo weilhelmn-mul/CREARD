@@ -160,6 +160,15 @@ export async function PATCH(request: NextRequest) {
     const db = getAdminDb();
     const now = Timestamp.now();
 
+    // Hora de pago = hora de validación: el pago se considera oficialmente recibido
+    // en el momento en que el administrador lo valida (no cuando el usuario lo declaró
+    // ni cuando se creó la reserva). Se registra en hora Lima con los formatos del sistema.
+    const limaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Lima' }));
+    const vDateParts = new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' }).formatToParts(limaNow);
+    const validatedPayDate = `${vDateParts.find(p => p.type === 'day')?.value || '01'}/${vDateParts.find(p => p.type === 'month')?.value || '01'}/${vDateParts.find(p => p.type === 'year')?.value || '2026'}`;
+    const vTimeParts = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Lima' }).formatToParts(limaNow);
+    const validatedPayTime = `${vTimeParts.find(p => p.type === 'hour')?.value || '00'}:${vTimeParts.find(p => p.type === 'minute')?.value || '00'}:${vTimeParts.find(p => p.type === 'second')?.value || '00'}`;
+
     // Get booking
     const bookingRef = db.collection('bookings').doc(bookingId);
     const bookingSnap = await bookingRef.get();
@@ -230,6 +239,13 @@ export async function PATCH(request: NextRequest) {
         updateData.slot_status = 'reserved';
         // Pago-validado → confirmada: la reserva confirmada ya no expira
         updateData.expires_at = FieldValue.delete();
+        // Hora de pago = hora de validación (admin): la hora oficial del pago es
+        // cuando el administrador confirma haber recibido el dinero.
+        updateData.payment_date = validatedPayDate;
+        updateData.payment_time = validatedPayTime;
+        updateData.validated_at = now;
+        updateData.validated_by = authUser.id;
+        updateData.validated_by_name = authUser.name || authUser.email || '';
         newStatus = 'reserved';
       } else {
         // Reject: free up the slot
@@ -286,6 +302,12 @@ export async function PATCH(request: NextRequest) {
           validated_by_name: authUser.name || authUser.email || '',
           validated_at: now,
           updated_at: now,
+          // Hora de pago = hora de validación. Solo al validar el pago principal
+          // (adelanto/total): la validación del SALDO no sobreescribe la hora del
+          // adelanto ya validado (ese dinero se recibió antes).
+          ...(action === 'validate' && !isRemainingPayment
+            ? { payment_date: validatedPayDate, payment_time: validatedPayTime }
+            : {}),
         });
       }
     } catch (payErr: any) {

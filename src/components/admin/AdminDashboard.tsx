@@ -2774,6 +2774,12 @@ export default function AdminDashboard() {
     + todayReserved.reduce((s, b) => s + b.advanceAmount, 0)
   const pendingPayments = bookings.filter((b) => b.status === 'reserved' && b.remainingAmount > 0)
   const pendingTotal = pendingPayments.reduce((s, b) => s + b.remainingAmount, 0)
+  // Alerta de la pestaña Pagos: pagos por validar = adelantos/totales declarados por
+  // usuarios (payment_pending) + saldos marcados como pagados a la espera de validación.
+  const paymentsToValidate = bookings.filter((b: any) =>
+    b.status === 'payment_pending' ||
+    (b.status === 'reserved' && (b.remainingPaymentStatus === 'pending' || b.remaining_payment_status === 'pending'))
+  ).length
 
   const uniqueCourts = [...new Map(bookings.filter(b => b.court).map(b => [b.court!.id, b.court!])).values()]
   const uniqueSports = [...new Set(bookings.filter(b => b.court?.sport).map(b => b.court!.sport))]
@@ -3872,20 +3878,35 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar">
-          {adminTabs.map((tab) => (
-            <button type="button"
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
-                activeTab === tab.key
-                  ? 'bg-cm-primary/10 text-cm-primary font-semibold'
-                  : 'text-cm-on-surface-variant hover:text-cm-on-surface'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+          {adminTabs.map((tab) => {
+            // Alerta visual: la pestaña Pagos cambia de color y muestra un badge
+            // cuando hay pagos pendientes de validación por el administrador.
+            const pendingValidations = tab.key === 'pagos' ? paymentsToValidate : 0
+            const alertTab = pendingValidations > 0
+            return (
+              <button type="button"
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === tab.key
+                    ? alertTab
+                      ? 'bg-orange-500/15 text-orange-400 font-semibold'
+                      : 'bg-cm-primary/10 text-cm-primary font-semibold'
+                    : alertTab
+                      ? 'text-orange-400 hover:text-orange-300'
+                      : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                {tab.label}
+                {alertTab && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none animate-pulse">
+                    {pendingValidations > 99 ? '99+' : pendingValidations}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* ═════════════════ TAB CONTENT ═════════════════ */}

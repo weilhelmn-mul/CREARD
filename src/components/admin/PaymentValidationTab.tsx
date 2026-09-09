@@ -321,7 +321,11 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
         allUserBookings = Array.isArray(allData) ? allData : []
       }
       setAdvanceBookings(allBookings.filter((b: any) => b.status === 'payment_pending'))
-      setRemainingBookings(allUserBookings.filter((b: any) => b.remaining_payment_status === 'pending' && b.status === 'reserved'))
+      // FIX: /api/bookings devuelve camelCase (remainingPaymentStatus); se acepta
+      // también snake_case por compatibilidad con respuestas legacy.
+      setRemainingBookings(allUserBookings.filter((b: any) =>
+        (b.remainingPaymentStatus === 'pending' || b.remaining_payment_status === 'pending') && b.status === 'reserved'
+      ))
     } catch {
       toast({ title: 'Error', description: 'No se pudo cargar las validaciones', variant: 'destructive' })
     } finally {
