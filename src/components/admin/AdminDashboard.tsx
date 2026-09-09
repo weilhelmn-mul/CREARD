@@ -2531,6 +2531,29 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  /* ─── Polling silencioso (60s): mantiene la alerta de la pestaña Pagos al día ───
+     Refresca SOLO la lista de reservas (sin loading flicker) mientras el panel está
+     visible, para que el badge "pagos por validar" aparezca aunque el admin no
+     interactúe. Si un usuario declara un pago, el badge naranja se ve en ≤60s. */
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      try {
+        const today = todayStr()
+        const from = new Date(Date.now() - 365 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+        const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+        const res = await fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers: getAuthHeaders() })
+        if (res.ok) {
+          const data = await res.json()
+          const arr = Array.isArray(data) ? data : []
+          if (arr.length > 0) setBookings(arr)
+        }
+      } catch { /* silencioso: reintenta en el próximo ciclo */ }
+    }, 60000)
+    return () => clearInterval(id)
+  }, [])
+
+
   /* Derive booking court list from allCourts — deduplicated by id */
   const bookingCourtDetails = useMemo(() => {
     const seen = new Set<string>()
