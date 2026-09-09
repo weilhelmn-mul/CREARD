@@ -35,6 +35,35 @@ export default function AuthView() {
     }
   }
 
+  // Recuperacion de contrasena: envia email de restablecimiento server-side
+  const handleForgotPassword = async () => {
+    setError('')
+    setSuccessMsg('')
+
+    if (!loginEmail.trim()) {
+      setError('Escribe tu correo electronico arriba y luego pulsa "Olvidaste tu contrasena?".')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth?action=forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo enviar el correo de restablecimiento.')
+      }
+      setSuccessMsg(data.message || 'Te enviamos un correo para restablecer tu contrasena.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocurrio un error inesperado.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const goBack = () => {
     setView('home')
   }
@@ -274,6 +303,10 @@ export default function AuthView() {
                   className="w-full py-3.5 mt-2 bg-cm-primary text-cm-on-primary font-semibold rounded-xl hover:bg-cm-primary-dim transition-all duration-200 glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
                   {loading ? (<><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>Ingresando...</>)
                     : (<><span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>login</span>Iniciar Sesion</>)}
+                </button>
+                <button type="button" onClick={handleForgotPassword} disabled={loading}
+                  className="w-full text-center text-xs text-cm-on-surface-variant hover:text-cm-primary transition-colors font-[family-name:var(--font-inter)] disabled:opacity-50">
+                  Olvidaste tu contrasena?
                 </button>
               </form>
             ) : (

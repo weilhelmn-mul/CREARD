@@ -369,6 +369,58 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
+    // ── FORGOT PASSWORD ──
+    // Envia email de restablecimiento via Identity Toolkit.
+    // Respuesta generica para no revelar si el email existe (anti-enumeracion).
+    if (action === 'forgot-password') {
+      const { email } = body;
+
+      if (!email || typeof email !== 'string') {
+        return NextResponse.json(
+          { error: 'Email es requerido' },
+          { status: 400 }
+        );
+      }
+
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '';
+      if (!apiKey || apiKey.includes('TU_') || apiKey.includes('AQUI')) {
+        return NextResponse.json(
+          { error: 'Error de configuracion de autenticacion' },
+          { status: 500 }
+        );
+      }
+
+      let delivered = false;
+      try {
+        const res = await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
+          }
+        );
+        delivered = res.ok;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}) as { error?: { message?: string } });
+          console.warn('[AUTH] forgot-password para', email, '->', err?.error?.message || res.status);
+        }
+      } catch (fpErr) {
+        console.warn('[AUTH] forgot-password fallo para', email, ':', fpErr);
+      }
+
+      if (!delivered) {
+        console.warn('[AUTH] forgot-password: Firebase no confirmo el envio para', email, '(respuesta generica al cliente)');
+      }
+
+      // Respuesta SIEMPRE generica (200) para no revelar si el email existe
+      // (anti-enumeracion) ni si Firebase lo acepto.
+      return NextResponse.json({
+        message:
+          'Si el correo esta registrado, recibiras en unos minutos un enlace para restablecer tu contrasena. Revisa tambien tu carpeta de spam.',
+      });
+    }
+
     // ── LOGOUT ──
     if (action === 'logout') {
       try {
