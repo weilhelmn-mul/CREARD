@@ -178,3 +178,20 @@ Work Log:
 Stage Summary:
 - El sistema tiene ahora auto-recuperación de contraseña. Si "ha fallado el login" era contraseña olvidada/mismatch (causa más probable), el usuario ya recibió el email para restablecerla.
 - Si el error visto fue "Tu cuenta esta pendiente de aprobacion": es chrisvc06@gmail.com; el admin debe aprobarla desde el panel (no es bug).
+
+---
+Task ID: 8
+Agent: Super Z (main agent)
+Task: Fix tooltip "Registrar adelanto" -> "Registrar Pago" + registro de pago total con desglose mixto (efectivo + Yape/Plin)
+
+Work Log:
+- Tooltip corregido en BookingsTable (title del icono payments): 'Registrar adelanto' -> 'Registrar Pago' / 'Registrar Pago adicional'.
+- Modal de pago (AdminDashboard) reescrito: dos montos (Efectivo + Yape/Plin) con selector Yape|Plin, total en vivo, aviso si excede saldo, helper "Completar saldo con efectivo". Prefill: efectivo = saldo pendiente (flujo de un solo método intacto).
+- handleSubmitAdvance: total = efectivo + digital; paymentMethod = MIXTO si ambos > 0, si no EFECTIVO/YAPE/PLIN; envía paymentBreakdown {efectivo, digital, digitalMethod} cuando es mixto; toast describe el desglose.
+- API PUT /api/bookings: valida y persiste payment_breakdown (Firestore) y acepta MIXTO en VALID_PM; GET mapea paymentBreakdown al cliente; badges MIXTO (💵📱) con tooltip del desglose en tabla + galería + lista móvil.
+- Incidente dev: tras editar, el dev server sirvió un chunk stale con "advanceAmount is not defined" (tsc no veía nada). Resuelto: era caché de Turbopack; el build de producción (npm run build + next start :3100) estaba limpio. No afecta a Vercel.
+- E2E local (build prod :3100, UI real): reserva 26 Sep -> modal split 10 efectivo + 7.5 Yape -> toast "Pago dividido S/ 17.50 (Efectivo S/ 10.00 + YAPE S/ 7.50). Restante: S/ 0.00" -> booking completed, advance 35, remaining 0, paymentMethod MIXTO, paymentBreakdown persistido. Reservas de prueba eliminadas (I5qJfS05…, xusapESYX…).
+- E2E producción (creard.vercel.app, commit c59d4c5, deploy dpl_GWbmVDKyV9tj READY): PUT mixto 20 efectivo + 15 PLIN -> booking completed + breakdown {efectivo:20, digital:15, digitalMethod:PLIN, total:35} verificado; booking de prueba eliminado (25VEatWl…).
+
+Stage Summary:
+- El admin puede registrar el pago total (o adelantos) con efectivo y/o Yape/Plin en una sola operación, con desglose persistido por método para contabilidad. Tooltip corregido. Desplegado y verificado en producción.
