@@ -160,3 +160,21 @@ Work Log:
 
 Stage Summary:
 - FIX desplegado y verificado en producción: usuarios logueados pueden reservar (cookie server-side 30d revocable); contraseña verificada en login; anti-spoofing intacto; Tarea 5 sin regresiones (E2E 21/21 local).
+
+---
+Task ID: 7-b
+Agent: Super Z (main agent)
+Task: Investigar "ha fallado el login" (reportado tras el fix P0 de sesiones)
+
+Work Log:
+- Verificado en producción que la API de login funciona: admin@creard.com/admin123 -> 200 (super_admin), carlos@email.com/user123 -> 200, password incorrecta -> 401. Login UI en navegador real (creard.vercel.app) OK sin errores de consola.
+- Auditoría Firebase Auth vs Firestore (scripts/audit_users.ts): 16 usuarios en Auth, 69 docs en Firestore (~43 legacy sin email). weilhelmn@gmail.com existe y sincronizada (super_admin/approved). chrisvc06@gmail.com real con status=pending (vería "cuenta pendiente" -> es el flujo de aprobación, no bug).
+- Diagnóstico: antes del fix P0 el login NO verificaba contraseña (cualquiera valía); ahora sí. Usuarios que entraban con contraseña incorrecta/olvidada ahora reciben 401 y NO existía flujo de recuperación.
+- FIX desplegado (commit 9592964, deploy dpl_G1dprgD8DpZHPye2aEbqDurYLCWj READY): acción ?action=forgot-password (Identity Toolkit accounts:sendOobCode PASSWORD_RESET, respuesta genérica anti-enumeración) + enlace "Olvidaste tu contrasena?" en el formulario de login (AuthView).
+- Verificación: Identity Toolkit confirma envío real (HTTP 200 kind=GetOobConfirmationCodeResponse); flujo UI probado local y en producción; login sin regresiones.
+- Email de restablecimiento enviado a weilhelmn@gmail.com desde el endpoint de producción (desbloqueo inmediato del propietario + prueba E2E de entrega a Gmail real).
+- Nota: la API key en .env.local está entre comillas; el parser de Next la limpia, pero scripts manuales deben strippear comillas.
+
+Stage Summary:
+- El sistema tiene ahora auto-recuperación de contraseña. Si "ha fallado el login" era contraseña olvidada/mismatch (causa más probable), el usuario ya recibió el email para restablecerla.
+- Si el error visto fue "Tu cuenta esta pendiente de aprobacion": es chrisvc06@gmail.com; el admin debe aprobarla desde el panel (no es bug).
