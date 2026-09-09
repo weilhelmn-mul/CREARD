@@ -230,3 +230,59 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 });
   }
 }
+
+// DELETE /api/payments?id=<docId>  |  ?bookingId=<id> — super_admin only.
+// Mantenimiento: elimina registros de pago huérfanos (p.ej. pagos de pruebas
+// cuya reserva ya fue borrada; DELETE /api/bookings no limpia el pago top-level).
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    if (authResult.user.role !== 'super_admin') {
+      return NextResponse.json({ error: 'Solo el super administrador puede eliminar pagos.' }, { status: 403 });
+    }
+    if (!isFirebaseAvailable()) {
+      return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const bookingId = searchParams.get('bookingId');
+    if (!id && !bookingId) {
+      return NextResponse.json({ error: 'Se requiere id o bookingId.' }, { status: 400 });
+    }
+
+    const { getAdminDb } = await import('@/lib/firebase-admin');
+    const db = await getAdminDb();
+
+    let deleted = 0;
+    if (id) {
+      await db.collection('payments').doc(id).delete();
+      deleted = 1;
+    } else {
+      const snap = await db.collection('payments').where('booking_id', '==', bookingId).get();
+      for (const doc of snap.docs) {
+        await doc.ref.delete();
+        deleted++;
+      }
+    }
+
+    try {
+      await logPaymentAudit({
+        booking_id: bookingId || (id ? String(id) : ''),
+        payment_id: id || undefined,
+        action: 'deleted',
+        new_status: 'deleted',
+        performed_by: authResult.user.id,
+        performed_by_name: authResult.user.name || authResult.user.email || '',
+        performed_by_role: authResult.user.role,
+        details: `Registro(s) de pago eliminado(s) por mantenimiento (super_admin). Total: ${deleted}`,
+      });
+    } catch { /* best-effort */ }
+
+    return NextResponse.json({ success: true, deleted });
+  } catch (error) {
+    console.error('Error deleting payment:', error);
+    return NextResponse.json({ error: 'Failed to delete payment' }, { status: 500 });
+  }
+}
