@@ -27,6 +27,7 @@ interface Booking {
   remainingAmount: number
   status: string
   paymentMethod: string | null
+  paymentBreakdown?: { efectivo: number; digital: number; digitalMethod?: string } | null
   createdAt?: unknown
   recurringGroupId?: string
   recurringIndex?: number
@@ -70,7 +71,6 @@ interface BookingsTableProps {
   openAdvanceModal: (booking: Booking) => void
   handleUpdateStatus: (booking: Booking, status: string) => void
   onShowEquipDetail: (booking: Booking) => void
-  advanceAmount: string
   isSuperAdmin?: boolean
   onDeleteBooking?: (bookingId: string) => void
   use12hFormat?: boolean
@@ -85,7 +85,6 @@ export default function BookingsTable({
   openAdvanceModal,
   handleUpdateStatus,
   onShowEquipDetail,
-  advanceAmount,
   isSuperAdmin = false,
   onDeleteBooking,
   use12hFormat = false,
@@ -204,8 +203,11 @@ export default function BookingsTable({
                   <td className="px-4 py-3 text-right text-cm-primary font-bold font-[family-name:var(--font-sora)] hidden sm:table-cell">{fmtCurrency(b.totalPrice)}</td>
                   <td className="px-2 py-3 text-center">
                     {b.paymentMethod ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
-                        {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant"
+                        title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
+                      >
+                        {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
                         <span className="hidden lg:inline">{b.paymentMethod}</span>
                       </span>
                     ) : (
@@ -227,7 +229,7 @@ export default function BookingsTable({
                       <button
                         onClick={() => openAdvanceModal(b)}
                         className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                        title={b.remainingAmount > 0 ? 'Registrar adelanto' : 'Registrar pago adicional'}
+                        title={b.remainingAmount > 0 ? 'Registrar Pago' : 'Registrar Pago adicional'}
                       >
                         <span className="material-symbols-outlined text-[16px]">payments</span>
                       </button>

@@ -88,6 +88,7 @@ interface Booking {
   remainingAmount: number
   status: string
   paymentMethod: string | null
+  paymentBreakdown?: { efectivo: number; digital: number; digitalMethod?: string } | null
   createdAt?: unknown
   recurringGroupId?: string
   recurringIndex?: number
@@ -2387,8 +2388,12 @@ export default function AdminDashboard() {
   /* advance payment modal */
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [advanceTarget, setAdvanceTarget] = useState<Booking | null>(null)
-  const [advanceAmount, setAdvanceAmount] = useState('')
-  const [advanceMethod, setAdvanceMethod] = useState('EFECTIVO')
+  // Pago dividido: el admin puede registrar en una sola operación efectivo + Yape/Plin,
+  // o solo uno de los dos (los campos van a 0 según corresponda)
+  const [advanceCash, setAdvanceCash] = useState('')
+  const [advanceDigital, setAdvanceDigital] = useState('')
+  const [advanceDigitalMethod, setAdvanceDigitalMethod] = useState<'YAPE' | 'PLIN'>('YAPE')
+  const advanceTotal = (parseFloat(advanceCash || '0') || 0) + (parseFloat(advanceDigital || '0') || 0)
   const [submittingAdvance, setSubmittingAdvance] = useState(false)
 
   /* extend time modal */
@@ -3109,20 +3114,34 @@ export default function AdminDashboard() {
   /* advance payment handlers */
   const openAdvanceModal = (booking: Booking) => {
     setAdvanceTarget(booking)
-    setAdvanceAmount(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
-    setAdvanceMethod('EFECTIVO')
+    // Prefill: el efectivo cubre el saldo pendiente (flujo de un solo método);
+    // el admin puede mover parte a Yape/Plin para registrar un pago dividido
+    setAdvanceCash(String(booking.remainingAmount > 0 ? booking.remainingAmount : booking.totalPrice))
+    setAdvanceDigital('')
+    setAdvanceDigitalMethod('YAPE')
     setShowAdvanceModal(true)
   }
 
   const handleSubmitAdvance = async () => {
-    if (!advanceTarget || !advanceAmount || parseFloat(advanceAmount) <= 0) return
+    const cash = Math.round((parseFloat(advanceCash || '0') || 0) * 100) / 100
+    const digital = Math.round((parseFloat(advanceDigital || '0') || 0) * 100) / 100
+    const total = Math.round((cash + digital) * 100) / 100
+    if (!advanceTarget || total <= 0) return
+    const maxAmount = advanceTarget.remainingAmount > 0 ? advanceTarget.remainingAmount : advanceTarget.totalPrice
+    if (total > maxAmount + 0.01) {
+      toast({ title: 'Monto inválido', description: `El total no puede exceder ${fmtCurrency(maxAmount)}`, variant: 'destructive' })
+      return
+    }
     setSubmittingAdvance(true)
     try {
       // Update booking status and adjust amounts
-      const newAdvance = advanceTarget.advanceAmount + parseFloat(advanceAmount)
+      const newAdvance = advanceTarget.advanceAmount + total
       const newRemaining = Math.max(0, advanceTarget.totalPrice - newAdvance)
       const newStatus = newRemaining <= 0 ? 'completed' : 'reserved'
       const isFullPayment = newRemaining <= 0
+      // Método resultante: mixto si ambos montos > 0, si no el único método usado
+      const bothUsed = cash > 0 && digital > 0
+      const resultingMethod = bothUsed ? 'MIXTO' : cash > 0 ? 'EFECTIVO' : advanceDigitalMethod
 
       const res = await fetch('/api/bookings', {
         method: 'PUT',
@@ -3132,15 +3151,18 @@ export default function AdminDashboard() {
           status: newStatus,
           advanceAmount: newAdvance,
           remainingAmount: newRemaining,
-          paymentMethod: advanceMethod,
+          paymentMethod: resultingMethod,
+          ...(bothUsed ? { paymentBreakdown: { efectivo: cash, digital, digitalMethod: advanceDigitalMethod } } : {}),
         }),
       })
       if (res.ok) {
         toast({
-          title: isFullPayment ? 'Pago total registrado' : 'Adelanto registrado',
-          description: isFullPayment
-            ? `Se registró el pago total de ${fmtCurrency(parseFloat(advanceAmount))}. Saldo: S/ 0.00`
-            : `Adelanto de ${fmtCurrency(parseFloat(advanceAmount))} registrado. Restante: ${fmtCurrency(newRemaining)}`,
+          title: isFullPayment ? 'Pago total registrado' : 'Pago registrado',
+          description: bothUsed
+            ? `Pago dividido ${fmtCurrency(total)} (Efectivo ${fmtCurrency(cash)} + ${advanceDigitalMethod} ${fmtCurrency(digital)}). Restante: ${fmtCurrency(newRemaining)}`
+            : isFullPayment
+              ? `Se registró el pago total de ${fmtCurrency(total)}. Saldo: S/ 0.00`
+              : `Pago de ${fmtCurrency(total)} registrado. Restante: ${fmtCurrency(newRemaining)}`,
         })
         setShowAdvanceModal(false)
         setAdvanceTarget(null)
@@ -4089,7 +4111,6 @@ export default function AdminDashboard() {
                   openAdvanceModal={openAdvanceModal}
                   handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
                   onShowEquipDetail={setShowEquipDetail}
-                  advanceAmount={advanceAmount}
                   isSuperAdmin={isSuperAdmin}
                   onDeleteBooking={handleDeleteBooking}
                   use12hFormat={use12hFormat}
@@ -4174,8 +4195,11 @@ export default function AdminDashboard() {
                               </span>
                             )}
                             {b.paymentMethod && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant">
-                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant"
+                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
+                              >
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
                                 <span>{b.paymentMethod}</span>
                               </span>
                             )}
@@ -4330,8 +4354,11 @@ export default function AdminDashboard() {
                               </span>
                             )}
                             {b.paymentMethod && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex">
-                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : '💵'}
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex"
+                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
+                              >
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
                                 <span>{b.paymentMethod}</span>
                               </span>
                             )}
@@ -5958,10 +5985,10 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">
-                      {advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'Registrar el Total' : 'Registrar Adelanto'}
+                      {advanceTarget.remainingAmount > 0 && advanceTotal >= advanceTarget.remainingAmount ? 'Registrar el Total' : 'Registrar Pago'}
                     </h3>
                     <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">
-                      {advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'Cancelar la totalidad de la deuda' : 'Agregar pago a reserva existente'}
+                      {advanceTarget.remainingAmount > 0 && advanceTotal >= advanceTarget.remainingAmount ? 'Cancelar la totalidad de la deuda' : 'Agregar pago a reserva existente'}
                     </p>
                   </div>
                 </div>
@@ -6013,42 +6040,52 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Monto del adelanto (S/) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={advanceAmount}
-                    onChange={(e) => setAdvanceAmount(e.target.value)}
-                    max={advanceTarget.remainingAmount > 0 ? advanceTarget.remainingAmount : advanceTarget.totalPrice}
-                    className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                    placeholder="0.00"
-                  />
-                  {advanceTarget.remainingAmount > 0 && (
-                    <button type="button"
-                      onClick={() => setAdvanceAmount(String(advanceTarget.remainingAmount))}
-                      className="text-[10px] text-amber-400 font-semibold mt-1 hover:underline font-[family-name:var(--font-inter)]"
-                    >
-                      Completar saldo: {fmtCurrency(advanceTarget.remainingAmount)}
-                    </button>
-                  )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">payments</span> Efectivo (S/) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={advanceCash}
+                      onChange={(e) => setAdvanceCash(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">account_balance_wallet</span> Yape/Plin (S/)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={advanceDigital}
+                      onChange={(e) => setAdvanceDigital(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-sm text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
 
+                {/* Selector Yape / Plin para la parte digital */}
                 <div>
-                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método de pago</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'EFECTIVO', label: 'Efectivo', icon: 'payments' },
+                  <label className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-1 block">Método digital (si aplica)</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
                       { key: 'YAPE', label: 'Yape', icon: 'account_balance_wallet' },
                       { key: 'PLIN', label: 'Plin', icon: 'account_balance_wallet' },
-                    ].map((pm) => (
+                    ] as const).map((pm) => (
                       <button
                         type="button"
                         key={pm.key}
-                        onClick={() => setAdvanceMethod(pm.key)}
+                        onClick={() => setAdvanceDigitalMethod(pm.key)}
                         className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-[11px] font-medium transition-all ${
-                          advanceMethod === pm.key
-                            ? 'bg-amber-500/10 border-amber-400/40 text-amber-400'
+                          advanceDigitalMethod === pm.key
+                            ? 'bg-purple-500/10 border-purple-400/40 text-purple-300'
                             : 'bg-cm-surface-container-highest/30 border-transparent text-cm-on-surface-variant hover:border-white/10'
                         }`}
                       >
@@ -6058,21 +6095,50 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
+
+                {/* Total en vivo + helper */}
+                <div className="flex items-center justify-between text-xs font-[family-name:var(--font-inter)] px-1">
+                  <span className="text-cm-on-surface-variant">Total a registrar</span>
+                  <span className={`font-bold ${advanceTotal > 0 ? 'text-cm-primary' : 'text-cm-on-surface-variant'}`}>{fmtCurrency(advanceTotal)}</span>
+                </div>
+                {advanceTarget.remainingAmount > 0 && (
+                  <div className="flex items-center justify-between text-xs font-[family-name:var(--font-inter)] px-1">
+                    <span className="text-cm-on-surface-variant">Saldo pendiente</span>
+                    <span className="text-orange-400 font-semibold">{fmtCurrency(advanceTarget.remainingAmount)}</span>
+                  </div>
+                )}
+                {advanceTotal > 0 && advanceTarget.remainingAmount > 0 && advanceTotal > advanceTarget.remainingAmount + 0.01 && (
+                  <p className="text-[11px] text-red-400 font-medium px-1 font-[family-name:var(--font-inter)]">El total excede el saldo pendiente</p>
+                )}
+                {advanceTarget.remainingAmount > 0 && (
+                  <button type="button"
+                    onClick={() => {
+                      const rest = Math.max(0, Math.round((advanceTarget.remainingAmount - (parseFloat(advanceDigital || '0') || 0)) * 100) / 100)
+                      setAdvanceCash(String(rest))
+                    }}
+                    className="text-[10px] text-amber-400 font-semibold hover:underline font-[family-name:var(--font-inter)]"
+                  >
+                    Completar saldo con efectivo: {fmtCurrency(Math.max(0, advanceTarget.remainingAmount - (parseFloat(advanceDigital || '0') || 0)))}
+                  </button>
+                )}
+                <p className="text-[10px] text-cm-on-surface-variant/70 px-1 font-[family-name:var(--font-inter)]">
+                  Puedes registrar solo efectivo, solo Yape/Plin, o ambos (pago dividido).
+                </p>
               </div>
 
               <button type="button"
                 onClick={handleSubmitAdvance}
-                disabled={submittingAdvance || !advanceAmount || parseFloat(advanceAmount) <= 0}
+                disabled={submittingAdvance || advanceTotal <= 0}
                 className={`w-full mt-5 py-3 text-white rounded-xl font-semibold font-[family-name:var(--font-sora)] transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
-                  advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-500 hover:bg-amber-600'
+                  advanceTarget.remainingAmount > 0 && advanceTotal >= advanceTarget.remainingAmount ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-500 hover:bg-amber-600'
                 }`}
               >
                 {submittingAdvance ? (
                   <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Registrando...</>
-                ) : advanceTarget.remainingAmount > 0 && parseFloat(advanceAmount || '0') >= advanceTarget.remainingAmount ? (
-                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar el Total — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
+                ) : advanceTarget.remainingAmount > 0 && advanceTotal >= advanceTarget.remainingAmount ? (
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar el Total — {fmtCurrency(advanceTotal)}</>
                 ) : (
-                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Adelanto — {advanceAmount ? fmtCurrency(parseFloat(advanceAmount)) : 'S/ 0.00'}</>
+                  <><span className="material-symbols-outlined text-[20px]">check_circle</span> Registrar Pago — {fmtCurrency(advanceTotal)}</>
                 )}
               </button>
             </motion.div>

@@ -135,6 +135,7 @@ function toCamelBooking(b: Record<string, unknown>) {
     status: migrateStatus(b.status || 'reserved'),
     slotStatus: b.slot_status,
     paymentMethod: b.payment_method,
+    paymentBreakdown: b.payment_breakdown || null,
     remainingPaymentStatus: b.remaining_payment_status || null,
     notes: b.notes,
     createdAt: b.created_at,
@@ -826,7 +827,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems, selectedSlots: reqSelectedSlots } = body;
+    const { id, status, slot_status, advanceAmount: reqAdvance, remainingAmount: reqRemaining, paymentMethod: reqPaymentMethod, paymentBreakdown: reqPaymentBreakdown, equipmentDelivered, equipmentReturned, advanceAction, cancelReason, endTime: reqEndTime, totalPrice: reqTotalPrice, extendTime, editTime, editBooking, startTime: reqStartTime, date: reqDate, courtIds: reqCourtIds, userId: reqUserId, notes: reqNotes, equipmentItems: reqEquipmentItems, selectedSlots: reqSelectedSlots } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 });
@@ -899,10 +900,22 @@ export async function PUT(request: NextRequest) {
     if (typeof reqAdvance === 'number') updateData.advance_amount = reqAdvance;
     if (typeof reqRemaining === 'number') updateData.remaining_amount = reqRemaining;
     if (reqPaymentMethod) {
-      // FIX P1-7: Include online payment methods
-      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN', 'CULQI', 'TARJETA', 'CARD'];
+      // FIX P1-7: Include online payment methods + MIXTO (pago dividido efectivo + Yape/Plin)
+      const VALID_PM = ['EFECTIVO', 'YAPE', 'PLIN', 'CULQI', 'TARJETA', 'CARD', 'MIXTO'];
       const upper = (reqPaymentMethod as string).toUpperCase();
       updateData.payment_method = VALID_PM.includes(upper) ? upper : 'EFECTIVO';
+    }
+    // Pago dividido: desglose de cuánto se cobró en efectivo y cuánto por Yape/Plin
+    // (un solo pago puede combinar ambos métodos o usar solo uno)
+    if (reqPaymentBreakdown && typeof reqPaymentBreakdown === 'object') {
+      const efectivo = Math.max(0, Math.round((parseFloat(String((reqPaymentBreakdown as Record<string, unknown>).efectivo)) || 0) * 100) / 100);
+      const digital = Math.max(0, Math.round((parseFloat(String((reqPaymentBreakdown as Record<string, unknown>).digital)) || 0) * 100) / 100);
+      const dmRaw = String((reqPaymentBreakdown as Record<string, unknown>).digitalMethod || '').toUpperCase();
+      const digitalMethod = dmRaw === 'PLIN' ? 'PLIN' : dmRaw === 'YAPE' ? 'YAPE' : 'YAPE';
+      if (efectivo > 0 && digital > 0) {
+        updateData.payment_breakdown = { efectivo, digital, digitalMethod, total: Math.round((efectivo + digital) * 100) / 100, updated_at: new Date().toISOString() };
+      }
+      // Si solo hay un método con monto, no se guarda desglose (payment_method simple basta)
     }
     if (typeof equipmentDelivered === 'boolean') updateData.equipment_delivered = equipmentDelivered;
     if (typeof equipmentReturned === 'boolean') updateData.equipment_returned = equipmentReturned;
