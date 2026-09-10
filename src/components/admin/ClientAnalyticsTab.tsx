@@ -176,7 +176,16 @@ export default function ClientAnalyticsTab() {
       if (!topBooker || c.total > topBooker.total) topBooker = c
     }
     const vipCount = clients.filter((c) => c.level === 'vip').length
-    return { ingresos, ticket, atendidas, topSpender, topBooker, vipCount }
+    // Clientes activos = clientes con al menos una reserva EN el periodo (no histórico)
+    const activosSet = new Set<string>()
+    for (const b of scoped) {
+      const uid = (b.userId || '').trim()
+      if (uid) activosSet.add(`u:${uid}`)
+      else if (b.userEmail) activosSet.add(`m:${b.userEmail.toLowerCase()}`)
+      else if (b.userPhone) activosSet.add(`t:${b.userPhone}`)
+      else activosSet.add(`x:${b.id}`)
+    }
+    return { ingresos, ticket, atendidas, topSpender, topBooker, vipCount, activos: activosSet.size }
   }, [scoped, clients])
 
   /* Tabla: búsqueda + orden */
@@ -286,8 +295,8 @@ export default function ClientAnalyticsTab() {
             <span className="material-symbols-outlined text-sky-400 text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>group</span>
             <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Clientes activos</span>
           </div>
-          <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-sky-400">{clients.length}</p>
-          <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Con al menos una reserva</p>
+          <p className="font-[family-name:var(--font-sora)] text-2xl font-bold text-sky-400">{kpis.activos}</p>
+          <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Con al menos una reserva en el periodo</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }} className="glass-card rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
