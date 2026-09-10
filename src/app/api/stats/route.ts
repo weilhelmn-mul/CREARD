@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-middleware';
 import { getCount, getAllFromCollection, getBookings, getCourtById } from '@/lib/db';
+import { isQuotaError, quotaErrorResponse } from '@/lib/api-errors';
 
 /** Migrate legacy status values to the 3-status system */
 function migrateStatus(s: string): string {
@@ -244,6 +245,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
+    // Cuota de Firestore agotada — 503 honesto
+    if (isQuotaError(error)) return quotaErrorResponse();
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 }

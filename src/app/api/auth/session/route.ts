@@ -8,6 +8,7 @@ import { getUserById } from '@/lib/db';
 import { adminAuth } from '@/lib/firebase-admin';
 
 import { isFirebaseAvailable } from '@/lib/firebase-check';
+import { isQuotaError, quotaErrorResponse } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,6 +47,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Session verification error:', error);
+    // Cuota de Firestore agotada — 503 honesto (antes: 401 engañoso)
+    if (isQuotaError(error)) return quotaErrorResponse();
     const authError = error as { code?: string };
 
     if (authError.code === 'auth/id-token-expired') {

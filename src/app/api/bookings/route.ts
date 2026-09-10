@@ -16,6 +16,7 @@ import { requireAnyAuth, requireAuth } from '@/lib/auth-middleware';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { isQuotaError, quotaErrorResponse } from '@/lib/api-errors';
 
 // Migrate old status values to the canonical status system
 function migrateStatus(s: string): string {
@@ -481,6 +482,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(enriched);
   } catch (error) {
     console.error('[BOOKINGS] GET error:', error);
+    // Cuota de Firestore agotada — 503 honesto (antes: 500 genérico y,
+    // vías middleware, 401 "Autenticacion requerida" engañoso)
+    if (isQuotaError(error)) return quotaErrorResponse();
     const msg = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: 'Error al obtener reservas', detail: msg }, { status: 500 });
   }

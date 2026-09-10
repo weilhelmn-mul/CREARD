@@ -7,6 +7,7 @@ import {
 import { adminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { isFirebaseAvailable } from '@/lib/firebase-check';
 import { jsonCreateUser, jsonGetUserByEmail, jsonUpdateUser } from '@/lib/json-storage';
+import { isQuotaError, quotaErrorResponse } from '@/lib/api-errors';
 
 // ============================================================
 // Sesiones server-side (cookie httpOnly) — P0 FIX
@@ -421,6 +422,42 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── CHECK SESSION ──
+    // Sondeo ligero: ¿la cookie creard_session sigue válida?
+    // Lo usa restoreSession() para eliminar sesiones zombis (usuario
+    // "logueado" en localStorage pero sin credencial real):
+    //   200 = cookie válida · 401 = sesión muerta (forzar re-login)
+    //   503 = no se puede saber (cuota agotada) — mantener sesión local
+    if (action === 'check-session') {
+      try {
+        const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+        if (!cookieToken || cookieToken.length < 32) {
+          return NextResponse.json({ valid: false }, { status: 401 });
+        }
+        const sessSnap = await getAdminDb().collection('user_sessions').doc(sha256(cookieToken)).get();
+        if (!sessSnap.exists) {
+          return NextResponse.json({ valid: false }, { status: 401 });
+        }
+        const sess = sessSnap.data() as {
+          user_id?: string;
+          expires_at?: { toMillis?: () => number } | Date;
+        };
+        const expMs =
+          sess?.expires_at && typeof (sess.expires_at as { toMillis?: () => number })?.toMillis === 'function'
+            ? (sess.expires_at as { toMillis: () => number }).toMillis()
+            : sess?.expires_at instanceof Date
+              ? sess.expires_at.getTime()
+              : 0;
+        if (!sess?.user_id || !expMs || expMs < Date.now()) {
+          return NextResponse.json({ valid: false }, { status: 401 });
+        }
+        return NextResponse.json({ valid: true });
+      } catch (err) {
+        if (isQuotaError(err)) return quotaErrorResponse();
+        return NextResponse.json({ valid: false }, { status: 401 });
+      }
+    }
+
     // ── LOGOUT ──
     if (action === 'logout') {
       try {
@@ -485,6 +522,8 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: unknown) {
     console.error('Auth error:', error);
+    // Cuota de Firestore agotada — responder 503 honesto (antes: 500 genérico)
+    if (isQuotaError(error)) return quotaErrorResponse();
     const firebaseError = error as { errorInfo?: { code: string }; message?: string };
 
     if (firebaseError.errorInfo?.code === 'auth/email-already-exists') {

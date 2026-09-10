@@ -9,6 +9,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isQuotaError } from '@/lib/api-errors';
 
 type UserRole = 'user' | 'admin' | 'super_admin';
 
@@ -64,7 +65,12 @@ async function sessionCookieUser(
       return null;
     }
 
-    const userData = await dbModule.getUserById(sess.user_id).catch(() => null);
+    // Cuota agotada / Firestore indisponible: PROPAGAR (503 honesto) en vez
+    // de simular "sin sesión" (401 engañoso). getUserById ya no traga el error.
+    const userData = await dbModule.getUserById(sess.user_id).catch((err) => {
+      if (isQuotaError(err)) throw err;
+      return null;
+    });
 
     // Usuarios pendientes/rechazados/deshabilitados no autentican por sesión
     if (userData?.status && userData.status !== 'approved') return null;
@@ -78,6 +84,10 @@ async function sessionCookieUser(
       },
     };
   } catch (err) {
+    // Cuota de Firestore agotada: propagar para que la ruta responda 503
+    // con un mensaje real (antes devolvía null → 401 "Autenticacion
+    // requerida" aunque la sesión fuera válida).
+    if (isQuotaError(err)) throw err;
     console.warn('[AUTH] Session cookie check failed:', err);
     return null;
   }
@@ -133,7 +143,9 @@ export async function requireAuth(
       let userData = null;
       try {
         userData = await getUserById(uid);
-      } catch {
+      } catch (err) {
+        // Cuota agotada: propagar (503 honesto) — no degradar el rol a 'user'
+        if (isQuotaError(err)) throw err;
         // User document might not exist yet
       }
 
@@ -289,7 +301,9 @@ export async function requireAnyAuth(
       let userData = null;
       try {
         userData = await getUserById(uid);
-      } catch {
+      } catch (err) {
+        // Cuota agotada: propagar (503 honesto)
+        if (isQuotaError(err)) throw err;
         // User document might not exist yet
       }
 

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner, type NewsItem } from '@/context/SiteSettingsContext'
-import { getAuthHeaders } from '@/lib/auth-helpers'
+import { getAuthHeaders, getFreshAuthHeaders } from '@/lib/auth-helpers'
 import { cachedFetch, cachedFetchFresh, invalidateCache, invalidateAllCaches } from '@/lib/cache'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
@@ -2489,7 +2489,7 @@ export default function AdminDashboard() {
         return Array.isArray(d) ? d : []
       })
 
-      const [statsRes, bookingsRes, expensesRes, courtsData, usersData] = await Promise.all([
+      const [statsRes, bookingsRes0, expensesRes, courtsData, usersData] = await Promise.all([
         fetch('/api/stats', { headers }).catch(() => new Response(null, { status: 0 })),
         // B13 FIX: Fetch wider date range (365 days) for accurate Finanzas
         // Only fetch recent bookings: 365 days back to 60 days forward
@@ -2503,6 +2503,20 @@ export default function AdminDashboard() {
         courtsPromise,
         usersPromise,
       ])
+
+      // FIX 401: si el Bearer venció (los ID tokens de Firebase duran 1 h),
+      // reintentar UNA vez con un token recién emitido antes de mostrar error.
+      let bookingsRes = bookingsRes0
+      if (bookingsRes0.status === 401) {
+        try {
+          const freshHeaders = await getFreshAuthHeaders()
+          const today = todayStr()
+          const from = new Date(Date.now() - 365 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+          const retry = await fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers: freshHeaders })
+          if (retry.ok) bookingsRes = retry
+        } catch { /* mantiene la respuesta 401 original */ }
+      }
 
       if (statsRes.ok) setStats(await statsRes.json())
       if (bookingsRes.ok) {
@@ -2561,54 +2575,61 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  /* ─── Polling silencioso (30s) + refresh inmediato al volver a la pestaña ───
-     Mantiene la alerta de la pestaña Pagos al día. Refresca SOLO la lista de
-     reservas (sin loading flicker) mientras el panel está visible:
-     - Cada 30s con la pestaña visible.
-     - AL INSTANTE cuando el admin regresa a la pestaña (visibilitychange) o la
-       ventana recupera el foco — así la alerta naranja nunca se ve obsoleta.
-     - Toast de aviso cuando el número de pagos por validar AUMENTA (sin spam:
-       solo si crece respecto al último chequeo). */
+  /* ─── Polling liviano (60s) + refresh al volver a la pestaña ───
+     ANTES: cada 30 s se re-descargaban 365 días de reservas (~600 lecturas
+     de Firestore por ciclo) → la cuota diaria gratuita se agotaba en menos
+     de una hora y todas las APIs fallaban con 401 "Autenticacion requerida".
+     AHORA: se consulta /api/payments-pending-count (agregación count(),
+     ≈1 lectura) cada 60 s. El refresh COMPLETO solo ocurre cuando el
+     contador cambia de verdad (nuevo pago, validación, cancelación):
+     - Toast cuando el número de pagos por validar AUMENTA.
+     - Refresh inmediato al volver a la pestaña SI hubo cambios.
+     - Datos frescos garantizados tras cada cambio real en el sistema. */
   const prevPendingCountRef = useRef<number | null>(null)
   useEffect(() => {
-    const silentRefresh = async () => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+    let cancelled = false
+
+    const checkPendingCount = async (): Promise<number | null> => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return null
       try {
-        const today = todayStr()
-        const from = new Date(Date.now() - 365 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        const to = new Date(Date.now() + 60 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
-        const res = await fetch(`/api/bookings?dateFrom=${from}&dateTo=${to}`, { headers: getAuthHeaders() })
-        if (res.ok) {
-          const data = await res.json()
-          const arr = Array.isArray(data) ? data : []
-          if (arr.length > 0) {
-            setBookings(arr)
-            const pendingCount = arr.filter((b: any) =>
-              b.status === 'payment_pending' ||
-              (b.status === 'reserved' && (b.remainingPaymentStatus === 'pending' || b.remaining_payment_status === 'pending'))
-            ).length
-            const prev = prevPendingCountRef.current
-            if (prev !== null && pendingCount > prev) {
-              toast({
-                title: 'Pago por validar',
-                description: `${pendingCount} pago(s) esperan tu validación en la pestaña Pagos.`,
-              })
-            }
-            prevPendingCountRef.current = pendingCount
-          }
-        }
-      } catch { /* silencioso: reintenta en el próximo ciclo */ }
+        const res = await fetch('/api/payments-pending-count', { headers: getAuthHeaders() })
+        if (!res.ok) return null
+        const data = await res.json()
+        return typeof data.count === 'number' ? data.count : null
+      } catch {
+        return null
+      }
     }
-    const id = setInterval(silentRefresh, 30000)
-    const onWake = () => { silentRefresh() }
+
+    const maybeRefresh = async () => {
+      const count = await checkPendingCount()
+      if (cancelled || count === null) return
+      const prev = prevPendingCountRef.current
+      if (prev !== null && count !== prev) {
+        if (count > prev) {
+          toast({
+            title: 'Pago por validar',
+            description: `${count} pago(s) esperan tu validación en la pestaña Pagos.`,
+          })
+        }
+        fetchData() // refresh completo solo ante cambios reales
+      }
+      prevPendingCountRef.current = count
+    }
+
+    const t = setTimeout(maybeRefresh, 5000) // línea base tras la carga inicial
+    const id = setInterval(maybeRefresh, 60000)
+    const onWake = () => { maybeRefresh() }
     document.addEventListener('visibilitychange', onWake)
     window.addEventListener('focus', onWake)
     return () => {
+      cancelled = true
+      clearTimeout(t)
       clearInterval(id)
       document.removeEventListener('visibilitychange', onWake)
       window.removeEventListener('focus', onWake)
     }
-  }, [])
+  }, [fetchData])
 
 
   /* Derive booking court list from allCourts — deduplicated by id */

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { startTokenRefresher } from '@/lib/auth-helpers'
 import { motion, AnimatePresence } from 'framer-motion'
 import { isFirebaseClientAvailable } from '@/lib/auth-helpers'
 
@@ -125,6 +126,7 @@ export default function AuthView() {
       const store = useAppStore.getState()
       store.setUser(data.user)
       store.setFirebaseToken(firebaseToken)
+      startTokenRefresher() // mantiene el Bearer vivo (>1h en el panel)
       setView('home')
     } catch (err) {
       if (err instanceof Error) {

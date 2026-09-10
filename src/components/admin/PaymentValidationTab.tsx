@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 
@@ -307,7 +307,16 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
   // ----------------------------------------------------------
   // DATA FETCHING
   // ----------------------------------------------------------
-  const fetchData = useCallback(async () => {
+  // ── Anti-desperdicio de cuota: la pestaña Pagos antes re-descargaba TODO
+  // el historial de reservas (dateFrom=2020 → dateTo=2030, ~1.000 lecturas de
+  // Firestore) en CADA visita a la pestaña. Ahora se reutiliza lo cargado
+  // hace menos de 2 min; las acciones de validación fuerzan refresco (force).
+  const lastFetchRef = useRef(0)
+  const lastPaymentsFetchRef = useRef(0)
+  const fetchData = useCallback(async (force = false) => {
+    const now = Date.now()
+    if (!force && now - lastFetchRef.current < 120000) return
+    lastFetchRef.current = now
     try {
       const headers = await getAuthHeaders()
       const res = await fetch('/api/payment-validation', { headers })
@@ -333,7 +342,10 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
     }
   }, [])
 
-  const fetchPayments = useCallback(async () => {
+  const fetchPayments = useCallback(async (force = false) => {
+    const now = Date.now()
+    if (!force && now - lastPaymentsFetchRef.current < 120000) return
+    lastPaymentsFetchRef.current = now
     setPaymentsLoading(true)
     try {
       const headers = await getAuthHeaders()
@@ -372,8 +384,8 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
       })
       setObsDialog(null)
       setObservation('')
-      fetchData()
-      fetchPayments()
+      fetchData(true)
+      fetchPayments(true)
       onValidationChange?.()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
