@@ -237,3 +237,19 @@ Stage Summary:
 - En producción: hora de pago = hora de validación del admin (verificado al segundo, TZ correcta) + alerta naranja con badge en pestaña Pagos con polling 60s y auto-limpieza.
 - NOTA datos históricos: los payment_time anteriores al fix están -5h (bug legacy); opcional script one-time para normalizarlos desde validated_at/created_at.
 - NOTA seguridad: token GitHub expuesto en el chat — recomendable rotarlo tras la sesión; también sigue pendiente la service account key nueva para restaurar .env.local local.
+
+---
+Task ID: 8-d
+Agent: Super Z (main agent)
+Task: Restaurar .env.local local con la service account key del usuario (último pendiente de 8-b/8-c)
+
+Work Log:
+- Usuario provee service account JSON nueva (firebase-adminsdk-fbsvc@creard-8debc.iam.gserviceaccount.com). Escrita a .env.local en formato desglosado (FIREBASE_SERVICE_ACCOUNT_*) que consume src/lib/firebase-admin.ts. Gitignored (.env*), sin riesgo de commit.
+- Web config reconstruida: API key re-extraída del bundle de producción → la "key inválida" de 8-c era el MISMO key TRUNCADO (faltaba "Jo"); el completo AIzaSy...RmfJo es VÁLIDO (verificado contra identitytoolkit projects + createAuthUri). Project number obtenido: 595668846640 → messagingSenderId. authDomain/storageBucket por convención; appId no recuperable vía Management API (404 en v1alpha, token OK) pero no se requiere: el cliente solo usa email/password Auth (AuthView), sin Analytics/FCM/Firestore directo.
+- Smoke test Admin SDK (scripts/smoke_env_local.js): courts=12, bookings=143, payments=38 (consistente con 8-c), Auth users=16. ✅
+- Smoke test app completa (npx next start -p 3106, tras matar el server stale de 3105 que no tenía las nuevas env): "[CREARD] Firebase Admin inicializado correctamente" en runtime; login server-side carlos (user) y admin@creard.com (super_admin) → 200 con cookies; /api/bookings autenticado devuelve datos reales para ambos roles. ✅
+
+Stage Summary:
+- Entorno local COMPLETAMENTE restaurado: Admin SDK + login + APIs operativos contra producción Firebase (creard-8debc). Pendientes de 8-b/8-c resueltos en su totalidad.
+- Corrección de conocimiento: la API key web SIEMPRE fue válida; en 8-c se extrajo truncada. Habilita futuros E2E de producción vía REST.
+- Seguridad: la service account transito por el chat — rotarla al final de la sesión (Firebase Console > IAM). Token GitHub ya rotado/restringido según 8-c.
