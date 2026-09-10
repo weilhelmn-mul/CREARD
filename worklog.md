@@ -253,3 +253,21 @@ Stage Summary:
 - Entorno local COMPLETAMENTE restaurado: Admin SDK + login + APIs operativos contra producción Firebase (creard-8debc). Pendientes de 8-b/8-c resueltos en su totalidad.
 - Corrección de conocimiento: la API key web SIEMPRE fue válida; en 8-c se extrajo truncada. Habilita futuros E2E de producción vía REST.
 - Seguridad: la service account transito por el chat — rotarla al final de la sesión (Firebase Console > IAM). Token GitHub ya rotado/restringido según 8-c.
+
+---
+Task ID: 8-e
+Agent: Super Z (main agent)
+Task: "La pestaña Pagos no cambia de color" — diagnóstico + endurecimiento de la alerta
+
+Work Log:
+- Diagnóstico con service account local: 1 reserva payment_pending real (QEsBXFwq0adRxS4GQiGu, 10 Sep, creada ~19:30 Lima). API /api/bookings la devuelve y el filtro del dashboard la cuenta (verificado por curl con sesión admin local). Bundle de producción (8-c) contiene el filtro, la alerta y el polling 60s.
+- REPRODUCCIÓN EN PRODUCCIÓN con navegador real (agent-browser, login admin@creard.com): la pestaña Pagos SÍ aparece NARANJA (text-orange-400) con badge pulsante "1" → el feature funciona; el navegador del usuario mostraba sesión/UI obsoleta.
+- Causa probable de la obsolescencia: pestaña abierta con bundle/datos anteriores + polling que se salta ciclos cuando la pestaña NO está visible (visibilitycheck) → al volver podía tardar hasta 60s en refrescar.
+- ENDURECIMIENTO (commit 62467b8): polling 30s + listener visibilitychange/focus que refresca AL INSTANTE al volver al panel + toast "Pago por validar: N pago(s) esperan tu validación" cuando el contador AUMENTA (ref con inicialización silenciosa para no toastear al cargar) + SW cache v5→v6 para purgar caches obsoletos.
+- Build local OK (requirió matar next dev por OOM; NODE_OPTIONS max-old-space 1536). Verificado en bundle local: visibilitychange, setInterval(,3e4), "Pago por validar", creard-v6.
+- Deploy Vercel confirmado vía marcador invariante sw.js=creard-v6 (los hashes de chunk difieren entre builds). Re-verificación en producción: Pagos naranja + badge "1" + captura creard_prod_pagos_alerta_v2.png.
+- OBSERVACIÓN pendiente (no bloqueante): 11 pagos top-level status=pending SIN booking_id creados hoy (12:04–14:24 Lima) — huérfanos de algún flujo anterior o reintento; no afectan la alerta (que se calcula desde bookings). Investigar origen en un próximo task.
+
+Stage Summary:
+- La alerta de la pestaña Pagos FUNCIONA en producción (verificada en vivo 2 veces con capturas). El incidente del usuario se debía a sesión obsoleta del navegador; se le indicará recargar una vez.
+- Sistema endurecido: refresco inmediato al volver a la pestaña, polling 30s, toast al detectar nuevos pagos, purga de caches SW v6.
