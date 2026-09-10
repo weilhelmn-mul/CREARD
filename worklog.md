@@ -324,3 +324,22 @@ Work Log:
 Stage Summary:
 - Finanzas ahora muestra desglose Efectivo vs Yape+Plin en vivo, conciliado con Ingresos Totales
 - De paso verificado en producción: Adelantos por Cancelaciones (82.50/162.00/-79.50) y Balance 4824.00 operativos tras fix del Task 9
+
+---
+Task ID: 11
+Agent: Super Z (main agent)
+Task: "Quiero conocer el ingreso por día, por mes o por otra fecha — filtro interactivo y futurista en Finanzas"
+
+Work Log:
+- Nueva tarjeta "Ingresos por Fecha" en pestaña Finanzas (AdminDashboard.tsx, entre Método de Pago y Adelantos): glass-card + glow-border con el neón verde del sistema
+- Filtros: chips Hoy / Semana / Mes / Año / Todo / Personalizado; navegación de meses con chevrones ◀ ▶ (offset −∞..+2); rango personalizado con dos input date + botón limpiar; toggle Por día / Por mes
+- Lógica (useMemo incomeByPeriod + incomeRange): mismo criterio audited que Ingresos Totales (completed+reserved, advanceAmount, clasificación paymentMethod/paymentBreakdown incl. MIXTO) agrupado por b.date; helpers timezone-safe con Date.UTC (addDaysStr, diffDaysStr, fmtMonthKey); eje completo con días/meses en 0; rangos >92 días degradan a vista por mes (aviso "Rango extenso"); promedio sobre tiempo transcurrido (hoy corta rangos futuros); mejor día/mes
+- Gráfico: barras animadas framer-motion con gradiente neón + boxShadow glow, mejor barra destacada, tooltips con desglose Efectivo/Yape+Plin/Culqi/reservas, baseline dots para días sin ingresos, labels cada N para no saturar, scroll horizontal en móvil (minWidth 16px/barra)
+- 2 FIXES durante verificación: (1) tooltip recortado por overflow-x-auto → headroom pt-[88px] (un intento con márgenes negativos colapsó el contenedor y se revirtió); (2) Tailwind v4 envuelve group-hover en @media(hover:hover) que no aplica en algunos entornos → tooltip por estado React (hoveredBar) con onMouseEnter/Leave + click para tap
+- tsc: 155 errores idénticos antes/después (0 nuevos). Build OK. Deploys: 20217a3 (feature), 090fa86+fix final → verificados por marcadores en chunks de producción
+- E2E producción (agent-browser, admin): Mes→Sept S/ 292.50·5 reservas (Efectivo 185.00·63.2% + YapePlin 107.50·36.8% = total ✓); ◀→Agosto S/ 15.00·1; Hoy S/ 52.50·2; Todo→ S/ 5203.50·128 reservas = Ingresos Totales exacto, por-mes forzado, mejor mes Jun 2026 S/ 2706.00, leyenda idéntica a auditoría (3886/74.7%, 882.50/17%, 435/8.4%); Personalizado 1–30 Sep → 292.50; tooltip "4 Sep · S/150.00 · 2 reservas · Efectivo 150.00" verificado en vivo
+- Screenshots: download/creard_ingresos_fecha_header.png, creard_fecha_grafico_fix.png, creard_fecha_tooltip_final.png, creard_ingresos_todo_grafico.png, creard_fecha_custom.png, creard_ingresos_agosto.png, creard_fecha_hoy.png
+
+Stage Summary:
+- Finanzas ahora responde "¿cuánto se ingresó por día, por mes o en cualquier rango?" con un filtro interactivo futurista, conciliado 100% con Ingresos Totales y con la auditoría del Task 9
+- Tooltip robusto (mouse + tap), degradación automática día→mes en rangos largos, sin errores TS nuevos
