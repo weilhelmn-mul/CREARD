@@ -2531,12 +2531,17 @@ export default function AdminDashboard() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  /* ─── Polling silencioso (60s): mantiene la alerta de la pestaña Pagos al día ───
-     Refresca SOLO la lista de reservas (sin loading flicker) mientras el panel está
-     visible, para que el badge "pagos por validar" aparezca aunque el admin no
-     interactúe. Si un usuario declara un pago, el badge naranja se ve en ≤60s. */
+  /* ─── Polling silencioso (30s) + refresh inmediato al volver a la pestaña ───
+     Mantiene la alerta de la pestaña Pagos al día. Refresca SOLO la lista de
+     reservas (sin loading flicker) mientras el panel está visible:
+     - Cada 30s con la pestaña visible.
+     - AL INSTANTE cuando el admin regresa a la pestaña (visibilitychange) o la
+       ventana recupera el foco — así la alerta naranja nunca se ve obsoleta.
+     - Toast de aviso cuando el número de pagos por validar AUMENTA (sin spam:
+       solo si crece respecto al último chequeo). */
+  const prevPendingCountRef = useRef<number | null>(null)
   useEffect(() => {
-    const id = setInterval(async () => {
+    const silentRefresh = async () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       try {
         const today = todayStr()
@@ -2546,11 +2551,33 @@ export default function AdminDashboard() {
         if (res.ok) {
           const data = await res.json()
           const arr = Array.isArray(data) ? data : []
-          if (arr.length > 0) setBookings(arr)
+          if (arr.length > 0) {
+            setBookings(arr)
+            const pendingCount = arr.filter((b: any) =>
+              b.status === 'payment_pending' ||
+              (b.status === 'reserved' && (b.remainingPaymentStatus === 'pending' || b.remaining_payment_status === 'pending'))
+            ).length
+            const prev = prevPendingCountRef.current
+            if (prev !== null && pendingCount > prev) {
+              toast({
+                title: 'Pago por validar',
+                description: `${pendingCount} pago(s) esperan tu validación en la pestaña Pagos.`,
+              })
+            }
+            prevPendingCountRef.current = pendingCount
+          }
         }
       } catch { /* silencioso: reintenta en el próximo ciclo */ }
-    }, 60000)
-    return () => clearInterval(id)
+    }
+    const id = setInterval(silentRefresh, 30000)
+    const onWake = () => { silentRefresh() }
+    document.addEventListener('visibilitychange', onWake)
+    window.addEventListener('focus', onWake)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onWake)
+      window.removeEventListener('focus', onWake)
+    }
   }, [])
 
 

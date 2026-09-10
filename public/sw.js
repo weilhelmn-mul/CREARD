@@ -1,4 +1,4 @@
-const CACHE_NAME = 'creard-v5';
+const CACHE_NAME = 'creard-v6';
 const STATIC_ASSETS = [
   '/creard-logo.png',
   '/favicon.ico',
