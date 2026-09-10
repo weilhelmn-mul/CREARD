@@ -45,6 +45,9 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   whatsappClientMinutesBefore: 10,
 }
 
+/** localStorage key para descartes de alarmas (se limpian al cambiar el día) */
+const DISMISS_STORAGE_KEY = 'creard_alarm_dismissed_v1'
+
 /* ═══════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════ */
@@ -155,7 +158,18 @@ interface ActiveBooking {
 export function useBookingAlarm(bookings: ActiveBooking[], settings: NotificationSettings) {
   const [alerts, setAlerts] = useState<BookingAlert[]>([])
   const [alertingIds, setAlertingIds] = useState<Set<string>>(new Set())
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+  // Descartes persistidos en localStorage (se auto-limpian al cambiar el día):
+  // así una alerta "turno terminado" NO reaparece tras recargar el panel.
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(DISMISS_STORAGE_KEY)
+      if (!raw) return new Set()
+      const parsed = JSON.parse(raw) as { day: string; keys: string[] }
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+      return parsed.day === today ? new Set(parsed.keys) : new Set()
+    } catch { return new Set() }
+  })
 
   // Track which bookings have already triggered an alert (to avoid re-triggering)
   const triggeredWarnings = useRef<Set<string>>(new Set())
@@ -163,6 +177,13 @@ export function useBookingAlarm(bookings: ActiveBooking[], settings: Notificatio
   const lastSoundTime = useRef<number>(0)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+
+  const persistDismissed = useCallback((next: Set<string>) => {
+    try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
+      localStorage.setItem(DISMISS_STORAGE_KEY, JSON.stringify({ day: today, keys: [...next] }))
+    } catch { /* almacenamiento no disponible — los descartes viven solo en la sesión */ }
+  }, [])
 
   const checkAlarms = useCallback(() => {
     const s = settingsRef.current
@@ -175,7 +196,8 @@ export function useBookingAlarm(bookings: ActiveBooking[], settings: Notificatio
     const currentMinutes = timeToMinutes(currentTime)
     const warningThreshold = s.warningMinutesBefore
 
-    const newAlerts: BookingAlert[] = []
+    const newAlerts: BookingAlert[] = []      // entradas nuevas para el banner
+    const freshAlerts: BookingAlert[] = []    // dentro de la ventana viva → sonido + webhooks
     const newAlertingIds = new Set<string>()
 
     for (const b of bookings) {
@@ -189,19 +211,38 @@ export function useBookingAlarm(bookings: ActiveBooking[], settings: Notificatio
         ? b.courts.map(c => c.name).join(', ')
         : b.court?.name || 'Cancha'
 
-      // EXPIRED: time has passed
+      // EXPIRED (fresco): terminó hace menos de 15 min — atención en vivo.
+      // Banner + pulso + sonido + webhooks.
       if (remaining <= 0 && remaining > -15) {
-        // Within 15 minutes after end — show expired alert
         const alertKey = `${b.id}-expired`
         newAlertingIds.add(b.id)
 
+        if (!triggeredExpired.current.has(b.id) && !dismissedIds.has(alertKey)) {
+          triggeredExpired.current.add(b.id)
+          const alert: BookingAlert = {
+            bookingId: b.id,
+            courtName,
+            endTime: b.endTime,
+            remainingMinutes: 0,
+            alertType: 'expired',
+          }
+          newAlerts.push(alert)
+          freshAlerts.push(alert)
+        }
+      }
+      // EXPIRED (pasado): terminó hace más de 15 min PERO sigue siendo hoy.
+      // FIX 8-f: la alerta persiste TODO EL DÍA en el banner (sin sonido ni pulso)
+      // hasta que el admin la descarte — antes desaparecía a los 15 min y si el
+      // admin no estaba mirando el panel en esa ventana exacta, nunca la veía.
+      else if (remaining <= -15) {
+        const alertKey = `${b.id}-expired`
         if (!triggeredExpired.current.has(b.id) && !dismissedIds.has(alertKey)) {
           triggeredExpired.current.add(b.id)
           newAlerts.push({
             bookingId: b.id,
             courtName,
             endTime: b.endTime,
-            remainingMinutes: 0,
+            remainingMinutes: remaining, // negativo = hace cuánto terminó
             alertType: 'expired',
           })
         }
@@ -227,16 +268,17 @@ export function useBookingAlarm(bookings: ActiveBooking[], settings: Notificatio
     if (newAlerts.length > 0) {
       setAlerts(prev => [...newAlerts, ...prev].slice(0, 20)) // Keep max 20
 
-      // Play sound (with cooldown: max once per 30 seconds)
-      const now = Date.now()
-      if (s.soundEnabled && now - lastSoundTime.current > 30000) {
-        lastSoundTime.current = now
-        const type = newAlerts.some(a => a.alertType === 'expired') ? 'expired' : 'warning'
-        playAlertSound(s.soundVolume, type)
+      // Sonido y webhooks SOLO para alertas frescas (no molestar por turnos
+      // que terminaron hace horas — esos ya están visibles en el banner).
+      if (freshAlerts.length > 0) {
+        const now = Date.now()
+        if (s.soundEnabled && now - lastSoundTime.current > 30000) {
+          lastSoundTime.current = now
+          const type = freshAlerts.some(a => a.alertType === 'expired') ? 'expired' : 'warning'
+          playAlertSound(s.soundVolume, type)
+        }
+        dispatchNotifications(freshAlerts, bookings, s)
       }
-
-      // Dispatch webhooks (best effort)
-      dispatchNotifications(newAlerts, bookings, s)
     }
 
     setAlertingIds(newAlertingIds)
@@ -251,14 +293,26 @@ export function useBookingAlarm(bookings: ActiveBooking[], settings: Notificatio
 
   const dismissAlert = useCallback((bookingId: string, type: string) => {
     const key = `${bookingId}-${type}`
-    setDismissedIds(prev => new Set(prev).add(key))
+    setDismissedIds(prev => {
+      const next = new Set(prev).add(key)
+      persistDismissed(next)
+      return next
+    })
     setAlerts(prev => prev.filter(a => !(a.bookingId === bookingId && a.alertType === type)))
-  }, [])
+  }, [persistDismissed])
 
   const clearAllAlerts = useCallback(() => {
+    // "Limpiar todo" descarta TODAS las alertas visibles por el resto del día
+    // (persistido) — antes solo vaciaba la lista y las alertas reaparecían.
+    const keys = alerts.map(a => `${a.bookingId}-${a.alertType}`)
+    setDismissedIds(prev => {
+      const next = new Set(prev)
+      keys.forEach(k => next.add(k))
+      persistDismissed(next)
+      return next
+    })
     setAlerts([])
-    setDismissedIds(new Set())
-  }, [])
+  }, [alerts, persistDismissed])
 
   const getAlertLevel = useCallback((bookingId: string): 'none' | 'warning' | 'expired' => {
     if (!alertingIds.has(bookingId)) return 'none'
@@ -403,7 +457,9 @@ export function NotificationBanner({ alerts, onDismiss, onClearAll }: Notificati
                   </p>
                   <p className="text-[11px] text-white/50 font-[family-name:var(--font-inter)]">
                     {alert.alertType === 'expired'
-                      ? `Turno terminaba a las ${alert.endTime}`
+                      ? (alert.remainingMinutes < 0
+                          ? `Terminó hace ${Math.abs(alert.remainingMinutes)} min — terminaba a las ${alert.endTime}`
+                          : `Turno terminado — terminaba a las ${alert.endTime}`)
                       : `${alert.remainingMinutes} min restantes — termina a las ${alert.endTime}`
                     }
                   </p>
