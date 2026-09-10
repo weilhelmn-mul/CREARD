@@ -287,3 +287,23 @@ Work Log:
 
 Stage Summary:
 - Las alertas de fin de turno ahora son persistentes todo el día hasta que el admin las descarte; el descarte sobrevive recargas. Verificado E2E en producción con una reserva real. Sonido/webhooks solo en la ventana fresca de 15 min.
+
+---
+Task ID: 9
+Agent: Super Z (main agent)
+Task: Auditoría financiera completa (Ingresos Totales, Yape/Plin, Efectivo, Adelantos por Cancelaciones, Retenidos, Devueltos) + fix crítico descubierto durante la auditoría
+
+Work Log:
+- Contexto: .env.local con service account se perdió al reiniciarse el entorno; se auditó vía API de producción (login super_admin admin@creard.com → cookie creard_session) usando scripts/audit_finanzas_api.js
+- BUG CRÍTICO detectado: /api/retained-advances devolvía SIEMPRE 403 — requireAnyAuth retorna {user:{role}} pero el route leía authUser.role (undefined). Los 3 handlers (GET/POST/PUT) afectados desde commit d139a43. Consecuencia: la tarjeta "Adelantos por Cancelaciones" del panel Finanzas nunca cargó datos reales
+- FIX aplicado (patión instanceof NextResponse como en payments-list), commit 587cb9c, push a main, deploy Vercel verificado por polling (403→200 en ~5 min)
+- Auditoría ejecutada sobre producción: 149 reservas, 46 pagos, 6 adelantos, 1 egreso
+- RESULTADOS: Ingresos Totales S/ 5,203.50 (completadas 3,548.50 + adelantos activos 1,655.00) ✔ cuadra con panel; Efectivo S/ 3,886.00 (74.7%), Yape S/ 817.50 (15.7%), Culqi S/ 435.00 (8.4%), Plin S/ 65.00 (1.2%); Yape+Plin = S/ 882.50 (17.0%); Retenidos S/ 82.50 (4), Devueltos S/ 162.00 (2), neto -S/ 79.50; Egresos S/ 300; Balance caja S/ 4,824.00 ✔
+- HALLAZGOS: (1) crítico auth corregido; (2) 17 canceladas con adelanto SIN clasificar (S/ 453.50, ~S/ 121 de pruebas); (3) 3 registros de adelantos con reservas borradas (S/ 99.50); (4) 27 pagos huérfanos S/ 590 (11 por validar 237.50 + 16 cobrados 352.50); (5) 15 completadas con saldo por cobrar S/ 572; (6) doble criterio de ingresos (stats 5,775.50 vs finanzas 5,203.50); (7) colección payments respalda solo S/ 660 de 5,203.50
+- Informe PDF generado (ruta Report/ReportLab + portada HTML Template 01 via html2poster): download/Auditoria_Financiera_CREARD_10sep2026.pdf (6 páginas, donut de métodos, 4 tablas, 7 hallazgos); QA: pdf_qa PASS con 4 warnings falsos-positivos (tarjetas anidadas)
+- Scripts persistidos: scripts/audit_finanzas_api.js, audit_chart_donut.py, audit_pdf_body.py, audit_cover.html
+
+Stage Summary:
+- Panel Finanzas verificado aritméticamente contra datos crudos: 100% reproducible
+- Bug crítico de auth en retained-advances corregido y desplegado (587cb9c)
+- Informe de auditoría entregado en download/Auditoria_Financiera_CREARD_10sep2026.pdf
