@@ -4924,8 +4924,9 @@ export default function AdminDashboard() {
                 {/* Línea de tiempo interactiva */}
                 {incomeByPeriod.series.length > 0 && incomeByPeriod.total > 0 ? (
                   <div className="rounded-lg bg-cm-surface-container-highest/20 border border-white/5 p-3 [background-image:linear-gradient(rgba(0,255,65,0.05)_1px,transparent_1px)] [background-size:100%_25%]">
-                    <div className="overflow-x-auto no-scrollbar">
-                      <div className="flex" style={{ minWidth: `${Math.max(incomeByPeriod.series.length * 16, 100)}px` }}>
+                    {/* pt para que el tooltip (bottom-full) no se recorte por overflow-x-auto */}
+                    <div className="overflow-x-auto no-scrollbar pt-[92px] -mt-[92px]">
+                      <div className="flex pt-[92px] mt-[-92px] mb-[-92px]" style={{ minWidth: `${Math.max(incomeByPeriod.series.length * 16, 100)}px` }}>
                         {incomeByPeriod.series.map((s, i) => {
                           const hPct = incomeByPeriod.maxTotal > 0 && s.total > 0 ? Math.max((s.total / incomeByPeriod.maxTotal) * 100, 4) : 0
                           const isBest = s.total > 0 && s.total === incomeByPeriod.maxTotal
