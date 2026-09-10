@@ -442,7 +442,7 @@ export default function ClientAnalyticsTab() {
                       className="border-b border-white/5 hover:bg-white/[0.03] transition-colors cursor-pointer" onClick={() => setSelected(c)}>
                       <td className="px-2.5 py-2.5 max-w-[190px]">
                         <p className="text-xs font-bold text-cm-on-surface font-[family-name:var(--font-inter)] truncate">{c.name}</p>
-                        <p className="text-[9.5px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{c.total} res. hist. · desde {fmtDateFull(c.firstDate)}</p>
+                        <p className="text-[9.5px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{c.totalAllTime} res. hist. · desde {fmtDateFull(c.firstDate)}</p>
                       </td>
                       <td className="px-2.5 py-2.5 text-[11px] text-cm-on-surface-variant whitespace-nowrap font-[family-name:var(--font-inter)]">{c.phone || '—'}</td>
                       <td className="px-2.5 py-2.5 text-[11px] text-cm-on-surface-variant max-w-[170px] truncate font-[family-name:var(--font-inter)]" title={c.email}>{c.email || '—'}</td>
