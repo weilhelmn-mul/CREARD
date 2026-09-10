@@ -3706,6 +3706,7 @@ export default function AdminDashboard() {
   const [incomeMonthOffset, setIncomeMonthOffset] = useState(0)
   const [incomeCustomFrom, setIncomeCustomFrom] = useState('')
   const [incomeCustomTo, setIncomeCustomTo] = useState('')
+  const [hoveredBar, setHoveredBar] = useState<string | null>(null)
 
   const selectIncomePeriod = (p: IncomePeriodKey) => {
     setIncomePeriod(p)
@@ -4931,11 +4932,15 @@ export default function AdminDashboard() {
                           const hPct = incomeByPeriod.maxTotal > 0 && s.total > 0 ? Math.max((s.total / incomeByPeriod.maxTotal) * 100, 4) : 0
                           const isBest = s.total > 0 && s.total === incomeByPeriod.maxTotal
                           const showLbl = i % periodLabelEvery === 0 || i === incomeByPeriod.series.length - 1
+                          const barId = `${incomePeriod}-${incomeByPeriod.effGran}-${s.key}`
+                          const tipOn = hoveredBar === barId
                           return (
-                            <div key={s.key} className="group relative flex-1 flex flex-col items-center">
+                            <div key={s.key} className="group relative flex-1 flex flex-col items-center"
+                              onMouseEnter={() => setHoveredBar(barId)} onMouseLeave={() => setHoveredBar(null)}
+                              onClick={() => setHoveredBar((h) => (h === barId ? null : barId))}>
                               <div className="relative w-full h-[120px] flex items-end justify-center px-[1px]">
                                 {s.total > 0 && (
-                                  <div className={`pointer-events-none hidden group-hover:block absolute bottom-full z-20 mb-1 rounded-lg bg-[#0d150e]/95 border border-cm-primary/40 px-2.5 py-1.5 whitespace-nowrap shadow-[0_0_12px_rgba(0,255,65,0.25)] ${i < 2 ? 'left-0' : i > incomeByPeriod.series.length - 3 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
+                                  <div className={`pointer-events-none absolute bottom-full z-20 mb-1 rounded-lg bg-[#0d150e]/95 border border-cm-primary/40 px-2.5 py-1.5 whitespace-nowrap shadow-[0_0_12px_rgba(0,255,65,0.25)] ${tipOn ? 'block' : 'hidden'} ${i < 2 ? 'left-0' : i > incomeByPeriod.series.length - 3 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
                                     <p className="text-[10px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{s.label}</p>
                                     <p className="text-[10px] text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(s.total)} · {s.count} {s.count === 1 ? 'reserva' : 'reservas'}</p>
                                     <p className="text-[9px] text-green-400 font-[family-name:var(--font-inter)]">Efectivo: {fmtCurrency(s.efectivo)}</p>
@@ -4948,7 +4953,7 @@ export default function AdminDashboard() {
                                   initial={{ height: 0 }}
                                   animate={{ height: s.total > 0 ? `${hPct}%` : '2px' }}
                                   transition={{ duration: 0.45, delay: Math.min(i * 0.012, 0.5), ease: 'easeOut' }}
-                                  className={`w-full max-w-[26px] rounded-t-[3px] hover:brightness-125 ${s.total > 0 ? 'bg-gradient-to-t from-cm-primary/15 via-cm-primary/40 to-cm-primary/85 cursor-pointer' : 'bg-white/10'}`}
+                                  className={`w-full max-w-[26px] rounded-t-[3px] ${tipOn ? 'brightness-125' : ''} ${s.total > 0 ? 'bg-gradient-to-t from-cm-primary/15 via-cm-primary/40 to-cm-primary/85 cursor-pointer' : 'bg-white/10'}`}
                                   style={s.total > 0 ? { boxShadow: isBest ? '0 0 12px rgba(0,255,65,0.45)' : '0 0 6px rgba(0,255,65,0.18)' } : undefined}
                                 />
                               </div>
