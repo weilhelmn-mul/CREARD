@@ -3639,6 +3639,37 @@ export default function AdminDashboard() {
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
   const balance = effectiveIncome - totalExpenses
 
+  // Ingresos por método de pago (mismo criterio que totalIncome: completados + adelantos activos).
+  // Fuente: payment_method de la reserva + payment_breakdown para pagos divididos (MIXTO).
+  const incomeByMethod = useMemo(() => {
+    const m = { efectivo: 0, yape: 0, plin: 0, culqi: 0, otros: 0, mixtoSinDesglose: 0 }
+    for (const b of bookings) {
+      if (b.status !== 'completed' && b.status !== 'reserved') continue
+      const paid = b.advanceAmount || 0
+      const pm = String(b.paymentMethod || '').trim().toUpperCase()
+      if (pm === 'MIXTO') {
+        const bd = b.paymentBreakdown
+        if (bd && ((bd.efectivo || 0) > 0 || (bd.digital || 0) > 0)) {
+          m.efectivo += bd.efectivo || 0
+          const dm = String(bd.digitalMethod || 'YAPE').trim().toUpperCase()
+          if (dm === 'PLIN') m.plin += bd.digital || 0
+          else if (dm === 'CULQI') m.culqi += bd.digital || 0
+          else m.yape += bd.digital || 0
+        } else {
+          m.mixtoSinDesglose += paid
+        }
+      } else if (pm === 'YAPE' || pm === 'YAPE QR' || pm === 'YAPE_QR') m.yape += paid
+      else if (pm === 'PLIN') m.plin += paid
+      else if (pm === 'CULQI') m.culqi += paid
+      else if (pm === 'EFECTIVO' || pm === 'CASH') m.efectivo += paid
+      else m.otros += paid
+    }
+    const yapePlin = m.yape + m.plin
+    const total = m.efectivo + yapePlin + m.culqi + m.otros + m.mixtoSinDesglose
+    const pct = (v: number) => (total > 0 ? Math.round((v / total) * 1000) / 10 : 0)
+    return { ...m, yapePlin, total, pct }
+  }, [bookings])
+
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount
     return acc
@@ -4546,6 +4577,67 @@ export default function AdminDashboard() {
                   <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mt-1">Total de gastos registrados</p>
                 </motion.div>
               </div>
+
+              {/* Row 1.5: Ingresos por método de pago (Efectivo vs Yape + Plin) */}
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17 }} className="glass-card rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>donut_small</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Ingresos por Método de Pago</span>
+                  </div>
+                  <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Completados + adelantos activos</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="p-3 rounded-lg bg-green-400/10">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="material-symbols-outlined text-green-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
+                      <p className="text-[10px] text-green-300 font-[family-name:var(--font-inter)]">En Efectivo</p>
+                    </div>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-green-400">{fmtCurrency(incomeByMethod.efectivo)}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{incomeByMethod.pct(incomeByMethod.efectivo)}% del total</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-purple-400/10">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="material-symbols-outlined text-purple-400 text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>smartphone</span>
+                      <p className="text-[10px] text-purple-300 font-[family-name:var(--font-inter)]">Por Yape + Plin</p>
+                    </div>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-purple-400">{fmtCurrency(incomeByMethod.yapePlin)}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{incomeByMethod.pct(incomeByMethod.yapePlin)}% del total</p>
+                  </div>
+                </div>
+                <div className="h-2.5 rounded-full overflow-hidden flex bg-cm-surface-container-highest/40 mb-3">
+                  <div className="bg-green-400" style={{ width: `${incomeByMethod.pct(incomeByMethod.efectivo)}%` }} />
+                  <div className="bg-purple-400" style={{ width: `${incomeByMethod.pct(incomeByMethod.yapePlin)}%` }} />
+                  {incomeByMethod.culqi > 0 && <div className="bg-blue-400" style={{ width: `${incomeByMethod.pct(incomeByMethod.culqi)}%` }} />}
+                  {(incomeByMethod.otros + incomeByMethod.mixtoSinDesglose) > 0 && <div className="bg-cm-on-surface-variant/40 flex-1" />}
+                </div>
+                <div className="p-2.5 rounded-lg bg-cm-surface-container-highest/40 space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" />Yape</span>
+                    <span className="text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(incomeByMethod.yape)} · {incomeByMethod.pct(incomeByMethod.yape)}%</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />Plin</span>
+                    <span className="text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(incomeByMethod.plin)} · {incomeByMethod.pct(incomeByMethod.plin)}%</span>
+                  </div>
+                  {incomeByMethod.culqi > 0 && (
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Culqi</span>
+                      <span className="text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(incomeByMethod.culqi)} · {incomeByMethod.pct(incomeByMethod.culqi)}%</span>
+                    </div>
+                  )}
+                  {(incomeByMethod.otros + incomeByMethod.mixtoSinDesglose) > 0 && (
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cm-on-surface-variant/60 inline-block" />Sin método / Mixto sin desglose</span>
+                      <span className="text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(incomeByMethod.otros + incomeByMethod.mixtoSinDesglose)} · {incomeByMethod.pct(incomeByMethod.otros + incomeByMethod.mixtoSinDesglose)}%</span>
+                    </div>
+                  )}
+                  <div className="border-t border-white/10 mt-1 pt-1.5 flex justify-between text-xs font-bold">
+                    <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
+                    <span className="text-cm-primary font-[family-name:var(--font-sora)]">{fmtCurrency(incomeByMethod.total)}</span>
+                  </div>
+                </div>
+              </motion.div>
 
               {/* Row 2: Retained advances + Balance */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
