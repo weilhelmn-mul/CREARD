@@ -26,6 +26,7 @@ import SeriesBookingsTable from './tables/SeriesBookingsTable'
 import TimeSlotPicker from './TimeSlotPicker'
 import PaymentValidationTab from '@/components/admin/PaymentValidationTab'
 import YapeConfigTab from '@/components/admin/YapeConfigTab'
+import ClientAnalyticsTab from '@/components/admin/ClientAnalyticsTab'
 import {
   DndContext,
   closestCenter,
@@ -142,7 +143,7 @@ interface Stats {
   dailyBookings: { day: string; bookings: number; revenue: number }[]
 }
 
-type AdminTab = 'reservas' | 'finanzas' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'pagos' | 'yape_config' | 'config'
+type AdminTab = 'reservas' | 'finanzas' | 'clientes' | 'gastos' | 'equipos' | 'alarmas' | 'reclamaciones' | 'usuarios' | 'canchas' | 'contenido' | 'pagos' | 'yape_config' | 'config'
 
 /* ═══════════════════════════════════════════════════
    CONFIG
@@ -171,6 +172,7 @@ const expenseCategories: Record<string, { label: string; icon: string; color: st
 const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'reservas',  label: 'Reservas',  icon: 'calendar_month' },
   { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
+  { key: 'clientes', label: 'Clientes',  icon: 'leaderboard' },
   { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
   { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
   { key: 'alarmas',   label: 'Alarmas',   icon: 'notifications_active' },
@@ -5454,6 +5456,11 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
             </motion.div>
+          )}
+
+          {/* ─── CLIENTES: ANÁLISIS DE INGRESOS Y BALANCE POR USUARIO ─── */}
+          {activeTab === 'clientes' && (
+            <ClientAnalyticsTab />
           )}
 
           {/* ─── GASTOS ─── */}
