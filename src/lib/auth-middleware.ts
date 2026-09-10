@@ -9,7 +9,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isQuotaError } from '@/lib/api-errors';
+import { isQuotaError, quotaErrorResponse } from '@/lib/api-errors';
 
 type UserRole = 'user' | 'admin' | 'super_admin';
 
