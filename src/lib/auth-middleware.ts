@@ -110,6 +110,21 @@ export async function requireAuth(
   request: NextRequest,
   requiredRole?: UserRole
 ): Promise<{ user: AuthenticatedUser } | NextResponse> {
+  try {
+    return await requireAuthInner(request, requiredRole);
+  } catch (err) {
+    // Cuota de Firestore agotada: devolver 503 honesto. Las rutas ya
+    // tratan un NextResponse como "responder y terminar", así que TODOS
+    // los endpoints protegidos informan la cuota sin cambios extra.
+    if (isQuotaError(err)) return quotaErrorResponse();
+    throw err;
+  }
+}
+
+async function requireAuthInner(
+  request: NextRequest,
+  requiredRole?: UserRole
+): Promise<{ user: AuthenticatedUser } | NextResponse> {
   // --- Import firebase-admin dynamically to avoid SSR issues ---
   let adminAuth: any;
   let getUserById: (id: string) => Promise<any>;
@@ -177,6 +192,9 @@ export async function requireAuth(
         },
       };
     } catch (tokenError: any) {
+      // Cuota de Firestore agotada: PROPAGAR (503 honesto) — no continuar a
+      // cookie/401, el problema no es la credencial sino el servicio.
+      if (isQuotaError(tokenError)) throw tokenError;
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
       // Continuar: puede autenticar por cookie de sesión (p.ej. Bearer expirado)
     }
@@ -268,6 +286,18 @@ export async function requireSuperAdmin(request: NextRequest) {
 export async function requireAnyAuth(
   request: NextRequest
 ): Promise<{ user: AuthenticatedUser } | NextResponse> {
+  try {
+    return await requireAnyAuthInner(request);
+  } catch (err) {
+    // Cuota de Firestore agotada: devolver 503 honesto (ver requireAuth)
+    if (isQuotaError(err)) return quotaErrorResponse();
+    throw err;
+  }
+}
+
+async function requireAnyAuthInner(
+  request: NextRequest
+): Promise<{ user: AuthenticatedUser } | NextResponse> {
   // --- Import firebase-admin dynamically to avoid SSR issues ---
   let adminAuth: any;
   let getUserById: (id: string) => Promise<any>;
@@ -320,6 +350,8 @@ export async function requireAnyAuth(
         },
       };
     } catch (tokenError: any) {
+      // Cuota de Firestore agotada: PROPAGAR (503 honesto)
+      if (isQuotaError(tokenError)) throw tokenError;
       console.warn('[AUTH] Token verification failed:', tokenError.code || tokenError.message);
       // Continuar: puede autenticar por cookie de sesión (p.ej. Bearer expirado)
     }
