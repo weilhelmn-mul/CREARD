@@ -343,3 +343,27 @@ Work Log:
 Stage Summary:
 - Finanzas ahora responde "¿cuánto se ingresó por día, por mes o en cualquier rango?" con un filtro interactivo futurista, conciliado 100% con Ingresos Totales y con la auditoría del Task 9
 - Tooltip robusto (mouse + tap), degradación automática día→mes en rangos largos, sin errores TS nuevos
+
+---
+Task ID: 12
+Agent: Super Z (main agent)
+Task: MÓDULO DE ANÁLISIS DE INGRESOS Y BALANCE POR USUARIO — nueva pestaña "Clientes" en el panel de administración
+
+Work Log:
+- Nueva API src/app/api/client-settings/route.ts (GET/PUT): umbrales de fidelización configurables persistidos en Firestore (app_settings/client_levels), admin-only con patrón requireAnyAuth/instanceof NextResponse; defaults nuevo 1-2 / frecuente 3-9 / muy frecuente 10-19 / VIP 20+ y alternativa por monto (300/1000/2000)
+- Nuevo módulo en 3 archivos (sin tocar lógica existente):
+  * clientAnalyticsShared.ts: tipos, identidad de cliente (userId → email → phone → id), periodRange (8 periodos timezone-safe America/Lima), aggregateClients (métricas periodo + histórico + adelantos), classifyByCount/Amount, bucketize (gráficos día/mes/año), criterio de ingresos = Finanzas (completed+reserved, advanceAmount)
+  * ClientAnalyticsTab.tsx: 7 KPIs del dashboard general, filtro de periodo (Hoy/Ayer/Esta semana/Este mes/Mes anterior/Este año/Año anterior/Personalizado con rango), tabla "Ingresos por usuario" (14 columnas: cliente, teléfono, correo, reservas, pagadas, canceladas, pendientes, montos reservado/pagado/pendiente, adelantos, pagos restantes, última reserva, estado), búsqueda + orden, Ranking con 🥇🥈🥉 + top 10 (6 criterios), Fidelización con 2 tarjetas de umbrales editables + distribución + Guardar
+  * ClientBalanceModal.tsx: 12 tiles de balance histórico, generación Hoy/Semana/Mes/Año, gráfico de evolución día/mes/año × Ingresos/Reservas/Promedio (auto-degrada día→mes >92 buckets, mejor barra con glow), historial cronológico filtrable (Todo/Día/Mes/Año/Personalizado) con columnas Fecha/Cancha/Deporte/Horario/Reserva/Pago/Monto/Estado + nota de adelanto retenido/devuelto
+- Integración mínima en AdminDashboard.tsx: import + 'clientes' en AdminTab + botón tras Finanzas + render condicional — ningún módulo existente modificado
+- 2 FIXES durante verificación E2E: (1) KPI "Clientes activos" contaba histórico (68) en vez del periodo (9) — corregido con set de identidades del periodo; (2) subtítulo de fila usaba c.total (periodo) para "res. hist." — corregido a totalAllTime
+- Verificación contra datos crudos (scripts/verify_clientes_api.js, réplica exacta de la lógica): Sept 2026 ingresos S/ 275.00, 9 clientes activos, 12 reservas (4 atendidas), ticket S/ 68.75, top Weilhelmn S/ 125 (4 res) — UI 100% igual; Año 2026: S/ 5186.00 / 68 clientes / 149 reservas / ticket S/ 40.83 / top Carlos S/ 732.50 (23 res) — UI 100% igual; VIP=1 (Carlos 23≥20)
+- tsc: 155 errores idénticos antes/después (0 nuevos). Build OK. Deploys: 7e415ed (módulo), 151d1fb (fix activos), 6e7026c (fix res. hist.)
+- E2E producción (agent-browser, admin): filtros Hoy/Año/Después responden; balance Carlos cuadra (23 res, 732.50 pagado, 422 pendiente, 6.5 res/mes, promedio 122.08 = 732.5/6); gráfico por mes con Mayo 2026 mejor barra; historial con datos reales (YAPE/CULQI/EFECTIVO/CASH, adelanto/saldo por fila); ranking top-3 exacto (732.50/482.50/369.50); fidelización dist reservas 1/2/6/59 y monto 0/0/3/65; flujo completo de guardado de umbrales: input 3→4 → "Umbrales guardados" → GET Firestore=4 → restaurado a 3
+- Módulos existentes verificados intactos tras deploy: Reservas (tabla OK), Finanzas (Ingresos Totales + Método de Pago + por Fecha OK)
+- Screenshots: download/creard_clientes_kpis.png, creard_balance_carlos.png, creard_balance_historial.png, creard_balance_grafico.png, creard_ranking.png, creard_fidelizacion.png, creard_clientes_final.png, creard_clientes_mobile.png
+
+Stage Summary:
+- El panel de administración tiene la pestaña "Clientes" con análisis completo de ingresos y balance por usuario, ranking de clientes para premios y fidelización configurable persistida en Firestore
+- Todos los KPIs validados contra datos crudos de producción (100% reproducible, criterio Finanzas)
+- Sin regresiones: reservas, finanzas, pagos y demás pestañas operan igual que antes
