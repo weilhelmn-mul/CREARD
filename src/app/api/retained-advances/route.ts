@@ -18,8 +18,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
 
-    const authUser = await requireAnyAuth(request);
-    if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'super_admin')) {
+    // FIX: requireAnyAuth devuelve { user } | NextResponse — antes se leía
+    // authUser.role directamente (undefined) y TODA la ruta devolvía 403.
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso no autorizado' }, { status: 403 });
     }
 
@@ -85,8 +89,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
 
-    const authUser = await requireAnyAuth(request);
-    if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'super_admin')) {
+    // FIX: mismo bug de auth que en GET — ver comentario arriba.
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso no autorizado' }, { status: 403 });
     }
 
@@ -141,8 +148,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Firebase no configurado' }, { status: 503 });
     }
 
-    const authUser = await requireAnyAuth(request);
-    if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'super_admin')) {
+    // FIX: mismo bug de auth que en GET — ver comentario arriba.
+    const authResult = await requireAnyAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const authUser = authResult.user;
+    if (authUser.role !== 'admin' && authUser.role !== 'super_admin') {
       return NextResponse.json({ error: 'Acceso no autorizado' }, { status: 403 });
     }
 
