@@ -307,3 +307,20 @@ Stage Summary:
 - Panel Finanzas verificado aritméticamente contra datos crudos: 100% reproducible
 - Bug crítico de auth en retained-advances corregido y desplegado (587cb9c)
 - Informe de auditoría entregado en download/Auditoria_Financiera_CREARD_10sep2026.pdf
+
+---
+Task ID: 10
+Agent: Super Z (main agent)
+Task: Agregar a Finanzas los ingresos registrados por método de pago (Efectivo y Yape + Plin)
+
+Work Log:
+- Nuevo useMemo incomeByMethod en AdminDashboard.tsx: clasifica advanceAmount de reservas completed+reserved (mismo criterio que Ingresos Totales) usando payment_method + payment_breakdown para MIXTO; normaliza YAPE/YAPE QR/yape_qr, PLIN, CULQI, EFECTIVO/CASH; calcula porcentajes sobre el total
+- Nueva tarjeta "Ingresos por Método de Pago" en pestaña Finanzas (entre fila principal y Adelantos): 2 tiles (En Efectivo verde / Por Yape + Plin morado con % del total), barra apilada de proporción, detalle Yape/Plin/Culqi/sin-método con montos y %, fila Total que cuadra con Ingresos Totales
+- tsc: 155 errores idénticos antes/después (0 nuevos; todos preexistentes en archivos no-bloqueantes)
+- Deploy commit a1ee7cf → push main → Vercel desplegado (~4 min, verificado por marcador "Ingresos por Método de Pago" en chunks)
+- E2E producción con agent-browser (admin@creard.com): Finanzas muestra En Efectivo S/ 3886.00 (74.7%), Yape+Plin S/ 882.50 (17%), Yape S/ 817.50 · 15.7%, Plin S/ 65.00 · 1.2%, Culqi S/ 435.00 · 8.4%, Total S/ 5203.50 — coincide exactamente con la auditoría (Task 9)
+- Screenshots: download/creard_finanzas_metodo_pago.png, creard_finanzas_metodo_pago_detalle.png
+
+Stage Summary:
+- Finanzas ahora muestra desglose Efectivo vs Yape+Plin en vivo, conciliado con Ingresos Totales
+- De paso verificado en producción: Adelantos por Cancelaciones (82.50/162.00/-79.50) y Balance 4824.00 operativos tras fix del Task 9
