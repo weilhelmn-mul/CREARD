@@ -367,3 +367,29 @@ Stage Summary:
 - El panel de administración tiene la pestaña "Clientes" con análisis completo de ingresos y balance por usuario, ranking de clientes para premios y fidelización configurable persistida en Firestore
 - Todos los KPIs validados contra datos crudos de producción (100% reproducible, criterio Finanzas)
 - Sin regresiones: reservas, finanzas, pagos y demás pestañas operan igual que antes
+
+---
+Task ID: 13
+Agent: Super Z (main agent)
+Task: "me sale este error: No se pudieron cargar las reservas (401), autenticación requerida" — diagnóstico y reparación
+
+Work Log:
+- Reproducción en producción: login /api/auth → 500; /api/bookings con token real → 500 detail "8 RESOURCE_EXHAUSTED: Quota exceeded"; /api/stats → 500; /api/auth/session → 401. RAÍZ: cuota diaria gratuita de Firestore AGOTADA (plan Spark: 50K lecturas/día) — NO era sesión del usuario
+- Por qué 401 engañoso: la lectura de la sesión (cookie) en Firestore fallaba por cuota → sessionCookieUser devolvía null → middleware respondía 401 "Autenticacion requerida" aunque la credencial fuera válida
+- Quemadores de cuota identificados: (1) polling del panel admin cada 30s re-descargando 365 días de reservas (~600 lecturas/ciclo con enriquecimiento court+user → ~70K lecturas/hora = cuota en <1h); (2) pestaña Pagos re-descargando TODO el historial 2020-2030 en cada visita; (3) pestaña Clientes ídem 2024-2027; (4) el error exacto del usuario venía de ClientAnalyticsTab línea 107 "No se pudieron cargar las reservas (401)"
+- FIXES (commits f336b15, 0c764f5, 9b0d366, e3802f9):
+  * NUEVO /api/payments-pending-count: agregación count() de Firestore (~1 lectura) con criterio idéntico al filtro de la pestaña Pagos (payment_pending + reserved&remaining_payment_status=pending); fallback a 2 agregaciones simples si faltase índice compuesto
+  * AdminDashboard: polling 30s×365d ELIMINADO → count-check cada 60s; refresh completo SOLO cuando el contador cambia (toast al aumentar, igual UX que antes); retry 401 en fetchData con token recién emitido (getFreshAuthHeaders)
+  * PaymentValidationTab + ClientAnalyticsTab: guard de 2 min (validaciones/Reintentar fuerzan refresh)
+  * auth-middleware: requireAuth/requireAnyAuth capturan RESOURCE_EXHAUSTED y devuelven 503 QUOTA_EXHAUSTED con mensaje real (antes 401 engañoso en TODAS las rutas); no degradan rol a 'user' durante outages
+  * auth route: acción check-session (sondeo barato de cookie) + 503 honesto en catch
+  * auth-helpers: restoreSession con recuperación en 2 niveles (token fresco del SDK de Firebase → sondeo de cookie) y logout limpio si la sesión está muerta (elimina sesiones zombis que provocaban 401 eternos); startTokenRefresher renueva el Bearer cada 50 min (antes expiraba a la hora sin renovarse nunca); getFreshAuthHeaders
+  * NUEVO src/lib/api-errors.ts: isQuotaError + quotaErrorResponse compartidos
+- tsc: solo errores preexistentes en mis archivos (0 nuevos); builds OK (notar: next.config tiene ignoreBuildErrors:true — un import faltante se descubrió en runtime y se corrigió en 9b0d366)
+- Verificación producción: anónimo → 401 correcto; con Bearer válido durante outage → 503 QUOTA_EXHAUSTED honesto en payments-pending-count, bookings y stats; login → 503 honesto
+
+Stage Summary:
+- El 401 del usuario NO era su sesión: era la cuota diaria de Firestore agotada por polling redundante; el middleware la reportaba como "Autenticacion requerida"
+- Lecturas reducidas ~99% (de ~70K/hora a ~1/min en polling); el sistema deja de agotar la cuota diaria en uso normal
+- La cuota se repone a medianoche Pacífico (~02:00 Perú): hasta entonces el sitio responde 503 con mensaje claro; si el usuario necesita el servicio YA, actualizar Firebase a plan Blaze (pay-as-you-go, incluye el tier gratis)
+- Sesiones zombis eliminadas: si al volver la sesión no sirve, la app pide re-login limpio en vez de fallar con 401 en cada acción
