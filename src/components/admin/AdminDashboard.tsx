@@ -205,6 +205,34 @@ const fmtDateFull = (d: string) => {
 }
 const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 
+/* ─── Ingresos por Fecha: helpers de calendario (timezone-safe vía Date.UTC) ─── */
+type IncomePeriodKey = 'hoy' | 'semana' | 'mes' | 'anio' | 'todo' | 'custom'
+type IncomeGranularity = 'dia' | 'mes'
+const INCOME_PERIODS: { key: IncomePeriodKey; label: string }[] = [
+  { key: 'hoy', label: 'Hoy' },
+  { key: 'semana', label: 'Semana' },
+  { key: 'mes', label: 'Mes' },
+  { key: 'anio', label: 'Año' },
+  { key: 'todo', label: 'Todo' },
+  { key: 'custom', label: 'Personalizado' },
+]
+const MONTHS_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const pad2 = (n: number) => String(n).padStart(2, '0')
+/** Suma (o resta) días a una fecha 'YYYY-MM-DD' sin problemas de zona horaria */
+const addDaysStr = (dateStr: string, n: number) => {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + n))
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`
+}
+/** Días entre dos fechas 'YYYY-MM-DD' (b - a) */
+const diffDaysStr = (a: string, b: string) => {
+  const [y1, m1, d1] = a.split('-').map(Number)
+  const [y2, m2, d2] = b.split('-').map(Number)
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000)
+}
+/** '2026-09' → 'Sep 2026' */
+const fmtMonthKey = (key: string) => `${MONTHS_ES[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`
+
 /** Compare Firestore Timestamps (seconds) or ISO strings for sorting */
 function compareTimestamps(a: unknown, b: unknown): number {
   const toMs = (t: unknown): number => {
@@ -3670,6 +3698,168 @@ export default function AdminDashboard() {
     return { ...m, yapePlin, total, pct }
   }, [bookings])
 
+  /* ─── Ingresos por Fecha (filtro interactivo: día / mes / rango personalizado) ───
+     Mismo criterio que Ingresos Totales: reservas completed + reserved, monto = advanceAmount,
+     agrupado por fecha de la reserva (b.date 'YYYY-MM-DD'). */
+  const [incomePeriod, setIncomePeriod] = useState<IncomePeriodKey>('mes')
+  const [incomeGranularity, setIncomeGranularity] = useState<IncomeGranularity>('dia')
+  const [incomeMonthOffset, setIncomeMonthOffset] = useState(0)
+  const [incomeCustomFrom, setIncomeCustomFrom] = useState('')
+  const [incomeCustomTo, setIncomeCustomTo] = useState('')
+
+  const selectIncomePeriod = (p: IncomePeriodKey) => {
+    setIncomePeriod(p)
+    if (p === 'anio' || p === 'todo') setIncomeGranularity('mes')
+    else if (p !== 'custom') setIncomeGranularity('dia')
+    if (p === 'mes') setIncomeMonthOffset(0)
+  }
+
+  // Rango [from, to] en 'YYYY-MM-DD' según el periodo elegido ('' = sin límite)
+  const incomeRange = useMemo(() => {
+    const today = todayStr()
+    const [ty, tm, td] = today.split('-').map(Number)
+    if (incomePeriod === 'hoy') return { from: today, to: today, label: `Hoy · ${fmtDateFull(today)}` }
+    if (incomePeriod === 'semana') {
+      const dow = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay() // 0 = domingo
+      const monday = addDaysStr(today, dow === 0 ? -6 : 1 - dow)
+      const sunday = addDaysStr(monday, 6)
+      return { from: monday, to: sunday, label: `Semana · ${fmtDate(monday)} – ${fmtDate(sunday)}` }
+    }
+    if (incomePeriod === 'mes') {
+      const base = new Date(Date.UTC(ty, tm - 1 + incomeMonthOffset, 1))
+      const y = base.getUTCFullYear()
+      const m = base.getUTCMonth() + 1
+      return {
+        from: `${y}-${pad2(m)}-01`,
+        to: `${y}-${pad2(m)}-${pad2(new Date(Date.UTC(y, m, 0)).getUTCDate())}`,
+        label: `${MONTHS_FULL[m - 1]} ${y}`,
+      }
+    }
+    if (incomePeriod === 'anio') return { from: `${ty}-01-01`, to: `${ty}-12-31`, label: `Año ${ty}` }
+    if (incomePeriod === 'custom') {
+      const f = incomeCustomFrom
+      const t = incomeCustomTo
+      const label = f && t ? `${fmtDateFull(f)} – ${fmtDateFull(t)}` : f ? `Desde ${fmtDateFull(f)}` : t ? `Hasta ${fmtDateFull(t)}` : 'Elige un rango'
+      return { from: f, to: t, label }
+    }
+    return { from: '', to: '', label: 'Todo el historial' }
+  }, [incomePeriod, incomeMonthOffset, incomeCustomFrom, incomeCustomTo])
+
+  const incomeByPeriod = useMemo(() => {
+    const today = todayStr()
+    const { from, to } = incomeRange
+
+    const incomeBookings = bookings.filter((b) => {
+      if (b.status !== 'completed' && b.status !== 'reserved') return false
+      if (from && b.date < from) return false
+      if (to && b.date > to) return false
+      return true
+    })
+
+    // Límites efectivos del eje (para 'todo' o rango abierto: desde la primera reserva hasta hoy/última)
+    let minD = ''
+    let maxD = today
+    for (const b of incomeBookings) {
+      if (!minD || b.date < minD) minD = b.date
+      if (b.date > maxD) maxD = b.date
+    }
+    const effFrom = from || minD || today
+    const effTo = to || maxD
+    const empty = !effFrom || !effTo || effFrom > effTo
+
+    // Rangos muy largos no caben por día → forzar mes
+    const rangeDays = empty ? 0 : diffDaysStr(effFrom, effTo) + 1
+    const forced = !empty && incomeGranularity === 'dia' && rangeDays > 92
+    const effGran: IncomeGranularity = forced ? 'mes' : incomeGranularity
+
+    // Clasificación por método (idéntica a incomeByMethod) → [efectivo, yapePlin, culqi, otros]
+    const classify = (b: Booking): [number, number, number, number] => {
+      const paid = b.advanceAmount || 0
+      const pm = String(b.paymentMethod || '').trim().toUpperCase()
+      if (pm === 'MIXTO') {
+        const bd = b.paymentBreakdown
+        if (bd && ((bd.efectivo || 0) > 0 || (bd.digital || 0) > 0)) {
+          const dm = String(bd.digitalMethod || 'YAPE').trim().toUpperCase()
+          if (dm === 'CULQI') return [bd.efectivo || 0, 0, bd.digital || 0, 0]
+          return [bd.efectivo || 0, bd.digital || 0, 0, 0]
+        }
+        return [0, 0, 0, paid]
+      }
+      if (pm === 'YAPE' || pm === 'YAPE QR' || pm === 'YAPE_QR' || pm === 'PLIN') return [0, paid, 0, 0]
+      if (pm === 'CULQI') return [0, 0, paid, 0]
+      if (pm === 'EFECTIVO' || pm === 'CASH') return [paid, 0, 0, 0]
+      return [0, 0, 0, paid]
+    }
+
+    // Eje completo (incluye días/meses en 0 para ver la línea de tiempo real)
+    const axis: string[] = []
+    if (!empty) {
+      if (effGran === 'dia') {
+        for (let d = effFrom; d <= effTo && axis.length < 400; d = addDaysStr(d, 1)) axis.push(d)
+      } else {
+        let yy = Number(effFrom.slice(0, 4))
+        let mm = Number(effFrom.slice(5, 7))
+        const ey = Number(effTo.slice(0, 4))
+        const em = Number(effTo.slice(5, 7))
+        while ((yy < ey || (yy === ey && mm <= em)) && axis.length < 60) {
+          axis.push(`${yy}-${pad2(mm)}-01`)
+          mm++
+          if (mm > 12) { mm = 1; yy++ }
+        }
+      }
+    }
+
+    const bucketMap = new Map<string, { total: number; efectivo: number; yapePlin: number; culqi: number; otros: number; count: number }>()
+    let total = 0, count = 0, efectivo = 0, yapePlin = 0, culqi = 0, otros = 0
+    for (const b of incomeBookings) {
+      const amount = b.advanceAmount || 0
+      const [e, yp, cu, ot] = classify(b)
+      const key = effGran === 'dia' ? b.date : b.date.slice(0, 7)
+      const cur = bucketMap.get(key) || { total: 0, efectivo: 0, yapePlin: 0, culqi: 0, otros: 0, count: 0 }
+      cur.total += amount; cur.efectivo += e; cur.yapePlin += yp; cur.culqi += cu; cur.otros += ot; cur.count++
+      bucketMap.set(key, cur)
+      total += amount; count++; efectivo += e; yapePlin += yp; culqi += cu; otros += ot
+    }
+
+    const series = axis.map((k) => {
+      const hit = bucketMap.get(effGran === 'dia' ? k : k.slice(0, 7))
+      return {
+        key: k,
+        label: effGran === 'dia' ? fmtDate(k) : fmtMonthKey(k),
+        total: hit?.total || 0,
+        efectivo: hit?.efectivo || 0,
+        yapePlin: hit?.yapePlin || 0,
+        culqi: hit?.culqi || 0,
+        otros: hit?.otros || 0,
+        count: hit?.count || 0,
+      }
+    })
+    const maxTotal = series.reduce((mx, s) => Math.max(mx, s.total), 0)
+    const best = series.reduce((acc, s) => (s.total > acc.total ? { label: s.label, total: s.total } : acc), { label: '-', total: 0 })
+
+    // Promedio sobre el tiempo ya transcurrido del rango (hoy corta el rango futuro)
+    const anchor = today < effTo ? today : effTo
+    let elapsed = 0
+    if (!empty) {
+      if (effGran === 'dia') elapsed = Math.max(1, diffDaysStr(effFrom, anchor) + 1)
+      else {
+        const fy = Number(effFrom.slice(0, 4)), fm = Number(effFrom.slice(5, 7))
+        const ay = Number(anchor.slice(0, 4)), am = Number(anchor.slice(5, 7))
+        elapsed = Math.max(1, (ay - fy) * 12 + (am - fm) + 1)
+      }
+    }
+    const avg = elapsed > 0 ? total / elapsed : 0
+
+    return {
+      series, total, count, efectivo, yapePlin, culqi, otros, best, avg, maxTotal,
+      avgLabel: effGran === 'dia' ? 'Promedio por día' : 'Promedio por mes',
+      bestLabel: effGran === 'dia' ? 'Mejor día' : 'Mejor mes',
+      effGran, forced, empty,
+      pct: (v: number) => (total > 0 ? Math.round((v / total) * 1000) / 10 : 0),
+    }
+  }, [bookings, incomeRange, incomeGranularity])
+  const periodLabelEvery = Math.max(1, Math.ceil(incomeByPeriod.series.length / 12))
+
   const expensesByCategory = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + e.amount
     return acc
@@ -4636,6 +4826,169 @@ export default function AdminDashboard() {
                     <span className="text-cm-on-surface font-[family-name:var(--font-sora)]">Total</span>
                     <span className="text-cm-primary font-[family-name:var(--font-sora)]">{fmtCurrency(incomeByMethod.total)}</span>
                   </div>
+                </div>
+              </motion.div>
+
+              {/* Row 1.6: Ingresos por Fecha — filtro interactivo y futurista (día / mes / rango) */}
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }} className="glass-card glow-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-cm-primary text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>query_stats</span>
+                    <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] font-medium">Ingresos por Fecha</span>
+                  </div>
+                  <div className="flex items-center rounded-lg border border-white/10 overflow-hidden">
+                    {(['dia', 'mes'] as IncomeGranularity[]).map((g) => (
+                      <button key={g} type="button" onClick={() => setIncomeGranularity(g)}
+                        className={`px-3 py-1 text-[10.5px] font-semibold transition-all font-[family-name:var(--font-inter)] ${(incomeByPeriod.forced && g === 'dia') ? 'opacity-30 cursor-not-allowed' : ''} ${
+                          incomeByPeriod.effGran === g ? 'bg-cm-primary/15 text-cm-primary' : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+                        }`}>
+                        {g === 'dia' ? 'Por día' : 'Por mes'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chips de periodo */}
+                <div className="flex items-center flex-wrap gap-1.5 mb-3">
+                  {INCOME_PERIODS.map((p) => (
+                    <button key={p.key} type="button" onClick={() => selectIncomePeriod(p.key)}
+                      className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold border transition-all font-[family-name:var(--font-inter)] ${
+                        incomePeriod === p.key
+                          ? 'bg-cm-primary/15 border-cm-primary/60 text-cm-primary shadow-[0_0_10px_rgba(0,255,65,0.25)]'
+                          : 'bg-cm-surface-container-highest/30 border-white/10 text-cm-on-surface-variant hover:border-cm-primary/30 hover:text-cm-on-surface'
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Contexto: navegación de mes o rango personalizado */}
+                {incomePeriod === 'mes' && (
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    <button type="button" onClick={() => setIncomeMonthOffset((o) => o - 1)} aria-label="Mes anterior"
+                      className="p-1 rounded-md border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/40 transition-all">
+                      <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                    </button>
+                    <span className="text-xs font-semibold text-cm-primary text-glow font-[family-name:var(--font-sora)] min-w-[150px] text-center">{incomeRange.label}</span>
+                    <button type="button" onClick={() => setIncomeMonthOffset((o) => Math.min(2, o + 1))} disabled={incomeMonthOffset >= 2} aria-label="Mes siguiente"
+                      className="p-1 rounded-md border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/40 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                      <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                    </button>
+                  </div>
+                )}
+                {incomePeriod === 'custom' && (
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <input type="date" value={incomeCustomFrom} max={incomeCustomTo || undefined} onChange={(e) => setIncomeCustomFrom(e.target.value)}
+                      className="px-2.5 py-1.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px]">arrow_forward</span>
+                    <input type="date" value={incomeCustomTo} min={incomeCustomFrom || undefined} onChange={(e) => setIncomeCustomTo(e.target.value)}
+                      className="px-2.5 py-1.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]" />
+                    {(incomeCustomFrom || incomeCustomTo) && (
+                      <button type="button" onClick={() => { setIncomeCustomFrom(''); setIncomeCustomTo('') }}
+                        className="text-[10px] text-cm-on-surface-variant hover:text-red-400 underline underline-offset-2 font-[family-name:var(--font-inter)] transition-colors">
+                        limpiar
+                      </button>
+                    )}
+                  </div>
+                )}
+                {(incomePeriod !== 'custom' || incomeCustomFrom || incomeCustomTo) && incomePeriod !== 'mes' && (
+                  <p className="text-[11px] text-cm-on-surface font-medium font-[family-name:var(--font-inter)] mb-3 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-cm-primary/70 text-[14px]">event</span>{incomeRange.label}
+                  </p>
+                )}
+
+                {/* Resumen del periodo */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                  <div className="p-3 rounded-lg bg-cm-primary/5 border border-cm-primary/20">
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">Ingreso del periodo</p>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-primary text-glow">{fmtCurrency(incomeByPeriod.total)}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{incomeByPeriod.count} {incomeByPeriod.count === 1 ? 'reserva' : 'reservas'}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-cm-surface-container-highest/30">
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">{incomeByPeriod.avgLabel}</p>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">{fmtCurrency(incomeByPeriod.avg)}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">tiempo transcurrido</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-cm-surface-container-highest/30">
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-0.5">{incomeByPeriod.bestLabel}</p>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-yellow-400">{incomeByPeriod.best.total > 0 ? fmtCurrency(incomeByPeriod.best.total) : '-'}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{incomeByPeriod.best.label}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-purple-400/10">
+                    <p className="text-[10px] text-purple-300 font-[family-name:var(--font-inter)] mb-0.5">Yape + Plin en el periodo</p>
+                    <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-purple-400">{fmtCurrency(incomeByPeriod.yapePlin)}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{incomeByPeriod.pct(incomeByPeriod.yapePlin)}% del periodo</p>
+                  </div>
+                </div>
+
+                {/* Línea de tiempo interactiva */}
+                {incomeByPeriod.series.length > 0 && incomeByPeriod.total > 0 ? (
+                  <div className="rounded-lg bg-cm-surface-container-highest/20 border border-white/5 p-3 [background-image:linear-gradient(rgba(0,255,65,0.05)_1px,transparent_1px)] [background-size:100%_25%]">
+                    <div className="overflow-x-auto no-scrollbar">
+                      <div className="flex" style={{ minWidth: `${Math.max(incomeByPeriod.series.length * 16, 100)}px` }}>
+                        {incomeByPeriod.series.map((s, i) => {
+                          const hPct = incomeByPeriod.maxTotal > 0 && s.total > 0 ? Math.max((s.total / incomeByPeriod.maxTotal) * 100, 4) : 0
+                          const isBest = s.total > 0 && s.total === incomeByPeriod.maxTotal
+                          const showLbl = i % periodLabelEvery === 0 || i === incomeByPeriod.series.length - 1
+                          return (
+                            <div key={s.key} className="group relative flex-1 flex flex-col items-center">
+                              <div className="relative w-full h-[120px] flex items-end justify-center px-[1px]">
+                                {s.total > 0 && (
+                                  <div className={`pointer-events-none hidden group-hover:block absolute bottom-full z-20 mb-1 rounded-lg bg-[#0d150e]/95 border border-cm-primary/40 px-2.5 py-1.5 whitespace-nowrap shadow-[0_0_12px_rgba(0,255,65,0.25)] ${i < 2 ? 'left-0' : i > incomeByPeriod.series.length - 3 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
+                                    <p className="text-[10px] font-bold text-cm-primary font-[family-name:var(--font-sora)]">{s.label}</p>
+                                    <p className="text-[10px] text-cm-on-surface font-[family-name:var(--font-inter)]">{fmtCurrency(s.total)} · {s.count} {s.count === 1 ? 'reserva' : 'reservas'}</p>
+                                    <p className="text-[9px] text-green-400 font-[family-name:var(--font-inter)]">Efectivo: {fmtCurrency(s.efectivo)}</p>
+                                    <p className="text-[9px] text-purple-400 font-[family-name:var(--font-inter)]">Yape+Plin: {fmtCurrency(s.yapePlin)}</p>
+                                    {s.culqi > 0 && <p className="text-[9px] text-blue-400 font-[family-name:var(--font-inter)]">Culqi: {fmtCurrency(s.culqi)}</p>}
+                                  </div>
+                                )}
+                                <motion.div
+                                  key={`${incomePeriod}-${incomeByPeriod.effGran}-${s.key}`}
+                                  initial={{ height: 0 }}
+                                  animate={{ height: s.total > 0 ? `${hPct}%` : '2px' }}
+                                  transition={{ duration: 0.45, delay: Math.min(i * 0.012, 0.5), ease: 'easeOut' }}
+                                  className={`w-full max-w-[26px] rounded-t-[3px] hover:brightness-125 ${s.total > 0 ? 'bg-gradient-to-t from-cm-primary/15 via-cm-primary/40 to-cm-primary/85 cursor-pointer' : 'bg-white/10'}`}
+                                  style={s.total > 0 ? { boxShadow: isBest ? '0 0 12px rgba(0,255,65,0.45)' : '0 0 6px rgba(0,255,65,0.18)' } : undefined}
+                                />
+                              </div>
+                              <p className={`mt-1.5 text-[8.5px] leading-none font-[family-name:var(--font-inter)] whitespace-nowrap ${showLbl ? (isBest ? 'text-cm-primary font-bold' : 'text-cm-on-surface-variant') : 'opacity-0'}`}>{s.label}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-cm-surface-container-highest/20 border border-white/5 h-[150px] flex flex-col items-center justify-center text-center px-4">
+                    <span className="material-symbols-outlined text-cm-on-surface-variant/40 text-[30px] mb-1.5">monitoring</span>
+                    <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                      {incomeByPeriod.empty ? 'Elige un rango de fechas' : <>Sin ingresos registrados en <span className="text-cm-on-surface font-semibold">{incomeRange.label}</span></>}
+                    </p>
+                    <p className="text-[10px] text-cm-on-surface-variant/70 font-[family-name:var(--font-inter)] mt-1">Prueba otro periodo o el rango personalizado</p>
+                  </div>
+                )}
+
+                {/* Proporción por método dentro del periodo */}
+                {incomeByPeriod.total > 0 && (
+                  <div className="mt-3">
+                    <div className="h-2 rounded-full overflow-hidden flex bg-cm-surface-container-highest/40">
+                      <div className="bg-green-400" style={{ width: `${incomeByPeriod.pct(incomeByPeriod.efectivo)}%` }} />
+                      <div className="bg-purple-400" style={{ width: `${incomeByPeriod.pct(incomeByPeriod.yapePlin)}%` }} />
+                      {incomeByPeriod.culqi > 0 && <div className="bg-blue-400" style={{ width: `${incomeByPeriod.pct(incomeByPeriod.culqi)}%` }} />}
+                      {incomeByPeriod.otros > 0 && <div className="bg-cm-on-surface-variant/40 flex-1" />}
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" />Efectivo {fmtCurrency(incomeByPeriod.efectivo)} · {incomeByPeriod.pct(incomeByPeriod.efectivo)}%</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />Yape + Plin {fmtCurrency(incomeByPeriod.yapePlin)} · {incomeByPeriod.pct(incomeByPeriod.yapePlin)}%</span>
+                      {incomeByPeriod.culqi > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Culqi {fmtCurrency(incomeByPeriod.culqi)} · {incomeByPeriod.pct(incomeByPeriod.culqi)}%</span>}
+                      {incomeByPeriod.otros > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cm-on-surface-variant/60 inline-block" />Otros / Mixto {fmtCurrency(incomeByPeriod.otros)} · {incomeByPeriod.pct(incomeByPeriod.otros)}%</span>}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between flex-wrap gap-1 mt-3">
+                  <p className="text-[9.5px] text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">Mismo criterio que Ingresos Totales (completados + adelantos activos) según la fecha de la reserva</p>
+                  {incomeByPeriod.forced && <p className="text-[9.5px] text-yellow-400/80 font-[family-name:var(--font-inter)]">Rango extenso: vista por mes</p>}
                 </div>
               </motion.div>
 
