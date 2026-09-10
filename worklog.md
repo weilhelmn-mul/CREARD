@@ -271,3 +271,19 @@ Work Log:
 Stage Summary:
 - La alerta de la pestaña Pagos FUNCIONA en producción (verificada en vivo 2 veces con capturas). El incidente del usuario se debía a sesión obsoleta del navegador; se le indicará recargar una vez.
 - Sistema endurecido: refresco inmediato al volver a la pestaña, polling 30s, toast al detectar nuevos pagos, purga de caches SW v6.
+
+---
+Task ID: 8-f
+Agent: Super Z (main agent)
+Task: "Alertas y Notificaciones ya no se observan activas cuando los jugadores terminan de jugar"
+
+Work Log:
+- Restaurado .env.local (desapareció por limpieza del entorno; re-creado con la service account del usuario).
+- Diagnóstico (scripts/diag_alarmas.js): settings de notificación OK (enabled=true, sound=1, warning=10min; Google Chat/WhatsApp/Tasks SIN configurar — deshabilitados). Hoy Lima 9 Sep: reserva real E7hZ4DErO0Jw7kMRtVfz 18:00-20:00 reserved terminó 83 min antes de la revisión.
+- CAUSA RAÍZ: la alerta "turno terminado" solo existía mientras remaining > -15 (ventana de 15 min tras endTime, diseño original desde f04edac). Si el admin no miraba el panel en esos 15 min exactos, la alerta se perdía para siempre. Además los descartes no persistían (recargar reactivaba) y "Limpiar todo" vaciaba sin descartar (reaparecían tras recargar).
+- FIX (commit f595512, NotificationMonitor.tsx): alertas de turno terminado PERSISTEN TODO EL DÍA en el banner hasta descartarlas (nueva rama remaining <= -15, sin sonido/pulso/webhook para no molestar); ventana fresca (-15..0) conserva pulso+sonido+webhooks; descartes persistidos en localStorage (creard_alarm_dismissed_v1, auto-limpieza por día); "Limpiar todo" ahora SÍ descarta todas las visibles; texto nuevo "Terminó hace N min — terminaba a las HH:MM".
+- Deploy confirmado por marcador creard_alarm_dismissed_v1 en chunks de producción. E2E en producción (navegador real, admin): banner "Turno finalizado" visible con "Cancha Vóley B — Terminó hace 92 min — terminaba a las 20:00" (antes invisible) → captura creard_prod_alarma_persistente.png → descartar X → localStorage persistido → recargar → NO reaparece. ✅
+- NOTA: las notificaciones EXTERNAS (Google Chat/WhatsApp/Tasks) siguen sin configurar en site_settings/notifications — configurarlas desde la pestaña Alarmas si se quiere aviso fuera del panel.
+
+Stage Summary:
+- Las alertas de fin de turno ahora son persistentes todo el día hasta que el admin las descarte; el descarte sobrevive recargas. Verificado E2E en producción con una reserva real. Sonido/webhooks solo en la ventana fresca de 15 min.
