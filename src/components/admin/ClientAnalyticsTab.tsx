@@ -13,7 +13,7 @@
    (reservas completed + reserved, monto = advanceAmount).
    ═══════════════════════════════════════════════════ */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import ClientBalanceModal from './ClientBalanceModal'
@@ -93,8 +93,16 @@ export default function ClientAnalyticsTab() {
   /* modal */
   const [selected, setSelected] = useState<ClientStat | null>(null)
 
-  /* ─── Carga de datos (historial completo) ─── */
-  const loadData = async () => {
+  /* ─── Carga de datos (historial completo) ───
+     Guard anti-cuota: cada visita a la pestaña re-descargaba TODO el
+     historial (~600+ lecturas de Firestore). Ahora se reutiliza lo
+     cargado hace <2 min; "Reintentar" y el montaje inicial fuerzan
+     según corresponda (retry siempre fuerza). */
+  const lastLoadRef = useRef(0)
+  const loadData = async (force = false) => {
+    const now = Date.now()
+    if (!force && now - lastLoadRef.current < 120000) return
+    lastLoadRef.current = now
     setLoading(true)
     setLoadError('')
     try {
@@ -128,7 +136,7 @@ export default function ClientAnalyticsTab() {
       setLoading(false)
     }
   }
-  useEffect(() => { loadData() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
+  useEffect(() => { loadData(true) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
 
   /* ─── Guardar umbrales de fidelización ─── */
   const saveLevels = async () => {
@@ -270,7 +278,7 @@ export default function ClientAnalyticsTab() {
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <span className="material-symbols-outlined text-red-400 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>cloud_off</span>
         <p className="text-sm text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{loadError}</p>
-        <button type="button" onClick={loadData}
+        <button type="button" onClick={() => loadData(true)}
           className="mt-1 px-4 py-2 rounded-lg bg-cm-primary/15 border border-cm-primary/40 text-cm-primary text-xs font-bold hover:bg-cm-primary/25 transition-all">
           Reintentar
         </button>
