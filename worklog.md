@@ -413,3 +413,24 @@ Stage Summary:
 - CREARD ya cumple lo que Firebase pide: todo el backend usa el SDK de Firebase Admin con cuenta de servicio; no hay secretos heredados en el código
 - Acción recomendada al usuario (solo consola): Project Settings → Service accounts → Database secrets → revocar el secreto legacy (seguro: el código no lo usa); cierra el aviso y mejora seguridad
 - Producción verificada sana: auth completa funcionando, sin 401, módulos existentes intactos
+
+---
+Task ID: 15
+Agent: Super Z (main agent)
+Task: Análisis plan Blaze vs Spark con datos reales + mejoras del módulo Clientes (CSV, WhatsApp, filtro de morosos)
+
+Work Log:
+- Análisis de cuota con datos reales de producción (scripts/analisis_cuota_blaze.js): 149 reservas, 73 usuarios, 6 canchas, 47 pagos, 6 adelantos
+- Lecturas estimadas por acción: login ~2, pestaña Reservas ~225, Clientes ~232, Pagos ~49, polling 1/min
+- Escenarios diarios vs cuota Spark (50K lecturas/día): normal ~1,695 (3%), alto ~6,745 (13%), extremo ~25,440 (51%) — NINGUNO excede la cuota tras las optimizaciones del Task 13
+- Blaze: tier gratis se mantiene (50K incluidos) → costo estimado en el peor caso realista: $0.00/mes; recomendación: actualizar como seguro gratis (elimina el tope duro), requiere tarjeta en consola (solo el dueño puede hacerlo)
+- Mejoras Clientes implementadas (aditivas, frontend-only, 0 cambios en módulos existentes):
+  * NUEVO src/components/admin/clientAnalyticsExport.ts: downloadCsv (BOM UTF-8 + quoting), exportClientsCsv (14 columnas), exportHistoryCsv (8 columnas, orden cronológico), buildWhatsAppLink (normaliza a +51 Perú, mensaje con saldo pendiente si aplica)
+  * ClientAnalyticsTab: botón "Exportar CSV" (exporta la tabla con filtros actuales), chip toggle "Solo con saldo pendiente" (morosidad), botón WhatsApp verde por fila (no abre el modal, stopPropagation, solo si hay teléfono)
+  * ClientBalanceModal: botón "CSV" en el historial (exporta el rango filtrado)
+- tsc: 155 errores idénticos (0 nuevos); build OK; rebased sobre remoto (commit usuario b8cb4f7) y push 9f996f2
+
+Stage Summary:
+- Blaze no es urgente (uso real 3-13% de la cuota en escenarios realistas) pero se recomienda como seguro de costo $0; el 401 anterior fue por un bug de polling ya reparado, no por volumen del negocio
+- Módulo Clientes ahora permite: exportar a CSV para contabilidad, contactar clientes por WhatsApp con mensaje prellenado (incluye saldo pendiente), y ver solo clientes con deuda
+- Pendiente verificación E2E en producción
