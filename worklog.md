@@ -393,3 +393,23 @@ Stage Summary:
 - Lecturas reducidas ~99% (de ~70K/hora a ~1/min en polling); el sistema deja de agotar la cuota diaria en uso normal
 - La cuota se repone a medianoche Pacífico (~02:00 Perú): hasta entonces el sitio responde 503 con mensaje claro; si el usuario necesita el servicio YA, actualizar Firebase a plan Blaze (pay-as-you-go, incluye el tier gratis)
 - Sesiones zombis eliminadas: si al volver la sesión no sirve, la app pide re-login limpio en vez de fallar con 401 en cada acción
+
+---
+Task ID: 14
+Agent: Super Z (main agent)
+Task: Aviso de Firebase "secretos de base de datos obsoletos / generador de tokens heredado — actualizar a SDK de Firebase Admin" — verificación de cumplimiento
+
+Work Log:
+- Búsqueda exhaustiva en todo el repo (src, scripts, data, examples, mini-services, db): 0 usos de secretos de BD legacy — sin Realtime Database, sin firebaseio REST con ?auth=, sin database_secret/databaseURL, sin createCustomToken/createSessionCookie legacy
+- Confirmado que el código ya usa la vía moderna que Firebase pide:
+  * Servidor: src/lib/firebase-admin.ts inicializa Admin SDK con service account (cert() desde FIREBASE_SERVICE_ACCOUNT_*) — usado por TODAS las API routes y src/lib/db.ts
+  * Cliente: src/lib/firebase.ts usa Client SDK moderno (signInWithEmailAndPassword + getIdToken)
+  * Sesiones: cookie aleatoria httpOnly con SHA-256 en Firestore (user_sessions) — sin tokens legacy
+  * .env.example y vercel.json sin variables de secretos legacy
+- Verificación de salud en producción (scripts/verify_prod_health.js): anónimo → 401 correcto; login admin → 200 (super_admin); /api/bookings, /api/stats, /api/retained-advances, /api/client-settings, /api/payments-pending-count, /api/expenses, /api/payments-list, /api/courts → todos 200. El 401 previo del usuario (cuota Firestore agotada, Task 13) sigue resuelto
+- Conclusión: el aviso de Firebase es una notificación de deprecación a nivel de PROYECTO (secreto heredado definido en la consola, no usado por el código). No requiere cambio de código ni deploy
+
+Stage Summary:
+- CREARD ya cumple lo que Firebase pide: todo el backend usa el SDK de Firebase Admin con cuenta de servicio; no hay secretos heredados en el código
+- Acción recomendada al usuario (solo consola): Project Settings → Service accounts → Database secrets → revocar el secreto legacy (seguro: el código no lo usa); cierra el aviso y mejora seguridad
+- Producción verificada sana: auth completa funcionando, sin 401, módulos existentes intactos
