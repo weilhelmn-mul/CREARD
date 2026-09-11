@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import ClientBalanceModal from './ClientBalanceModal'
+import { exportClientsCsv, buildWhatsAppLink } from './clientAnalyticsExport'
 import {
   type AnalyticsBooking, type AnalyticsAdvance, type ClientStat,
   type ClientThresholds, type PeriodKey, type ClientLevel,
@@ -85,6 +86,7 @@ export default function ClientAnalyticsTab() {
   /* tabla */
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('ingresos')
+  const [onlyPending, setOnlyPending] = useState(false)
 
   /* ranking / fidelización */
   const [rankBy, setRankBy] = useState<RankKey>('ingresos')
@@ -196,15 +198,16 @@ export default function ClientAnalyticsTab() {
     return { ingresos, ticket, atendidas, topSpender, topBooker, vipCount, activos: activosSet.size }
   }, [scoped, clients])
 
-  /* Tabla: búsqueda + orden */
+  /* Tabla: búsqueda + orden + filtro de morosos */
   const tableClients = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const base = q
+    let base = q
       ? clients.filter((c) =>
           c.name.toLowerCase().includes(q) ||
           c.email.toLowerCase().includes(q) ||
           c.phone.toLowerCase().includes(q))
       : clients
+    if (onlyPending) base = base.filter((c) => c.montoPendiente > 0.01)
     const sorted = [...base]
     switch (sortBy) {
       case 'ingresos': sorted.sort((a, b) => b.montoPagado - a.montoPagado || b.total - a.total); break
@@ -213,7 +216,7 @@ export default function ClientAnalyticsTab() {
       case 'nombre': sorted.sort((a, b) => a.name.localeCompare(b.name)); break
     }
     return sorted
-  }, [clients, search, sortBy])
+  }, [clients, search, sortBy, onlyPending])
 
   /* Ranking */
   const ranked = useMemo(() => {
@@ -420,6 +423,21 @@ export default function ClientAnalyticsTab() {
               <option value="pendiente">Ordenar: Pendiente</option>
               <option value="nombre">Ordenar: Nombre</option>
             </select>
+            <button type="button" onClick={() => setOnlyPending((v) => !v)}
+              className={`px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold border transition-all font-[family-name:var(--font-inter)] flex items-center gap-1 ${
+                onlyPending
+                  ? 'bg-orange-400/15 border-orange-400/60 text-orange-300 shadow-[0_0_10px_rgba(251,146,60,0.2)]'
+                  : 'bg-cm-surface-container-highest/40 border-white/10 text-cm-on-surface-variant hover:border-orange-400/40 hover:text-orange-300'
+              }`} title="Mostrar solo clientes con saldo pendiente por cobrar">
+              <span className="material-symbols-outlined text-[14px]">account_balance</span>
+              Solo con saldo pendiente
+            </button>
+            <button type="button" onClick={() => exportClientsCsv(tableClients, range.label)}
+              className="px-2.5 py-1.5 rounded-lg bg-cm-primary/10 border border-cm-primary/40 text-cm-primary text-[10.5px] font-bold hover:bg-cm-primary/20 transition-all font-[family-name:var(--font-inter)] flex items-center gap-1"
+              title="Descargar la tabla actual (con filtros aplicados) en CSV">
+              <span className="material-symbols-outlined text-[14px]">download</span>
+              Exportar CSV
+            </button>
           </div>
         </div>
 
@@ -475,8 +493,21 @@ export default function ClientAnalyticsTab() {
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9.5px] font-bold whitespace-nowrap ${lvlInfo.chip}`}>{lvlInfo.label}</span>
                       </td>
                       <td className="px-2.5 py-2.5 text-right">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">
-                          Balance<span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                        <span className="inline-flex items-center justify-end gap-1.5">
+                          {(() => {
+                            const wa = buildWhatsAppLink(c.name, c.phone, c.montoPendiente)
+                            if (!wa) return null
+                            return (
+                              <a href={wa} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                title={`Contactar por WhatsApp${c.montoPendiente > 0.01 ? ` — saldo pendiente ${fmtCurrency(c.montoPendiente)}` : ''}`}
+                                className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-green-400/40 bg-green-400/10 text-green-400 hover:bg-green-400/25 hover:scale-110 transition-all">
+                                <span className="material-symbols-outlined text-[13px]">chat</span>
+                              </a>
+                            )
+                          })()}
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-cm-primary font-[family-name:var(--font-inter)]">
+                            Balance<span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                          </span>
                         </span>
                       </td>
                     </motion.tr>

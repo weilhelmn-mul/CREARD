@@ -14,6 +14,7 @@ import {
   fmtCurrency, fmtDateFull, todayStr, inRange, periodRange,
   bucketize, statusBadge, CLIENT_LEVELS,
 } from './clientAnalyticsShared'
+import { exportHistoryCsv } from './clientAnalyticsExport'
 
 interface Props {
   stat: ClientStat
@@ -295,6 +296,12 @@ export default function ClientBalanceModal({ stat, onClose }: Props) {
                       }`}>{f.label}</button>
                   ))}
                 </div>
+                <button type="button" onClick={() => exportHistoryCsv(stat, filtered)} disabled={filtered.length === 0}
+                  className="px-2.5 py-1 rounded-lg bg-cm-primary/10 border border-cm-primary/40 text-cm-primary text-[10px] font-bold hover:bg-cm-primary/20 transition-all font-[family-name:var(--font-inter)] flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Descargar el historial visible en CSV">
+                  <span className="material-symbols-outlined text-[13px]">download</span>
+                  CSV
+                </button>
               </div>
             </div>
             {histFilter === 'custom' && (
