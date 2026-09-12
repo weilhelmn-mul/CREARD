@@ -434,3 +434,19 @@ Stage Summary:
 - Blaze no es urgente (uso real 3-13% de la cuota en escenarios realistas) pero se recomienda como seguro de costo $0; el 401 anterior fue por un bug de polling ya reparado, no por volumen del negocio
 - Módulo Clientes ahora permite: exportar a CSV para contabilidad, contactar clientes por WhatsApp con mensaje prellenado (incluye saldo pendiente), y ver solo clientes con deuda
 - Pendiente verificación E2E en producción
+
+---
+Task ID: 16
+Agent: Super Z (main agent)
+Task: FASE 1 + FASE 2 — Auditoría completa de UX móvil (sin modificar código) + reporte de soluciones para aprobación
+
+Work Log:
+- 3 agentes de exploración de código (solo lectura): flujo de reserva (UnifiedBookingView, BookingForm, BookingsView, CourtDetail, pagos), panel admin (AdminDashboard 7507 líneas, PaymentValidationTab, tablas, modales), base global (layout, viewport, safe-areas, globals.css, nav, auth, PWA). ~50 hallazgos documentados con archivo:línea
+- Pruebas en producción con navegador real: viewports 320x690 y 390x844 (móvil), 1440x900 (PC); home, detalle cancha, slots, panel admin (Reservas, Clientes, Pagos, Pago Yape); 12 screenshots en download/audit_*.png
+- MEDICIONES CLAVE: (1) botón "Crear Reserva" y=585-657 tapado por BottomNavBar y=610-690 (z-30 vs z-50) — tap al centro cae en NAV en 320 y 390; en PC 1440 OK; (2) página admin con scroll horizontal 445px vs 320px (125px overflow); (3) tabla Reservas 824px visible solo 35% (≈1 columna); (4) tabla Clientes min-w 1180px; (5) banner alarmas fixed 261px = 38% del viewport con z-200 tapando header; (6) slots 66x38px con estado en 8px; (7) labels nav truncados ("Reser..."); (8) validación Pagos sí tiene vista de tarjeta móvil (lg:hidden x20)
+- NO se modificó ningún archivo de código fuente (cumplimiento FASE 1). Screenshots y este log únicamente
+
+Stage Summary:
+- Auditoría FASE 1 completa: 14 problemas consolidados (6 críticos, 6 altos, 2 medios) listos para reporte FASE 2
+- Causa raíz del bloqueo principal: barras de acción fixed bottom sin compensar la BottomNavBar (80px, z-50) — la reserva NO se puede completar desde el celular
+- ESPERANDO APROBACIÓN del usuario antes de implementar (FASE 3) — nada se toca sin autorización expresa
