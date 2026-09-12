@@ -566,7 +566,7 @@ export default function BookingsView() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
             onClick={() => !paying && !yapeRemainingPaid && setPayModal(null)}
           >
             <motion.div
@@ -574,7 +574,9 @@ export default function BookingsView() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto"
+              // FIX #12 (FASE 4): 90vh → 85dvh — con el teclado móvil abierto el
+              // contenido sigue alcanzable (dvh refleja el viewport visible)
+              className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal header */}

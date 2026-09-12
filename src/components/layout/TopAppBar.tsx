@@ -67,8 +67,11 @@ export default function TopAppBar() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 bg-cm-surface/90 backdrop-blur-xl border-b border-white/10">
-      <div className="max-w-7xl mx-auto h-full flex items-center justify-between px-3 sm:px-6">
+    // FIX #9 (FASE 4): padding superior para el notch/notch-area de iOS.
+    // La barra crece con env(safe-area-inset-top); la fila de contenido
+    // mantiene su altura de 56/64px justo debajo del área segura.
+    <header className="fixed top-0 left-0 right-0 z-50 pt-[env(safe-area-inset-top,0px)] h-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:h-[calc(4rem+env(safe-area-inset-top,0px))] bg-cm-surface/90 backdrop-blur-xl border-b border-white/10">
+      <div className="max-w-7xl mx-auto h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6">
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
           <img src="/creard-logo.png" alt="CREARD" className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg" />

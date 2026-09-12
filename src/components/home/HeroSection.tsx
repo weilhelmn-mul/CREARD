@@ -348,14 +348,14 @@ export default function HeroSection() {
 
               <div
                 ref={dateScrollRef}
-                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth"
+                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth snap-x"
               >
                 {dateList.map((d, idx) => (
                   <button
                     type="button"
                     key={idx}
                     onClick={() => setSelectedDateIdx(idx)}
-                    className={`flex flex-col items-center px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[72px] flex-shrink-0 ${
+                    className={`flex flex-col items-center px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 min-w-[72px] flex-shrink-0 snap-start ${
                       selectedDateIdx === idx
                         ? 'bg-cm-primary text-cm-on-primary shadow-lg shadow-cm-primary/25 scale-105'
                         : 'bg-cm-surface-container-highest/50 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'

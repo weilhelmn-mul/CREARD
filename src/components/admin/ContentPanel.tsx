@@ -202,7 +202,7 @@ function GalleryPanel({ images }: { images: GalleryImage[] }) {
           <motion.div key={img.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card rounded-xl overflow-hidden group">
             <div className="aspect-video bg-cm-surface-container-highest relative overflow-hidden">
               {img.url ? <img src={img.url} alt={img.title} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-cm-on-surface-variant/30 text-[40px]">image</span></div>}
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 touch-reveal transition-opacity flex items-center justify-center gap-2">
                 <button onClick={() => startEdit(img)} className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"><span className="material-symbols-outlined text-white text-[18px]">edit</span></button>
                 <button onClick={() => handleDelete(img.id)} className="p-2 rounded-full bg-red-500/30 hover:bg-red-500/50 transition-colors"><span className="material-symbols-outlined text-red-300 text-[18px]">delete</span></button>
               </div>
@@ -219,7 +219,7 @@ function GalleryPanel({ images }: { images: GalleryImage[] }) {
       <AnimatePresence>
         {showForm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
-            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[85dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">{editingId ? 'Editar Foto' : 'Agregar Foto'}</h3>
                 <button onClick={() => setShowForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"><span className="material-symbols-outlined text-cm-on-surface-variant">close</span></button>
@@ -316,7 +316,7 @@ function NewsPanel({ news }: { news: NewsItem[] }) {
       <AnimatePresence>
         {showForm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
-            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-lg glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-lg glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[85dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="font-[family-name:var(--font-sora)] font-bold text-lg text-cm-on-surface">{editingId ? 'Editar Noticia' : 'Nueva Noticia'}</h3>
                 <button onClick={() => setShowForm(false)} className="p-1 rounded-full hover:bg-cm-surface-container-highest transition-colors"><span className="material-symbols-outlined text-cm-on-surface-variant">close</span></button>

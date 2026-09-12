@@ -233,7 +233,7 @@ export default function ClientBalanceModal({ stat, onClose }: Props) {
                 {chart.forced && (
                   <p className="text-[10px] text-amber-400/80 mb-2 font-[family-name:var(--font-inter)]">Rango extenso: vista por mes</p>
                 )}
-                <div className="overflow-x-auto no-scrollbar pb-1">
+                <div className="overflow-x-auto scroll-hint-x pb-1">
                   <div className="flex items-end gap-1 min-w-full h-36" style={{ minWidth: `${Math.max(chart.buckets.length * 22, 200)}px` }}>
                     {chart.buckets.map((b) => {
                       const v = metricValue(b)

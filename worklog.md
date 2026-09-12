@@ -450,3 +450,33 @@ Stage Summary:
 - Auditoría FASE 1 completa: 14 problemas consolidados (6 críticos, 6 altos, 2 medios) listos para reporte FASE 2
 - Causa raíz del bloqueo principal: barras de acción fixed bottom sin compensar la BottomNavBar (80px, z-50) — la reserva NO se puede completar desde el celular
 - ESPERANDO APROBACIÓN del usuario antes de implementar (FASE 3) — nada se toca sin autorización expresa
+
+---
+Task ID: 17
+Agent: Super Z (main agent)
+Task: FASE 4 — Implementación controlada de los 14 fixes aprobados (auditoría móvil) + FASE 5 pruebas
+
+Work Log:
+- Usuario aprobó ejecutar el plan completo de 14 fixes ("ejecuta el PLAN DE IMPLEMENTACIÓN PROPUESTO")
+- Fix #1 (CRÍTICO): barras de acción de CourtDetail z-30/40 → z-[60] (encima de la BottomNavBar z-50) + pb safe-area iOS; también barras de UnifiedBookingView y BookingForm con pb-[calc(1rem+env(safe-area-inset-bottom))]
+- Fix #2 (CRÍTICO): handleReservar ahora limpia selectedTime (solo usuarios) → ya no quedan 2 barras fixed apiladas; barra carrito muestra selectedTimeSlot del store
+- Fix #3 (CRÍTICO): override global en globals.css @supports(-webkit-touch-callout) → input/select/textarea 16px en iOS (169 inputs en 20 archivos cubiertos de golpe); PC intacto
+- Fix #4 (CRÍTICO): AdminDashboard root overflow-x-hidden (fin del scroll lateral de página); tabla Reservas → dual render (tabla en md+, tarjetas compactas auto en móvil vía renderCompactBookings extraído); ClientAnalytics/ClientBalanceModal con scroll-hint visible
+- Fix #5: NotificationBanner rediseñado: colapsado por defecto (tira ~52px), posicionado DEBAJO del TopAppBar (top-14/16 + safe-area), z-200 → z-60, lista expandida max-h-[38vh]; el estado colapsado ya no es irrecuperable (antes -translate-y-full lo ocultaba para siempre)
+- Fix #6: Validación Yape con puerta de confirmación: botón Validar abre diálogo (resumen usuario/fecha/monto/método) + checkbox obligatorio "He verificado el comprobante" que habilita "Sí, validar pago"; dialog Rechazar también bottom-sheet + max-h
+- Fix #7: acciones de fila 24px → ~40px (p-2.5 + iconos 18px) en BookingsTable, tarjetas compactas, galería y adelantos retenidos (12 líneas); gap-1 → gap-1.5
+- Fix #8: slots CourtDetail min-h-[46px] + hora 13px + estado 8px → 10px; badges HOY/día 8-9px → 10px; UnifiedBookingView HOY 8px → 10px
+- Fix #9: viewport viewportFit=cover; BottomNavBar con safe-area estructural (nav pb + inner h-20); TopAppBar con pt safe-area; main pt/pb con calc+env; SiteFooter pb-[calc(6.5rem+env)] en móvil (© ya no queda tapado)
+- Fix #10: overlays hover-only con clase .touch-reveal (@media hover:none → opacity 1): ImageUploader, imagen custom CMS, galería ContentPanel
+- Fix #11: tabs admin + sub-tabs (UsersTab/SiteConfigTab) con .scroll-hint-x (fade edges móvil, máscara CSS)
+- Fix #12: 9 modales con max-h-[85dvh]+scroll interno (CourtDetail popup, Pagar Restante, PaymentVoucher, Gasto, Pago adelanto, Extender [tenía overflow-hidden], Equipamiento, Rechazar Pago, ContentPanel x2); viewport interactiveWidget=resizes-content (Android)
+- Fix #13: snap-x/snap-start en miniaturas CourtDetail, tira fechas CourtDetail/UnifiedBookingView/HeroSection, tarjetas TodaysSchedule; unoptimized se CONSERVA (next.config solo permite 2 dominios; quitarlo rompería imágenes externas); imagen principal CourtDetail con priority
+- Fix #14: paymentMethodLabel() (src/lib/paymentMethodLabels.ts) aplicado en CourtDetail/BookingForm/AdminDashboard/BookingsTable; manifest.json start_url / → "/" (antes /admin=404), scope "/" + id; iconos PWA reales generados (192/512/maskable desde logo 1024)
+- tsc: 155 errores (baseline exacto, 0 nuevos); build OK (21.8s)
+- Deploy: push a origin main → Vercel auto-deploy
+- FASE 5: pruebas E2E en producción 320/375/390/430px + 768px tablet + 1440px PC (ver informe final al usuario)
+
+Stage Summary:
+- Los 14 problemas aprobados implementados sin eliminar funcionalidades ni tocar lógica Firebase/precios/horarios/reglas
+- Único cambio de comportamiento: Validar pago Yape requiere ahora confirmación explícita (aprobado como opción A)
+- Pendiente: verificación E2E en producción (320/375/390/430/tablet/PC) e informe final

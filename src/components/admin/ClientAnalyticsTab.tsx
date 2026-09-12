@@ -450,7 +450,7 @@ export default function ClientAnalyticsTab() {
             Ningún cliente coincide con la búsqueda en este periodo.
           </p>
         ) : (
-          <div className="overflow-x-auto no-scrollbar rounded-lg border border-white/10">
+          <div className="overflow-x-auto scroll-hint-x rounded-lg border border-white/10">
             <table className="w-full text-left min-w-[1180px]">
               <thead>
                 <tr className="bg-cm-surface-container-highest/40 border-b border-white/10">

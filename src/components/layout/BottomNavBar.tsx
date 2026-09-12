@@ -25,8 +25,11 @@ export default function BottomNavBar() {
     : baseNavItems
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden h-20 bg-cm-surface/95 backdrop-blur-xl border-t border-white/10">
-      <div className="flex items-center justify-around h-full px-1 pb-[env(safe-area-inset-bottom,0px)]">
+    // FIX #9 (FASE 4): safe-area del home-indicator iOS aplicada en la NAV
+    // (altura total = 80px + env(safe-area-inset-bottom)); antes el padding
+    // iba en el hijo con h-20 fija y comprimía los iconos.
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-cm-surface/95 backdrop-blur-xl border-t border-white/10 pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="flex items-center justify-around h-20 px-1">
         {navItems.map((item) => {
           const isActive = currentView === item.view
           const isAdminItem = item.view === 'admin'

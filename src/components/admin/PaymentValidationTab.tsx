@@ -293,6 +293,12 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
   const [processing, setProcessing] = useState<string | null>(null)
   const [obsDialog, setObsDialog] = useState<{ bookingId: string; action: string } | null>(null)
   const [observation, setObservation] = useState('')
+  // FIX #6 (FASE 4): confirmación explícita antes de validar pagos Yape/Plin.
+  // El sistema no almacena comprobantes (se gestionan por WhatsApp), así que
+  // el admin debe ATTESTAR que verificó el pago antes de que se habilite el
+  // botón "Sí, validar". Evita validaciones accidentales con un tap.
+  const [validateConfirm, setValidateConfirm] = useState<PendingBooking | null>(null)
+  const [validateChecked, setValidateChecked] = useState(false)
 
   const [payments, setPayments] = useState<PaymentRecord[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
@@ -455,11 +461,13 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => handleAction(b.id, 'validate')} disabled={processing === b.id} className="px-3 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
+          {/* FIX #6 (FASE 4): "Validar" ya no valida al instante — abre diálogo
+              de confirmación con casilla de verificación obligatoria */}
+          <button onClick={() => { setValidateConfirm(b); setValidateChecked(false) }} disabled={processing === b.id} className="px-3 py-2.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-semibold hover:bg-green-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
             {processing === b.id ? <div className="w-3.5 h-3.5 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" /> : <span className="material-symbols-outlined text-[14px]">check</span>}
             Validar
           </button>
-          <button onClick={() => { setObsDialog({ bookingId: b.id, action: 'reject' }); setObservation('') }} disabled={processing === b.id} className="px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
+          <button onClick={() => { setObsDialog({ bookingId: b.id, action: 'reject' }); setObservation('') }} disabled={processing === b.id} className="px-3 py-2.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">close</span>
             Rechazar
           </button>
@@ -822,11 +830,56 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
       </div>
 
       {/* --------------------------------------------------------
+          FIX #6 (FASE 4): DIÁLOGO DE CONFIRMACIÓN DE VALIDACIÓN
+          El admin debe declarar que verificó el pago en Yape/Plin
+          (comprobante gestionado por WhatsApp) antes de validar.
+          -------------------------------------------------------- */}
+      {validateConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setValidateConfirm(null)}>
+          <div className="glass-card rounded-2xl p-5 w-full max-w-md max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h4 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-2">Confirmar Validación de Pago</h4>
+            <p className="text-xs text-cm-on-surface-variant mb-3 font-[family-name:var(--font-inter)]">
+              El comprobante se gestiona fuera del sistema (WhatsApp / app del banco). Confirma que ya lo revisaste antes de validar:
+            </p>
+            <div className="rounded-xl bg-cm-surface-container-highest/40 p-3 space-y-1.5 mb-3 text-xs">
+              <div className="flex justify-between gap-3"><span className="text-cm-on-surface-variant">Usuario</span><span className="text-cm-on-surface font-medium text-right truncate">{validateConfirm.user_email || validateConfirm.user_id?.substring(0, 8)}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-cm-on-surface-variant">Fecha</span><span className="text-cm-on-surface font-medium">{fmtDateShort(validateConfirm.date)} · {validateConfirm.start_time} - {validateConfirm.end_time}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-cm-on-surface-variant">Método</span><span className="text-cm-on-surface font-medium">{validateConfirm.payment_method || 'Yape QR'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-cm-on-surface-variant">Monto</span><span className="text-[#00ff41] font-bold">S/ {(validateConfirm.remaining_amount != null && validateConfirm.remaining_payment_status ? validateConfirm.remaining_amount : validateConfirm.advance_amount || validateConfirm.total_price)?.toFixed(2)}</span></div>
+            </div>
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-white/10 bg-cm-surface-container/40 cursor-pointer select-none mb-4">
+              <input
+                type="checkbox"
+                checked={validateChecked}
+                onChange={(e) => setValidateChecked(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-[#00ff41] shrink-0"
+              />
+              <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">
+                He verificado el comprobante del pago (monto y número de operación) en la app Yape/Plin o canal correspondiente.
+              </span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setValidateConfirm(null)} className="px-4 py-2.5 text-cm-on-surface-variant text-sm hover:text-cm-on-surface transition-colors font-[family-name:var(--font-inter)]">Volver a revisar</button>
+              <button
+                onClick={() => { const id = validateConfirm.id; setValidateConfirm(null); handleAction(id, 'validate') }}
+                disabled={!validateChecked || processing === validateConfirm.id}
+                className="px-4 py-2.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-sm font-semibold hover:bg-green-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-[family-name:var(--font-inter)] flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                Sí, validar pago
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------
           REJECT OBSERVATION DIALOG
           -------------------------------------------------------- */}
       {obsDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setObsDialog(null)}>
-          <div className="glass-card rounded-2xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+        // FIX #12 (FASE 4): bottom-sheet + max-h — el textarea queda alcanzable con teclado abierto
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setObsDialog(null)}>
+          <div className="glass-card rounded-2xl p-5 w-full max-w-md max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h4 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-3">Rechazar Pago</h4>
             <p className="text-sm text-cm-on-surface-variant mb-3 font-[family-name:var(--font-inter)]">Agrega una observacion o motivo del rechazo:</p>
             <textarea value={observation} onChange={e => setObservation(e.target.value)} className="w-full h-24 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm p-3 resize-none focus:outline-none focus:border-red-500/50 font-[family-name:var(--font-inter)]" placeholder="Motivo del rechazo..." />

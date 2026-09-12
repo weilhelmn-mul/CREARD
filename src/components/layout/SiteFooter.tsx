@@ -36,7 +36,10 @@ export default function SiteFooter() {
 
   return (
     <footer className="bg-cm-surface-container-low border-t border-cm-border/50 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 py-10 md:py-14">
+      {/* FIX #9 (FASE 4): en móvil el footer reserva espacio para la
+          BottomNavBar (80px) + safe-area, así la última línea (© CREARD)
+          ya no queda tapada. En PC md:py-14 sin cambios. */}
+      <div className="max-w-7xl mx-auto px-4 pt-10 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:py-14">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
 
           {/* ── Columna 1: Sobre CREARD ── */}

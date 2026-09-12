@@ -159,7 +159,7 @@ export default function SiteConfigTab() {
   return (
     <div className="space-y-6">
       {/* Sub-tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1 scroll-hint-x">
         {subTabs.map((tab) => (
           <button
             key={tab.key}

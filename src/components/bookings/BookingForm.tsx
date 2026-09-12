@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { motion } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
+import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
 
 /* ───────────── Interfaces ───────────── */
@@ -830,8 +831,9 @@ export default function BookingForm() {
                   </span>
                   <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
                     Pagado con{' '}
-                    <span className="capitalize font-semibold text-cm-on-surface">
-                      {bookingDataList[0].paymentMethod}
+                    {/* FIX #14 (FASE 4): etiqueta legible en vez del valor crudo de BD */}
+                    <span className="font-semibold text-cm-on-surface">
+                      {paymentMethodLabel(bookingDataList[0].paymentMethod)}
                     </span>
                   </span>
                 </div>
@@ -870,8 +872,9 @@ export default function BookingForm() {
 
       {/* ─── Bottom Submit Bar (form only) ─── */}
       {!success && formStep === 'form' && (
+        // FIX #1/#9 (FASE 4): padding inferior con safe-area iOS
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
-          <div className="max-w-lg mx-auto p-4">
+          <div className="max-w-lg mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">

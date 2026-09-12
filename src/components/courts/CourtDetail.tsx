@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useAppStore, type User } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthHeaders } from '@/lib/auth-helpers'
+import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
 
 /* ───────────── Interfaces ───────────── */
 
@@ -285,6 +286,8 @@ export default function CourtDetail() {
     removeSelectedCourtId,
     setSelectedDate,
     setSelectedTimeSlot,
+    // FIX #2 (FASE 4): se muestra en la barra carrito cuando la selección del slot ya se limpió
+    selectedTimeSlot,
   } = useAppStore()
 
   const [court, setCourt] = useState<Court | null>(null)
@@ -455,7 +458,12 @@ export default function CourtDetail() {
     setSelectedDate(formatDateISO(selectedDate))
     setSelectedTimeSlot(`${selectedTime} - ${endTime}`)
     addSelectedCourtId(selectedCourtId)
-  }, [selectedTime, selectedCourtId, selectedDate, court, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
+    // FIX #2 (FASE 4): al agregar al carrito se limpia la selección del slot
+    // para que NO queden las dos barras fixed montadas a la vez (barra
+    // "Agregar" z-30 + barra "carrito" z-40 apiladas sobre bottom-0).
+    // Solo para usuarios: el flujo admin conserva selectedTime.
+    if (!isAdmin) setSelectedTime(null)
+  }, [selectedTime, selectedCourtId, selectedDate, court, isAdmin, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
 
   // Navigate to booking form with all selected courts
   const handleGoToBooking = useCallback(() => {
@@ -552,7 +560,9 @@ export default function CourtDetail() {
   const endTimeStr = selectedTime ? `${String(endHour).padStart(2, '0')}:00` : ''
 
   return (
-    <div className="pb-28">
+    // FIX #1 (FASE 4): pb-32 cubre la barra de acciones fija (~90px) y deja
+    // margen; antes pb-28 dejaba el final del contenido justo bajo la barra.
+    <div className="pb-32 md:pb-28">
       {/* ─── Image Gallery ─── */}
       <div className="relative">
         <div className="relative h-64 md:h-80 overflow-hidden">
@@ -561,7 +571,10 @@ export default function CourtDetail() {
             alt={court.name}
             fill
             className="object-cover transition-all duration-500"
+            // FIX #13: se conserva unoptimized (next.config solo permite 2
+            // dominios remotos; quitarlo rompería imágenes externas)
             unoptimized
+            priority
           />
           <div className="absolute inset-0 bg-gradient-to-t from-cm-background via-cm-background/30 to-transparent" />
 
@@ -609,12 +622,14 @@ export default function CourtDetail() {
 
         {/* Thumbnails */}
         {images.length > 1 && (
-          <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar">
+          // FIX #13 (FASE 4): snap-x para que la tira de miniaturas se alinee
+          // al soltar el deslizamiento en móvil
+          <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar snap-x">
             {images.map((img, idx) => (
               <button type="button"
                 key={idx}
                 onClick={() => setActiveImageIdx(idx)}
-                className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden transition-all duration-200 ${
+                className={`relative flex-shrink-0 snap-start w-16 h-16 rounded-lg overflow-hidden transition-all duration-200 ${
                   idx === activeImageIdx
                     ? 'ring-2 ring-[#00ff41] ring-offset-2 ring-offset-cm-background'
                     : 'opacity-60 hover:opacity-100'
@@ -761,7 +776,7 @@ export default function CourtDetail() {
             </span>
             Disponibilidad
           </h2>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 snap-x">
             {next7Days.map((date) => {
               const dateStr = formatDateISO(date)
               const isSelected = dateStr === formatDateISO(selectedDate)
@@ -770,7 +785,7 @@ export default function CourtDetail() {
                 <button type="button"
                   key={dateStr}
                   onClick={() => handleSelectDate(date)}
-                  className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl min-w-[68px] transition-all duration-200 flex-shrink-0 ${
+                  className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl min-w-[68px] transition-all duration-200 flex-shrink-0 snap-start ${
                     isSelected
                       ? 'bg-[#00ff41]/10 border border-[#00ff41]/30'
                       : 'bg-cm-surface-container-highest/40 border border-transparent hover:border-white/10'
@@ -790,8 +805,9 @@ export default function CourtDetail() {
                   >
                     {date.getDate()}
                   </span>
+                  {/* FIX #8 (FASE 4): text-[9px] → text-[10px] legible */}
                   <span
-                    className={`text-[9px] font-[family-name:var(--font-inter)] ${
+                    className={`text-[10px] font-[family-name:var(--font-inter)] ${
                       isSelected ? 'text-[#00ff41]' : 'text-cm-on-surface-variant'
                     }`}
                   >
@@ -875,11 +891,13 @@ export default function CourtDetail() {
                   key={slot}
                   disabled={disabled}
                   onClick={() => handleSelectSlot(slot)}
-                  className={`py-2.5 px-1 rounded-lg text-center transition-all duration-200 font-[family-name:var(--font-inter)] ${getSlotClasses(slot)}`}
+                  // FIX #8 (FASE 4): min-h 46px (objetivo táctil) y estado
+                  // legible 8px → 10px. Antes los slots medían 66×38px.
+                  className={`py-2.5 px-1 min-h-[46px] flex flex-col items-center justify-center rounded-lg text-center transition-all duration-200 font-[family-name:var(--font-inter)] ${getSlotClasses(slot)}`}
                   title={label || soonLabel || undefined}
                 >
-                  <span className="text-xs font-medium block">{slot}</span>
-                  {(label || soonLabel) && <span className="text-[8px] leading-tight block mt-0.5 opacity-80">{label || soonLabel}</span>}
+                  <span className="text-[13px] font-medium block leading-tight">{slot}</span>
+                  {(label || soonLabel) && <span className="text-[10px] leading-tight block mt-0.5 opacity-90">{label || soonLabel}</span>}
                 </button>
               )
             })}
@@ -892,9 +910,12 @@ export default function CourtDetail() {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-0 left-0 right-0 z-30 bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
+          // FIX #1 (FASE 4): z-[60] — la barra queda ENCIMA de la BottomNavBar
+          // (z-50) mientras hay una selección activa; antes (z-30) la nav
+          // pintaba encima y el tap al centro activaba la nav, no el CTA.
+          className="fixed bottom-0 left-0 right-0 z-[60] bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
         >
-          <div className="max-w-4xl mx-auto p-4">
+          <div className="max-w-4xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="glass-card rounded-2xl p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">
@@ -921,9 +942,10 @@ export default function CourtDetail() {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-[#00ff41]/30"
+          // FIX #1 (FASE 4): z-[60] sobre la BottomNavBar (z-50)
+          className="fixed bottom-0 left-0 right-0 z-[60] bg-cm-background/95 backdrop-blur-xl border-t border-[#00ff41]/30"
         >
-          <div className="max-w-4xl mx-auto p-4">
+          <div className="max-w-4xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="glass-card rounded-2xl p-4 border border-[#00ff41]/20">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -964,8 +986,11 @@ export default function CourtDetail() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  {/* FIX #2 (FASE 4): usa selectedTimeSlot del store — tras
+                      agregar al carrito selectedTime se limpia y antes esta
+                      línea quedaba vacía */}
                   <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    {selectedTime} - {endTimeStr}
+                    {selectedTimeSlot || (selectedTime ? `${selectedTime} - ${endTimeStr}` : '')}
                   </p>
                 </div>
                 <button type="button"
@@ -986,9 +1011,10 @@ export default function CourtDetail() {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-0 left-0 right-0 z-30 bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
+          // FIX #1 (FASE 4): z-[60] sobre la BottomNavBar (z-50)
+          className="fixed bottom-0 left-0 right-0 z-[60] bg-cm-background/95 backdrop-blur-xl border-t border-white/10"
         >
-          <div className="max-w-4xl mx-auto p-4">
+          <div className="max-w-4xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="glass-card rounded-2xl p-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Slot disponible</p>
@@ -1015,7 +1041,7 @@ export default function CourtDetail() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 overflow-y-auto"
             onClick={handleClosePopup}
           >
             {/* Backdrop */}
@@ -1026,7 +1052,9 @@ export default function CourtDetail() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 40, scale: 0.95 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-md glass-card rounded-2xl p-5 border border-white/15 shadow-2xl"
+              // FIX #12 (FASE 4): max-h + scroll interno — antes el contenido
+              // quedaba inalcanzable si excedía el viewport o el teclado lo recortaba
+              className="relative w-full max-w-md glass-card rounded-2xl p-5 border border-white/15 shadow-2xl max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close */}
@@ -1152,7 +1180,8 @@ export default function CourtDetail() {
                           : 'account_balance'}
                       </span>
                       <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] capitalize">
-                        {popupBooking.paymentMethod}
+                        {/* FIX #14 (FASE 4): etiqueta legible en vez del valor crudo */}
+                        {paymentMethodLabel(popupBooking.paymentMethod)}
                       </span>
                     </div>
                   )}

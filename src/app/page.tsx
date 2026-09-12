@@ -162,7 +162,10 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-cm-background">
       <AuthInitializer />
       {!isFullPage && <TopAppBar />}
-      <main className={`flex-1 ${isFullPage ? '' : 'pt-16 pb-24 md:pb-8'}`}>
+      {/* FIX #9 (FASE 4): pt/pb calculados con safe-areas iOS — el contenido
+          nunca queda bajo el TopAppBar (notch) ni bajo la BottomNavBar (80px
+          + home-indicator). En PC md:pb-8 como antes. */}
+      <main className={`flex-1 ${isFullPage ? '' : 'pt-[calc(4rem+env(safe-area-inset-top,0px))] pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-8'}`}>
         <ViewRouter />
       </main>
       {!isFullPage && <BottomNavBar />}

@@ -368,7 +368,7 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
             onClick={(e) => {
               if (e.target === e.currentTarget) onClose();
             }}
@@ -379,7 +379,9 @@ export default function PaymentVoucher({ data, open, onClose }: PaymentVoucherPr
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="glass-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto relative"
+              // FIX #12 (FASE 4): 90vh → 85dvh + overlay con scroll — con el
+              // teclado abierto el comprobante completo sigue alcanzable
+              className="glass-card rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto relative"
             >
               {/* Close button (hidden in print) */}
               <button

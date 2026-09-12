@@ -279,3 +279,61 @@
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.35; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   FIX #3 (FASE 4): Prevenir auto-zoom de iOS Safari al enfocar
+   inputs/selects/textareas con font-size < 16px.
+   Solo aplica en navegadores WebKit táctiles (iPhone/iPad);
+   en PC (Chrome/Firefox/Edge) no tiene ningún efecto.
+   ══════════════════════════════════════════════════════════════ */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX #10 (FASE 4): Fallback táctil para overlays/acciones que
+   antes solo eran accesibles con hover. En pantallas táctiles
+   (sin hover) el overlay siempre es visible.
+   Uso: añadir la clase junto a `opacity-0 group-hover:opacity-100`.
+   ══════════════════════════════════════════════════════════════ */
+@media (hover: none) {
+  .touch-reveal {
+    opacity: 1 !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX #11 (FASE 4): Indicador visual de scroll horizontal.
+   Desvanece los bordes de la tira para insinuar que hay más
+   contenido al deslizar. Solo en pantallas < 768px (móvil);
+   en PC las tiras normalmente caben completas.
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  .scroll-hint-x {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 14px,
+      black calc(100% - 14px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 14px,
+      black calc(100% - 14px),
+      transparent 100%
+    );
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX #9 (FASE 4): Safe-areas iOS — se aplican directamente con
+   env() en BottomNavBar / TopAppBar / SiteFooter / page.tsx y en
+   las barras de acción del flujo de reserva. En navegadores sin
+   soporte env() devuelve 0px de forma segura.
+   ══════════════════════════════════════════════════════════════ */

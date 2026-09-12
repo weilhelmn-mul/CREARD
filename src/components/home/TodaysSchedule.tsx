@@ -158,7 +158,7 @@ export default function TodaysSchedule() {
           </motion.div>
         ) : (
           <div className="glass-card rounded-2xl p-4 md:p-6 overflow-hidden">
-            <div className="overflow-x-auto no-scrollbar -mx-2 px-2">
+            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 snap-x">
               <div className="flex gap-3 pb-2 min-w-max">
                 {bookings.map((booking, index) => (
                   <motion.div
@@ -170,7 +170,7 @@ export default function TodaysSchedule() {
                       delay: index * 0.08,
                       ease: [0.25, 0.4, 0.25, 1],
                     }}
-                    className="flex-shrink-0 w-48 md:w-56 p-3 md:p-4 rounded-xl bg-cm-surface-container-highest/50 border border-white/5 hover:border-cm-primary/20 transition-all duration-200 group"
+                    className="flex-shrink-0 snap-start w-48 md:w-56 p-3 md:p-4 rounded-xl bg-cm-surface-container-highest/50 border border-white/5 hover:border-cm-primary/20 transition-all duration-200 group"
                   >
                     {/* Time */}
                     <div className="flex items-center gap-2 mb-3">

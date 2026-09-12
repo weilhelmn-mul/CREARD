@@ -608,14 +608,14 @@ export default function UnifiedBookingView() {
               <span className="material-symbols-outlined text-[16px] text-[#00ff41]">calendar_month</span>
               Fecha
             </h2>
-            <div ref={dateScrollRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+            <div ref={dateScrollRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x -mx-4 px-4">
               {availableDays.map((day) => {
                 const iso = formatDateISO(day)
                 const isActive = selectedDate === iso
                 const isTodayDate = isToday(day)
                 return (
                   <button key={iso} type="button" onClick={() => handleDateSelect(day)}
-                    className={`flex-shrink-0 w-[72px] py-2.5 rounded-xl text-center transition-all duration-200 border ${
+                    className={`flex-shrink-0 snap-start w-[72px] py-2.5 rounded-xl text-center transition-all duration-200 border ${
                       isActive
                         ? 'bg-[#00ff41]/15 border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.1)]'
                         : 'bg-cm-surface-container-highest/40 border-transparent hover:border-white/10'
@@ -630,7 +630,8 @@ export default function UnifiedBookingView() {
                       {MONTHS_ES[day.getMonth()]}
                     </p>
                     {isTodayDate && (
-                      <span className="block mt-0.5 text-[8px] font-bold text-[#00ff41] font-[family-name:var(--font-inter)]">HOY</span>
+                      // FIX #8 (FASE 4): badge HOY legible 8px → 10px
+                      <span className="block mt-0.5 text-[10px] font-bold text-[#00ff41] font-[family-name:var(--font-inter)]">HOY</span>
                     )}
                   </button>
                 )
@@ -1196,8 +1197,9 @@ export default function UnifiedBookingView() {
 
       {/* ═══ BOTTOM ACTION BAR ═══ */}
       {formStep === 'select' && (
+        // FIX #1/#9 (FASE 4): padding inferior con safe-area iOS
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
-          <div className="max-w-2xl mx-auto p-4">
+          <div className="max-w-2xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             {totalItems > 0 ? (
               <>
                 <div className="flex items-center justify-between mb-3">
@@ -1233,8 +1235,9 @@ export default function UnifiedBookingView() {
 
       {/* ═══ SUMMARY BOTTOM BAR ═══ */}
       {formStep === 'summary' && (
+        // FIX #1/#9 (FASE 4): padding inferior con safe-area iOS
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-cm-background/95 backdrop-blur-xl border-t border-white/10">
-          <div className="max-w-2xl mx-auto p-4">
+          <div className="max-w-2xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Monto a pagar</p>

@@ -369,7 +369,10 @@ interface NotificationBannerProps {
 }
 
 export function NotificationBanner({ alerts, onDismiss, onClearAll }: NotificationBannerProps) {
-  const [expanded, setExpanded] = useState(true)
+  // FIX #5 (FASE 4): colapsado por defecto. Antes: useState(true) y el estado
+  // colapsado usaba -translate-y-full (banner 100% oculto e irrecuperable).
+  // Ahora colapsado = tira compacta visible (~52px) que se puede expandir.
+  const [expanded, setExpanded] = useState(false)
 
   if (alerts.length === 0) return null
 
@@ -377,12 +380,13 @@ export function NotificationBanner({ alerts, onDismiss, onClearAll }: Notificati
 
   return (
     <div
-      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 ${
-        expanded ? 'translate-y-0' : '-translate-y-full'
-      }`}
+      // FIX #5 (FASE 4): debajo del TopAppBar (top-14/16 + safe-area iOS) y
+      // z-[60] — antes fixed top-0 z-[200] tapaba el header y ocupaba ~38%
+      // de la pantalla en móvil. La lista expandida tiene tope 38vh.
+      className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-[calc(4rem+env(safe-area-inset-top,0px))] left-0 right-0 z-[60] transition-all duration-300"
     >
       <div
-        className={`mx-4 mt-2 rounded-b-2xl rounded-t-lg shadow-2xl border backdrop-blur-xl ${
+        className={`mx-3 sm:mx-4 rounded-2xl shadow-2xl border backdrop-blur-xl ${
           hasExpired
             ? 'bg-red-950/90 border-red-500/40'
             : 'bg-amber-950/90 border-amber-500/40'
@@ -433,7 +437,9 @@ export function NotificationBanner({ alerts, onDismiss, onClearAll }: Notificati
 
         {/* Alert list */}
         {expanded && (
-          <div className="px-4 pb-3 space-y-2 max-h-48 overflow-y-auto">
+          // FIX #5 (FASE 4): max-h-48 → max-h-[38vh] — en pantallas pequeñas
+          // la lista nunca acapara la pantalla
+          <div className="px-4 pb-3 space-y-2 max-h-[38vh] overflow-y-auto">
             {alerts.map((alert) => (
               <div
                 key={`${alert.bookingId}-${alert.alertType}`}

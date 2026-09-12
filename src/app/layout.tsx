@@ -42,6 +42,13 @@ export const viewport: Viewport = {
   themeColor: "#6366f1",
   width: "device-width",
   initialScale: 1,
+  // FIX #9 (FASE 4): viewport-fit=cover habilita env(safe-area-inset-*) en iOS
+  // (notch / home indicator). Sin esto, los env() devuelven 0px.
+  viewportFit: "cover",
+  // FIX #12 (FASE 4): en Android el viewport se reduce cuando abre el teclado,
+  // de modo que las barras fixed y los modales no quedan tapados por él.
+  // iOS Safari lo ignora (usa dvh + scroll interno en modales).
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

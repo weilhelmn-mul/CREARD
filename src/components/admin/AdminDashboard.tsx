@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from '@/hooks/use-toast'
 import { useSiteSettings, type CustomSection, type ActivePromotion, type HeroBanner, type NewsItem } from '@/context/SiteSettingsContext'
 import { getAuthHeaders, getFreshAuthHeaders } from '@/lib/auth-helpers'
+import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
 import { cachedFetch, cachedFetchFresh, invalidateCache, invalidateAllCaches } from '@/lib/cache'
 import { EditModal, FormField, ArrayField } from '@/components/home/SectionEditor'
 import UsersTab from '@/components/admin/UsersTab'
@@ -305,7 +306,7 @@ function SortableSectionCard({
           <span className="material-symbols-outlined text-[16px]">{visible ? 'visibility' : 'visibility_off'}</span>
         </button>
         <button type="button" onClick={onEdit} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Editar">
-          <span className="material-symbols-outlined text-[16px]">edit</span>
+          <span className="material-symbols-outlined text-[18px]">edit</span>
         </button>
         {isCustom && onDelete && (
           <button type="button" onClick={onDelete} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar">
@@ -654,7 +655,7 @@ function ContentTab() {
           {currentUrl && (
             <div className="relative group rounded-xl overflow-hidden border border-white/10">
               <img src={currentUrl} alt={label} className="w-full h-32 object-cover" />
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 touch-reveal transition-opacity flex items-center justify-center gap-2">
                 <button type="button" onClick={() => {
                   if (path && editForm) updateField(path, '')
                   onUpload?.('')
@@ -854,7 +855,7 @@ function ContentTab() {
                         <span className="material-symbols-outlined text-[16px]">{promo.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
                       <button type="button" onClick={() => { setEditingPromo(promo); setPromoForm({ ...promo }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
-                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
                       </button>
                       <button type="button" onClick={() => deletePromo(promo.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -903,7 +904,7 @@ function ContentTab() {
                         <span className="material-symbols-outlined text-[16px]">{banner.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
                       <button type="button" onClick={() => { setEditingBanner(banner); setBannerForm({ ...banner }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
-                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
                       </button>
                       <button type="button" onClick={() => deleteBanner(banner.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -963,7 +964,7 @@ function ContentTab() {
                         <span className="material-symbols-outlined text-[16px]">{newsItem.active ? 'toggle_on' : 'toggle_off'}</span>
                       </button>
                       <button type="button" onClick={() => { setEditingNews(newsItem); setNewsForm({ ...newsItem }) }} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-cm-primary hover:bg-cm-primary/10 transition-colors">
-                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
                       </button>
                       <button type="button" onClick={() => deleteNews(newsItem.id)} className="p-1.5 rounded-lg text-cm-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <span className="material-symbols-outlined text-[16px]">delete</span>
@@ -1240,7 +1241,7 @@ function ContentTab() {
                             const items = [...(customForm.items || [])]
                             items[idx] = { ...items[idx], image: '' }
                             setCustomForm({ ...customForm, items })
-                          }} className="absolute top-1 right-1 p-0.5 rounded bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                          }} className="absolute top-1 right-1 p-2 rounded bg-red-500/80 text-white opacity-0 group-hover:opacity-100 touch-reveal transition-opacity">
                             <span className="material-symbols-outlined text-[12px]">close</span>
                           </button>
                         </div>
@@ -4119,11 +4120,152 @@ export default function AdminDashboard() {
     )
   }
 
+  // FIX #4 (FASE 4): lista de reservas en modo compacto (tarjetas) extraída
+  // a un helper para reutilizarla en el toggle manual de vista Y como
+  // fallback automático de la tabla en móviles (la tabla ~824px no cabe).
+  // FIX #7 (FASE 4): botones de acción aquí son ≥40px (p-2.5 + icono 18px).
+  const renderCompactBookings = () => (
+                <div className="space-y-2">
+                  {paginatedBookings.map((b, i) => {
+                    const st = statusConfig[b.status] || statusConfig.reserved
+                    const isCCompleted = b.status === 'completed'
+                    const calertLv = getAlertLevel(b.id)
+                    const compactBorder = isCCompleted
+                      ? 'border-green-400/40 shadow-[0_0_12px_rgba(34,197,94,0.1),0_0_3px_rgba(34,197,94,0.25)] animate-glow-green-row relative overflow-hidden'
+                      : calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
+                    return (
+                      <motion.div
+                        key={b.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
+                        className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
+                      >
+                        {isCCompleted && (
+                          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
+                        )}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                          {/* Date & Time */}
+                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
+                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
+                            <div>
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
+                                {b.recurringGroupId && (
+                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
+                            </div>
+                          </div>
+                          {/* Court */}
+                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
+                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
+                              {b.courtIds && b.courtIds.length > 1
+                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+                                : (b.court?.name || 'N/A')}
+                            </span>
+                          </div>
+                          {/* Client */}
+                          <div className="flex-1 min-w-0 hidden md:block">
+                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
+                          </div>
+                          {/* Status + Price + Action */}
+                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
+                            {b.recurringGroupId && (
+                              <button type="button"
+                                onClick={() => openSeriesModal(b.recurringGroupId!)}
+                                className="p-2.5 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+                                title="Ver serie recurrente"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">repeat</span>
+                              </button>
+                            )}
+                            {b.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
+                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                                {st.label}
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                                {st.label}
+                              </span>
+                            )}
+                            {b.paymentMethod && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex"
+                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
+                              >
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
+                                <span>{paymentMethodLabel(b.paymentMethod)}</span>
+                              </span>
+                            )}
+                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
+                            {/* B8 FIX: Always show payment button */}
+                            <button type="button"
+                              onClick={() => openAdvanceModal(b)}
+                              className="p-2.5 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">payments</span>
+                            </button>
+                            {b.status === 'reserved' && (
+                              <button type="button"
+                                onClick={() => openExtendModal(b)}
+                                className="p-2.5 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+                                title="Extender tiempo"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">schedule</span>
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button type="button"
+                                onClick={() => openEditModal(b)}
+                                className="p-2.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                title="Editar reserva"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                            )}
+                            <select
+                              value={b.status}
+                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
+                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            >
+                              <option value="reserved">Reservado</option>
+                              <option value="completed">Completo</option>
+                              <option value="cancelled">Cancelado</option>
+                            </select>
+                            {isSuperAdmin && (
+                              <button type="button"
+                                onClick={() => handleDeleteBooking(b.id)}
+                                className="p-2.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                title="Eliminar permanentemente"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+  )
+
   /* ═══════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════ */
   return (
-    <div className="px-4 py-6 pb-28">
+    // FIX #4 (FASE 4): overflow-x-hidden evita el scroll lateral de la
+    // PÁGINA (antes 445px de ancho vs 320px del viewport); los
+    // contenedores anchos hacen scroll dentro de sí mismos.
+    <div className="px-4 py-6 pb-28 overflow-x-hidden">
       {/* Notification Banner - always visible */}
       <NotificationBanner
         alerts={bookingAlerts}
@@ -4156,7 +4298,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
               title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
             >
-              <span className="material-symbols-outlined text-[16px]">schedule</span>
+              <span className="material-symbols-outlined text-[18px]">schedule</span>
               <span className="text-[11px] font-bold font-[family-name:var(--font-inter)]">{use12hFormat ? '12h' : '24h'}</span>
             </button>
           {notifSettings.enabled && (
@@ -4172,7 +4314,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar scroll-hint-x">
           {adminTabs.map((tab) => {
             // Alerta visual: la pestaña Pagos cambia de color y muestra un badge
             // cuando hay pagos pendientes de validación por el administrador.
@@ -4419,20 +4561,27 @@ export default function AdminDashboard() {
                   )}
                 </div>
               ) : viewMode === 'table' ? (
-                /* ─── TABLE MODE ─── */
-                <BookingsTable
-                  bookings={paginatedBookings}
-                  getAlertLevel={getAlertLevel}
-                  openSeriesModal={openSeriesModal}
-                  openAdvanceModal={openAdvanceModal}
-                  handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
-                  onShowEquipDetail={setShowEquipDetail}
-                  isSuperAdmin={isSuperAdmin}
-                  onDeleteBooking={handleDeleteBooking}
-                  use12hFormat={use12hFormat}
-                  onExtendTime={openExtendModal}
-                  onEditTime={isSuperAdmin ? openEditModal : undefined}
-                />
+                /* ─── TABLE MODE ─── FIX #4 (FASE 4): en desktop se conserva la
+                   tabla tal cual; en móvil (<768px) la tabla de ~824px se
+                   sustituye automáticamente por las tarjetas compactas. */
+                <>
+                  <div className="hidden md:block">
+                    <BookingsTable
+                      bookings={paginatedBookings}
+                      getAlertLevel={getAlertLevel}
+                      openSeriesModal={openSeriesModal}
+                      openAdvanceModal={openAdvanceModal}
+                      handleUpdateStatus={handleStatusChangeWithAdvanceCheck}
+                      onShowEquipDetail={setShowEquipDetail}
+                      isSuperAdmin={isSuperAdmin}
+                      onDeleteBooking={handleDeleteBooking}
+                      use12hFormat={use12hFormat}
+                      onExtendTime={openExtendModal}
+                      onEditTime={isSuperAdmin ? openEditModal : undefined}
+                    />
+                  </div>
+                  <div className="md:hidden">{renderCompactBookings()}</div>
+                </>
               ) : viewMode === 'gallery' ? (
                 /* ─── GALLERY MODE ─── */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -4516,7 +4665,7 @@ export default function AdminDashboard() {
                                 title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
                               >
                                 {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
-                                <span>{b.paymentMethod}</span>
+                                <span>{paymentMethodLabel(b.paymentMethod)}</span>
                               </span>
                             )}
                           </div>
@@ -4540,10 +4689,10 @@ export default function AdminDashboard() {
                             {b.recurringGroupId && (
                               <button type="button"
                                 onClick={() => openSeriesModal(b.recurringGroupId!)}
-                                className="p-1.5 rounded-lg bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-colors flex-shrink-0"
+                                className="p-2.5 rounded-lg bg-cm-primary/10 text-cm-primary hover:bg-cm-primary/20 transition-colors flex-shrink-0"
                                 title="Ver serie recurrente"
                               >
-                                <span className="material-symbols-outlined text-[16px]">repeat</span>
+                                <span className="material-symbols-outlined text-[18px]">repeat</span>
                               </button>
                             )}
                             <select
@@ -4558,36 +4707,36 @@ export default function AdminDashboard() {
                             {/* B8 FIX: Always show payment button (not just when remainingAmount > 0) */}
                             <button type="button"
                               onClick={() => openAdvanceModal(b)}
-                              className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
+                              className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-400/20 transition-colors flex-shrink-0"
                               title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
                             >
-                              <span className="material-symbols-outlined text-[16px]">payments</span>
+                              <span className="material-symbols-outlined text-[18px]">payments</span>
                             </button>
                             {b.status === 'reserved' && (
                               <button type="button"
                                 onClick={() => openExtendModal(b)}
-                                className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-400/20 transition-colors flex-shrink-0"
+                                className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-400/20 transition-colors flex-shrink-0"
                                 title="Extender tiempo"
                               >
-                                <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                <span className="material-symbols-outlined text-[18px]">schedule</span>
                               </button>
                             )}
                             {isSuperAdmin && (
                               <button type="button"
                                 onClick={() => openEditModal(b)}
-                                className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-400/20 transition-colors flex-shrink-0"
+                                className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-400/20 transition-colors flex-shrink-0"
                                 title="Editar reserva"
                               >
-                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
                               </button>
                             )}
                             {isSuperAdmin && (
                               <button type="button"
                                 onClick={() => handleDeleteBooking(b.id)}
-                                className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-400/20 transition-colors flex-shrink-0"
+                                className="p-2.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-400/20 transition-colors flex-shrink-0"
                                 title="Eliminar permanentemente"
                               >
-                                <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                                <span className="material-symbols-outlined text-[18px]">delete_forever</span>
                               </button>
                             )}
                           </div>
@@ -4598,137 +4747,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 /* ─── COMPACT MODE ─── */
-                <div className="space-y-2">
-                  {paginatedBookings.map((b, i) => {
-                    const st = statusConfig[b.status] || statusConfig.reserved
-                    const isCCompleted = b.status === 'completed'
-                    const calertLv = getAlertLevel(b.id)
-                    const compactBorder = isCCompleted
-                      ? 'border-green-400/40 shadow-[0_0_12px_rgba(34,197,94,0.1),0_0_3px_rgba(34,197,94,0.25)] animate-glow-green-row relative overflow-hidden'
-                      : calertLv === 'expired' ? 'border-red-500/60 animate-pulse' : calertLv === 'warning' ? 'border-amber-500/60' : ''
-                    return (
-                      <motion.div
-                        key={b.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.2) }}
-                        className={`glass-card rounded-xl px-4 py-3 hover:border-white/15 transition-all duration-200 ${compactBorder}`}
-                      >
-                        {isCCompleted && (
-                          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
-                        )}
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                          {/* Date & Time */}
-                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
-                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
-                            <div>
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
-                                {b.recurringGroupId && (
-                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
-                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
-                                  </button>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
-                            </div>
-                          </div>
-                          {/* Court */}
-                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
-                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
-                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
-                              {b.courtIds && b.courtIds.length > 1
-                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
-                                : (b.court?.name || 'N/A')}
-                            </span>
-                          </div>
-                          {/* Client */}
-                          <div className="flex-1 min-w-0 hidden md:block">
-                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
-                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
-                          </div>
-                          {/* Status + Price + Action */}
-                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
-                            {b.recurringGroupId && (
-                              <button type="button"
-                                onClick={() => openSeriesModal(b.recurringGroupId!)}
-                                className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
-                                title="Ver serie recurrente"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">repeat</span>
-                              </button>
-                            )}
-                            {b.status === 'completed' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
-                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
-                                {st.label}
-                              </span>
-                            ) : (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                                {st.label}
-                              </span>
-                            )}
-                            {b.paymentMethod && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex"
-                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
-                              >
-                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
-                                <span>{b.paymentMethod}</span>
-                              </span>
-                            )}
-                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
-                            {/* B8 FIX: Always show payment button */}
-                            <button type="button"
-                              onClick={() => openAdvanceModal(b)}
-                              className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
-                              title={b.remainingAmount > 0 ? 'Registrar pago' : 'Registrar pago adicional'}
-                            >
-                              <span className="material-symbols-outlined text-[14px]">payments</span>
-                            </button>
-                            {b.status === 'reserved' && (
-                              <button type="button"
-                                onClick={() => openExtendModal(b)}
-                                className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
-                                title="Extender tiempo"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                              </button>
-                            )}
-                            {isSuperAdmin && (
-                              <button type="button"
-                                onClick={() => openEditModal(b)}
-                                className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
-                                title="Editar reserva"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">edit</span>
-                              </button>
-                            )}
-                            <select
-                              value={b.status}
-                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
-                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
-                            >
-                              <option value="reserved">Reservado</option>
-                              <option value="completed">Completo</option>
-                              <option value="cancelled">Cancelado</option>
-                            </select>
-                            {isSuperAdmin && (
-                              <button type="button"
-                                onClick={() => handleDeleteBooking(b.id)}
-                                className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                                title="Eliminar permanentemente"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">delete_forever</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
+                renderCompactBookings()
               )}
               {/* Bug fix #8: Pagination controls */}
               {totalBookingsPages > 1 && (
@@ -5310,18 +5329,18 @@ export default function AdminDashboard() {
                                         }
                                       } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
                                     }}
-                                    className="p-1 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
+                                    className="p-2.5 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
                                     title="Guardar cambios"
                                   >
-                                    <span className="material-symbols-outlined text-[14px]">check</span>
+                                    <span className="material-symbols-outlined text-[18px]">check</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setEditingRaId(null)}
-                                    className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                    className="p-2.5 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
                                     title="Cancelar edición"
                                   >
-                                    <span className="material-symbols-outlined text-[14px]">close</span>
+                                    <span className="material-symbols-outlined text-[18px]">close</span>
                                   </button>
                                 </>
                               ) : (
@@ -5329,10 +5348,10 @@ export default function AdminDashboard() {
                                   <button
                                     type="button"
                                     onClick={() => { setEditingRaId(ra.id); setEditRaAmount(String(ra.amount)); setEditRaReason(ra.reason || '') }}
-                                    className="p-1 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                                    className="p-2.5 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
                                     title="Editar monto/motivo"
                                   >
-                                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                                    <span className="material-symbols-outlined text-[18px]">edit</span>
                                   </button>
                                   {ra.status === 'retained' ? (
                                     <button
@@ -5351,10 +5370,10 @@ export default function AdminDashboard() {
                                           }
                                         } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
                                       }}
-                                      className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                                      className="p-2.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
                                       title="Marcar como devuelto"
                                     >
-                                      <span className="material-symbols-outlined text-[14px]">currency_exchange</span>
+                                      <span className="material-symbols-outlined text-[18px]">currency_exchange</span>
                                     </button>
                                   ) : (
                                     <button
@@ -5373,10 +5392,10 @@ export default function AdminDashboard() {
                                           }
                                         } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
                                       }}
-                                      className="p-1 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+                                      className="p-2.5 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
                                       title="Marcar como retenido"
                                     >
-                                      <span className="material-symbols-outlined text-[14px]">lock</span>
+                                      <span className="material-symbols-outlined text-[18px]">lock</span>
                                     </button>
                                   )}
                                   <button
@@ -5395,10 +5414,10 @@ export default function AdminDashboard() {
                                         }
                                       } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
                                     }}
-                                    className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                    className="p-2.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
                                     title="Eliminar registro"
                                   >
-                                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                                    <span className="material-symbols-outlined text-[18px]">delete</span>
                                   </button>
                                 </>
                               )}
@@ -5520,7 +5539,7 @@ export default function AdminDashboard() {
                       animate={{ y: 0, opacity: 1 }}
                       exit={{ y: 100, opacity: 0 }}
                       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                      className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20"
+                      className="w-full max-w-md glass-card rounded-2xl p-6 border-cm-primary/20 max-h-[85dvh] overflow-y-auto"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-between mb-5">
@@ -6525,7 +6544,7 @@ export default function AdminDashboard() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md glass-card rounded-2xl p-6 border-amber-400/20"
+              className="w-full max-w-md glass-card rounded-2xl p-6 border-amber-400/20 max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-5">
@@ -6710,7 +6729,7 @@ export default function AdminDashboard() {
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="w-full max-w-md glass-card border border-white/10 rounded-2xl overflow-hidden"
+              className="w-full max-w-md glass-card border border-white/10 rounded-2xl max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -7146,7 +7165,7 @@ export default function AdminDashboard() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-sm glass-card rounded-2xl p-6 border-blue-400/20"
+              className="w-full max-w-sm glass-card rounded-2xl p-6 border-blue-400/20 max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">

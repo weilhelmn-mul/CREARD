@@ -252,7 +252,7 @@ export default function UsersTab() {
             className="w-full pl-10 pr-4 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm focus:outline-none focus:border-cm-primary/50 font-[family-name:var(--font-inter)]"
           />
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scroll-hint-x">
           {[
             { key: 'all', label: 'Todos' },
             { key: 'pending', label: 'Pendientes' },

@@ -47,6 +47,7 @@ const statusConfig: Record<string, { label: string; color: string; dot: string }
 }
 
 import { formatTimeRange } from '@/lib/timeUtils'
+import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
 
 const sportIcons: Record<string, string> = {
   futbol: 'sports_soccer', voley: 'sports_volleyball', basket: 'sports_basketball',
@@ -208,38 +209,38 @@ export default function BookingsTable({
                         title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
                       >
                         {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
-                        <span className="hidden lg:inline">{b.paymentMethod}</span>
+                        <span className="hidden lg:inline">{paymentMethodLabel(b.paymentMethod)}</span>
                       </span>
                     ) : (
                       <span className="text-cm-on-surface-variant/30 text-xs">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1.5">
                       {b.recurringGroupId && (
                         <button
                           onClick={() => openSeriesModal(b.recurringGroupId!)}
-                          className="p-1 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
+                          className="p-2.5 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors"
                           title="Ver serie recurrente"
                         >
-                          <span className="material-symbols-outlined text-[16px]">repeat</span>
+                          <span className="material-symbols-outlined text-[18px]">repeat</span>
                         </button>
                       )}
                       {/* B8 FIX: Always show payment button */}
                       <button
                         onClick={() => openAdvanceModal(b)}
-                        className="p-1 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
+                        className="p-2.5 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
                         title={b.remainingAmount > 0 ? 'Registrar Pago' : 'Registrar Pago adicional'}
                       >
-                        <span className="material-symbols-outlined text-[16px]">payments</span>
+                        <span className="material-symbols-outlined text-[18px]">payments</span>
                       </button>
                       {b.status === 'reserved' && onExtendTime && (
                         <button
                           onClick={() => onExtendTime(b)}
-                          className="p-1 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+                          className="p-2.5 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
                           title="Extender tiempo"
                         >
-                          <span className="material-symbols-outlined text-[16px]">schedule</span>
+                          <span className="material-symbols-outlined text-[18px]">schedule</span>
                         </button>
                       )}
                       <select
@@ -256,19 +257,19 @@ export default function BookingsTable({
                       {isSuperAdmin && onEditTime && (
                         <button
                           onClick={() => onEditTime(b)}
-                          className="p-1 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                          className="p-2.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
                           title="Editar reserva"
                         >
-                          <span className="material-symbols-outlined text-[16px]">edit</span>
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
                         </button>
                       )}
                       {isSuperAdmin && onDeleteBooking && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeleteBooking(b.id) }}
-                          className="p-1 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                          className="p-2.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
                           title="Eliminar permanentemente"
                         >
-                          <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                          <span className="material-symbols-outlined text-[18px]">delete_forever</span>
                         </button>
                       )}
                     </div>

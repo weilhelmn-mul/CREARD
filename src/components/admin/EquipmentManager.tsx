@@ -167,7 +167,7 @@ export default function EquipmentManager({ equipmentList, onRefresh }: { equipme
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-md glass-card rounded-2xl p-6 border-blue-400/20"
+            className="w-full max-w-md glass-card rounded-2xl p-6 border-blue-400/20 max-h-[85dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
