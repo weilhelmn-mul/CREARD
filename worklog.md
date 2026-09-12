@@ -480,3 +480,24 @@ Stage Summary:
 - Los 14 problemas aprobados implementados sin eliminar funcionalidades ni tocar lógica Firebase/precios/horarios/reglas
 - Único cambio de comportamiento: Validar pago Yape requiere ahora confirmación explícita (aprobado como opción A)
 - Pendiente: verificación E2E en producción (320/375/390/430/tablet/PC) e informe final
+
+---
+Task ID: 17-b
+Agent: Super Z (main agent)
+Task: FASE 5 — Pruebas E2E en producción (deploy 6c6af37)
+
+Work Log:
+- Deploy verificado: meta viewport con viewport-fit=cover + interactive-widget=resizes-content en vivo; CSS chunks con touch-reveal/scroll-hint-x/-webkit-touch-callout; iconos PWA 192/512 → 200; manifest start_url "/"
+- 320px: home sin overflow (sw=320); footer última línea visible sobre nav (tapaNav:false); admin sin overflow; Reservas = 0 tablas visibles + 3 tarjetas compactas (dual-render OK); acciones 44x51px; tabs con scroll-hint; modal Gasto max-h 586.5px=85dvh + scrollable
+- CourtDetail 320px: slots 66x53px (antes 66x38); barra admin z-60 > nav z-50; tap al centro del CTA recibe el botón (antes caía en nav); click ejecuta sin errores; barra persiste
+- Flujo reserva 320px: CTA "Continuar" recibe tap (y=622-674); gate de login OK
+- 390px: sin overflow (sw=390), slots 84x53px; 430px: sin overflow (sw=430); 768px admin: tabla vuelve a ser visible (md+), sin overflow
+- PC 1440px: tabla visible (3 filas), 0 tarjetas forzadas, sin overflow — funcionalidad PC intacta
+- Sin errores de consola ni de página
+- No verificable en vivo (sin datos): diálogo confirmación Yape (0 pagos pendientes en este momento; desplegado y se activará con el próximo pago), banner alarmas expandido (0 alertas activas)
+- HALLAZGO NUEVO (P15, NO implementado — requiere aprobación): tarjeta "Dirección" en CourtDetail desborda 57px en tablets 768-900px (grid item sin min-w-0 + truncate/nowrap). Propuesta: añadir min-w-0 al div col-span-2 md:col-span-1. PC (1024+) y móvil (<768) no afectados
+
+Stage Summary:
+- FASE 4 completa: 14/14 fixes desplegados en producción
+- FASE 5 completa: matriz 320/390/430/768/1440 verificada; reserva y admin operativos desde móvil; PC sin cambios
+- Pendiente de aprobación: P15 (min-w-0 tarjeta Dirección, 1 línea, riesgo muy bajo)
