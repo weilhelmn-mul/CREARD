@@ -688,14 +688,14 @@ export default function CourtDetail() {
               })()}
             </div>
           </div>
-          <div className="glass-card rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1">
+          <div className="glass-card rounded-xl p-3 flex items-center gap-3 col-span-2 md:col-span-1 min-w-0">
             <span
               className="material-symbols-outlined text-[#00ff41]"
               style={{ fontVariationSettings: '"FILL" 1' }}
             >
               map
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Dirección</p>
               <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)] truncate">
                 {court.branch.address}
