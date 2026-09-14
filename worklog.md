@@ -501,3 +501,21 @@ Stage Summary:
 - FASE 4 completa: 14/14 fixes desplegados en producción
 - FASE 5 completa: matriz 320/390/430/768/1440 verificada; reserva y admin operativos desde móvil; PC sin cambios
 - Pendiente de aprobación: P15 (min-w-0 tarjeta Dirección, 1 línea, riesgo muy bajo)
+
+---
+Task ID: 17-c
+Agent: Super Z (main agent)
+Task: Fix P15 aprobado por el usuario — min-w-0 en tarjeta "Dirección" de CourtDetail
+
+Work Log:
+- Usuario aprobó: "apruebo el fix P15"
+- src/components/courts/CourtDetail.tsx (línea 691): añadido min-w-0 al grid item (col-span-2 md:col-span-1) + min-w-0 al div interior (necesario para que el truncate existente pueda encoger dentro del flex; sin él el nowrap seguiría desbordando)
+- Cambio aditivo de 2 clases Tailwind; sin cambios de lógica, PC y móvil (<768) intactos
+- tsc: 155 errores (baseline exacto, 0 nuevos); build OK
+- Deploy: push 599f674 → Vercel deployment success (verificado vía GitHub commit status; el chunk CSS no cambió de hash porque min-w-0 ya existía en el bundle)
+- Verificación E2E en producción (agent-browser): 768px pageOverflow 0 (antes 57px), tarjeta 237px dentro de su columna (bordes derechos 752=752), dirección 261px truncada en 175px con ellipsis; 800px y 900px: overflow 0 + truncating OK; 390px: overflow 0, dirección cabe naturalmente (truncate NO activo — móvil intacto); 1440px PC: overflow 0, tarjeta cabe (si la dirección excede la columna muestra ellipsis — comportamiento ya previsto por la clase truncate original)
+- Screenshot: download/fix_p15_tablet_768.png; sin errores de página ni consola
+
+Stage Summary:
+- P15 implementado y verificado en producción: fin del desborde horizontal de la tarjeta Dirección en tablets 768-900px
+- Todos los hallazgos de la auditoría móvil (14 fixes + P15) están cerrados; no quedan pendientes de código
