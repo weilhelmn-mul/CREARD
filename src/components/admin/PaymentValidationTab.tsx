@@ -887,6 +887,26 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
           <div className="glass-card rounded-2xl p-5 w-full max-w-md max-h-[85dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h4 className="text-base font-bold text-cm-on-surface font-[family-name:var(--font-sora)] mb-3">Rechazar Pago</h4>
             <p className="text-sm text-cm-on-surface-variant mb-3 font-[family-name:var(--font-inter)]">Agrega una observacion o motivo del rechazo:</p>
+            {/* A4 (OLA 3 UX): razones rápidas — un toque llena el motivo (el admin
+                no tiene que redactar desde cero a mitad de una validación) */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {[
+                'Monto no coincide',
+                'No se encontró la operación',
+                'Comprobante ilegible',
+                'Fecha/hora no coincide',
+                'Yapeado a otro número',
+              ].map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setObservation(reason)}
+                  className="px-2.5 py-1.5 rounded-lg bg-cm-surface-container-highest/60 border border-white/10 text-[11px] font-medium text-cm-on-surface-variant hover:text-cm-on-surface hover:border-red-500/40 transition-colors active:scale-95"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
             <textarea value={observation} onChange={e => setObservation(e.target.value)} className="w-full h-24 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm p-3 resize-none focus:outline-none focus:border-red-500/50 font-[family-name:var(--font-inter)]" placeholder="Motivo del rechazo..." />
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setObsDialog(null)} className="px-4 py-2 text-cm-on-surface-variant text-sm hover:text-cm-on-surface transition-colors font-[family-name:var(--font-inter)]">Cancelar</button>

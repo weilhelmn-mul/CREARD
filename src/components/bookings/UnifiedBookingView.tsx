@@ -165,6 +165,8 @@ export default function UnifiedBookingView() {
   // R4 (OLA 2 UX): calendario mensual para elegir fechas lejanas
   const [calOpen, setCalOpen] = useState(false)
   const [activePaymentMethod, setActivePaymentMethod] = useState<'yape_qr' | 'culqi'>('yape_qr')
+  // R7 (OLA 3 UX): errores de validación inline (antes solo toasts transitorios)
+  const [fieldErrors, setFieldErrors] = useState<{ name?: boolean; phone?: boolean }>({})
 
   // R4 (OLA 2 UX): auto-scroll de la tira de fechas al día activo — si llegas
   // con una fecha lejana preseleccionada, el día elegido queda fuera de pantalla
@@ -419,8 +421,13 @@ export default function UnifiedBookingView() {
 
   const handleSubmit = useCallback(async () => {
     if (!user?.id || !selectedDate || selectedCourtIds.length === 0 || selectedTimeSlots.length === 0) return
-    if (!clientName.trim() || !clientPhone.trim()) {
-      toast({ title: 'Datos incompletos', description: 'Nombre y teléfono son requeridos.', variant: 'destructive' })
+    // R7 (OLA 3 UX): validación inline — marca los campos con error y muestra
+    // el motivo junto a cada uno (antes solo un toast transitorio arriba)
+    const digits = clientPhone.replace(/\D/g, '')
+    const errs = { name: !clientName.trim(), phone: digits.length < 7 }
+    setFieldErrors(errs)
+    if (errs.name || errs.phone) {
+      toast({ title: 'Datos incompletos', description: 'Revisa los campos marcados en rojo.', variant: 'destructive' })
       return
     }
 
@@ -1012,19 +1019,25 @@ export default function UnifiedBookingView() {
             </h2>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Nombre completo <span className="text-red-400">*</span></label>
-                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Tu nombre"
-                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+                <label htmlFor="ub-name" className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Nombre completo <span className="text-red-400">*</span></label>
+                <input id="ub-name" type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Tu nombre" autoComplete="name"
+                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border rounded-xl text-cm-on-surface text-[16px] placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)] ${fieldErrors.name ? 'border-red-500/60' : 'border-white/10'}`} />
+                {fieldErrors.name && (
+                  <p className="text-[11px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">Ingresa tu nombre completo</p>
+                )}
               </div>
               <div>
-                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Email</label>
-                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="tu@email.com"
-                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+                <label htmlFor="ub-email" className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Email</label>
+                <input id="ub-email" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="tu@email.com" autoComplete="email"
+                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-[16px] placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
               </div>
               <div>
-                <label className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Teléfono <span className="text-red-400">*</span></label>
-                <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+51 999 999 999"
-                  className="w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)]" />
+                <label htmlFor="ub-phone" className="text-xs text-cm-on-surface-variant mb-1 block font-[family-name:var(--font-inter)]">Teléfono <span className="text-red-400">*</span></label>
+                <input id="ub-phone" type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+51 999 999 999" autoComplete="tel" inputMode="tel"
+                  className={`w-full px-3 py-2.5 bg-cm-surface-container-highest/60 border rounded-xl text-cm-on-surface text-[16px] placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-[#00ff41]/50 transition-colors font-[family-name:var(--font-inter)] ${fieldErrors.phone ? 'border-red-500/60' : 'border-white/10'}`} />
+                {fieldErrors.phone && (
+                  <p className="text-[11px] text-red-400 mt-1 font-[family-name:var(--font-inter)]">Ingresa un teléfono válido (mínimo 7 dígitos)</p>
+                )}
               </div>
             </div>
           </div>
@@ -1303,7 +1316,9 @@ export default function UnifiedBookingView() {
                 </p>
               </div>
             </div>
-            <button type="button" disabled={submitting || !clientName.trim() || !clientPhone.trim()}
+            {/* R7 (OLA 3 UX): el CTA ya no se deshabilita en silencio — si faltan
+                datos, al tocarlo marca los campos con error */}
+            <button type="button" disabled={submitting}
               onClick={handleSubmit}
               className="w-full py-3.5 bg-[#00ff41] text-[#003907] font-semibold rounded-xl hover:bg-[#00e639] transition-all glow-accent disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-sora)] flex items-center justify-center gap-2">
               {submitting ? (

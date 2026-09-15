@@ -97,7 +97,7 @@ export default function ProfileView() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card rounded-2xl p-6 mb-6"
+          className="bg-cm-surface-container border border-white/10 rounded-2xl p-6 mb-6"
         >
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-2xl bg-cm-primary/20 flex items-center justify-center flex-shrink-0 border-2 border-cm-primary/30 glow-accent">
@@ -145,7 +145,7 @@ export default function ProfileView() {
           transition={{ delay: 0.05 }}
           className="grid grid-cols-3 gap-3 mb-6"
         >
-          <div className="glass-card rounded-xl p-4 text-center">
+          <div className="bg-cm-surface-container border border-white/10 rounded-xl p-4 text-center">
             <div className="w-10 h-10 rounded-lg bg-cm-primary/10 flex items-center justify-center mx-auto mb-2">
               <span className="material-symbols-outlined text-cm-primary" style={{ fontVariationSettings: '"FILL" 1' }}>calendar_month</span>
             </div>
@@ -154,7 +154,7 @@ export default function ProfileView() {
             </p>
             <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Reservas</p>
           </div>
-          <div className="glass-card rounded-xl p-4 text-center">
+          <div className="bg-cm-surface-container border border-white/10 rounded-xl p-4 text-center">
             <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto mb-2">
               <span className="material-symbols-outlined text-green-400" style={{ fontVariationSettings: '"FILL" 1' }}>payments</span>
             </div>
@@ -163,7 +163,7 @@ export default function ProfileView() {
             </p>
             <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Total Gastado</p>
           </div>
-          <div className="glass-card rounded-xl p-4 text-center">
+          <div className="bg-cm-surface-container border border-white/10 rounded-xl p-4 text-center">
             <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto mb-2">
               <span className="material-symbols-outlined text-blue-400" style={{ fontVariationSettings: '"FILL" 1' }}>location_on</span>
             </div>
@@ -213,7 +213,7 @@ export default function ProfileView() {
                 return (
                   <div
                     key={booking.id}
-                    className="glass-card rounded-xl p-3 flex items-center gap-3 hover:border-cm-primary/20 transition-all cursor-pointer"
+                    className="bg-cm-surface-container border border-white/10 rounded-xl p-3 flex items-center gap-3 hover:border-cm-primary/20 transition-all cursor-pointer"
                     onClick={() => setView('bookings')}
                   >
                     <div className="w-10 h-10 rounded-lg bg-cm-primary/10 flex items-center justify-center flex-shrink-0">
@@ -254,7 +254,7 @@ export default function ProfileView() {
           <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg mb-3">
             Configuración
           </h2>
-          <div className="glass-card rounded-2xl overflow-hidden">
+          <div className="bg-cm-surface-container border border-white/10 rounded-2xl overflow-hidden">
             <button type="button"
               onClick={() => setView('claims')}
               className="w-full flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors"
@@ -305,7 +305,7 @@ export default function ProfileView() {
           >
             <button type="button"
               onClick={() => setView('admin')}
-              className="w-full glass-card rounded-2xl p-4 flex items-center gap-3 hover:border-cm-primary/30 transition-all group"
+              className="w-full bg-cm-surface-container border border-white/10 rounded-2xl p-4 flex items-center gap-3 hover:border-cm-primary/30 transition-all group"
             >
               <div className="w-10 h-10 rounded-lg bg-cm-primary/10 flex items-center justify-center">
                 <span className="material-symbols-outlined text-cm-primary text-[22px]" style={{ fontVariationSettings: '"FILL" 1' }}>admin_panel_settings</span>

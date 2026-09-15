@@ -450,7 +450,9 @@ export default function ClientAnalyticsTab() {
             Ningún cliente coincide con la búsqueda en este periodo.
           </p>
         ) : (
-          <div className="overflow-x-auto scroll-hint-x rounded-lg border border-white/10">
+          <>
+          {/* A3 (móvil): dual render — tabla solo md+, tarjetas compactas en móvil (mismas acciones) */}
+          <div className="hidden md:block overflow-x-auto scroll-hint-x rounded-lg border border-white/10">
             <table className="w-full text-left min-w-[1180px]">
               <thead>
                 <tr className="bg-cm-surface-container-highest/40 border-b border-white/10">
@@ -516,6 +518,57 @@ export default function ClientAnalyticsTab() {
               </tbody>
             </table>
           </div>
+          {/* A3 (móvil): tarjetas compactas — mismas acciones que la tabla (WhatsApp + Balance) */}
+          <div className="md:hidden space-y-2">
+            {tableClients.map((c) => {
+              const wa = buildWhatsAppLink(c.name, c.phone, c.montoPendiente)
+              return (
+                <div key={c.key} className="bg-cm-surface-container rounded-xl border border-white/10 px-4 py-3 space-y-2">
+                  {/* Fila 1 — cliente + saldo pendiente */}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-inter)] truncate min-w-0">{c.name}</p>
+                    {c.montoPendiente > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-400/15 text-red-300 border border-red-400/30 flex-shrink-0 whitespace-nowrap font-[family-name:var(--font-inter)]">
+                        <span className="material-symbols-outlined text-[13px]">account_balance_wallet</span>
+                        Pendiente {fmtCurrency(c.montoPendiente)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-400/15 text-green-300 border border-green-400/30 flex-shrink-0 font-[family-name:var(--font-inter)]">
+                        <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                        Al día
+                      </span>
+                    )}
+                  </div>
+                  {/* Fila 2 — teléfono · reservas · total gastado */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">call</span>
+                      <span className="text-cm-on-surface font-medium">{c.phone || '—'}</span>
+                    </span>
+                    <span>{c.total} reservas</span>
+                    <span>Gastado: <span className="text-cm-primary font-bold font-[family-name:var(--font-sora)]">{fmtCurrency(c.montoReservado)}</span></span>
+                  </div>
+                  {/* Fila 3 — acciones (mismas que la tabla) */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+                    {wa && (
+                      <a href={wa} target="_blank" rel="noopener noreferrer"
+                        title={`Contactar por WhatsApp${c.montoPendiente > 0.01 ? ` — saldo pendiente ${fmtCurrency(c.montoPendiente)}` : ''}`}
+                        className="p-2.5 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors">
+                        <span className="material-symbols-outlined text-[18px]">chat</span>
+                      </a>
+                    )}
+                    <button type="button" onClick={() => setSelected(c)}
+                      title="Ver balance completo del cliente"
+                      className="inline-flex items-center gap-1 p-2.5 rounded-lg text-cm-primary hover:bg-cm-primary/10 transition-colors text-xs font-bold font-[family-name:var(--font-inter)]">
+                      Balance
+                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          </>
         )}
         <p className="text-[10px] text-cm-on-surface-variant mt-2 font-[family-name:var(--font-inter)]">
           Pagado = adelantos de reservas completadas y activas (criterio Finanzas). Pendiente $ = saldos por cobrar de reservas activas.

@@ -402,7 +402,8 @@ export default function ClaimsAdminTab() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* A3 (móvil): dual render — tabla solo md+, tarjetas compactas en móvil (mismas acciones) */}
+            <div className="hidden md:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="border-[#2a3a25] hover:bg-transparent">
@@ -473,6 +474,66 @@ export default function ClaimsAdminTab() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* A3 (móvil): tarjetas compactas — mismas acciones que la tabla (ver / responder / archivar) */}
+            <div className="md:hidden space-y-2 p-1">
+              {paginated.map(claim => {
+                const days = daysUntilDeadline(claim.deadlineDate)
+                const isUrgent = days <= 3 && days >= 0 && claim.status !== 'closed' && claim.status !== 'archived'
+                return (
+                  <div key={claim.id} className="bg-[#141e12] border border-[#2a3a25] rounded-xl px-4 py-3 space-y-2">
+                    {/* Fila 1 — Nº de reclamo / tipo + estado */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-sm font-medium text-[#dae6d2] truncate">{claim.claimNumber}</span>
+                        <Badge variant="outline" className={'text-[11px] font-semibold border flex-shrink-0 ' + typeConfig[claim.type].color + ' px-2 py-0.5'}>
+                          {typeConfig[claim.type].label}
+                        </Badge>
+                      </div>
+                      <Badge variant="outline" className={'text-[11px] font-semibold border flex-shrink-0 ' + statusConfig[claim.status].color + ' px-2 py-0.5'}>
+                        {statusConfig[claim.status].label}
+                      </Badge>
+                    </div>
+                    {/* Fila 2 — consumidor · fecha · plazo */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#dae6d2]/70">
+                      <span className="text-[#dae6d2] font-medium truncate min-w-0">{claim.consumerName}</span>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                        <Clock className="w-3.5 h-3.5 text-[#dae6d2]/40 flex-shrink-0" />
+                        {formatDate(claim.createdAt)}
+                      </span>
+                      {claim.deadlineDate ? (
+                        <span className={'inline-flex items-center gap-1 font-medium whitespace-nowrap ' + (isUrgent ? 'text-red-400' : 'text-[#dae6d2]/70')}>
+                          {isUrgent && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
+                          Plazo: {formatDate(claim.deadlineDate)}
+                          {isUrgent && <span className="text-[11px]">{days}d</span>}
+                        </span>
+                      ) : (
+                        <span className="text-[#dae6d2]/40">Sin plazo</span>
+                      )}
+                    </div>
+                    {/* Fila 3 — acciones (mismas que la tabla) */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#2a3a25]">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailClaim(claim)}
+                        className="h-10 w-10 p-2.5 text-[#dae6d2]/60 hover:text-[#00ff41] hover:bg-[#00ff41]/10" title="Ver detalle">
+                        <Eye className="w-[18px] h-[18px]" />
+                      </Button>
+                      {claim.status !== 'closed' && claim.status !== 'archived' && (
+                        <Button variant="ghost" size="sm" onClick={() => openResponse(claim)}
+                          className="h-10 w-10 p-2.5 text-[#dae6d2]/60 hover:text-[#00ff41] hover:bg-[#00ff41]/10" title="Responder">
+                          <MessageSquare className="w-[18px] h-[18px]" />
+                        </Button>
+                      )}
+                      {claim.status !== 'archived' && (
+                        <Button variant="ghost" size="sm" onClick={() => handleArchive(claim.id)}
+                          className="h-10 w-10 p-2.5 text-[#dae6d2]/60 hover:text-amber-400 hover:bg-amber-400/10" title="Archivar">
+                          <Archive className="w-[18px] h-[18px]" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
             {/* Pagination */}

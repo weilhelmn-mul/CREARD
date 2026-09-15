@@ -247,7 +247,7 @@ export default function AuthView() {
   }
 
   const inputClasses =
-    'w-full px-4 py-3 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all duration-200 placeholder:text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]'
+    'w-full px-4 py-3 bg-cm-surface-container-highest/60 border border-white/10 rounded-xl text-cm-on-surface text-sm focus:outline-none focus:border-cm-primary/50 focus:ring-1 focus:ring-cm-primary/20 transition-all duration-200 placeholder:text-cm-on-surface-variant font-[family-name:var(--font-inter)]'
 
   return (
     <div className="fixed inset-0 z-50 bg-cm-background flex items-center justify-center overflow-y-auto px-4 py-8">
@@ -383,7 +383,7 @@ export default function AuthView() {
             {/* Divider + Switch */}
             <div className="flex items-center gap-3 my-5">
               <div className="flex-1 h-px bg-white/10" />
-              <span className="text-xs text-cm-on-surface-variant/60 font-[family-name:var(--font-inter)]">o</span>
+              <span className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">o</span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
             <button type="button" onClick={switchMode}

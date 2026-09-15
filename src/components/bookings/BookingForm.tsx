@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
+import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
 
 /* ───────────── Interfaces ───────────── */
 
@@ -147,6 +148,10 @@ export default function BookingForm() {
   const [failedCount, setFailedCount] = useState(0)
 
   const [paymentMethod, setPaymentMethod] = useState('culqi')
+  // R8-A (OLA 3 UX): mismo selector de pago que el flujo unificado — el usuario
+  // elige Yape (QR, pendiente de validación) o Culqi (tarjeta, confirmado)
+  const [payChannel, setPayChannel] = useState<'culqi' | 'yape'>('culqi')
+  const [paidViaYape, setPaidViaYape] = useState(false)
   const [formStep, setFormStep] = useState<'form' | 'payment' | 'success'>('form')
   const [clientName, setClientName] = useState(user?.name || '')
   const [clientEmail, setClientEmail] = useState(user?.email || '')
@@ -428,8 +433,52 @@ export default function BookingForm() {
             </div>
           </div>
 
+          {/* R8-A (OLA 3 UX): selector de método — mismo modelo que UnifiedBookingView */}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button type="button"
+              onClick={() => setPayChannel('yape')}
+              className={`flex flex-col items-center gap-1 py-3.5 rounded-xl border transition-all active:scale-95 ${
+                payChannel === 'yape'
+                  ? 'bg-[#00ff41]/10 border-[#00ff41]/40 text-[#00ff41]'
+                  : 'bg-cm-surface-container-highest/40 border-white/10 text-cm-on-surface-variant'
+              }`}>
+              <span className="material-symbols-outlined text-[22px]">qr_code_2</span>
+              <span className="text-xs font-semibold">Yape QR</span>
+            </button>
+            <button type="button"
+              onClick={() => setPayChannel('culqi')}
+              className={`flex flex-col items-center gap-1 py-3.5 rounded-xl border transition-all active:scale-95 ${
+                payChannel === 'culqi'
+                  ? 'bg-[#00ff41]/10 border-[#00ff41]/40 text-[#00ff41]'
+                  : 'bg-cm-surface-container-highest/40 border-white/10 text-cm-on-surface-variant'
+              }`}>
+              <span className="material-symbols-outlined text-[22px]">credit_card</span>
+              <span className="text-xs font-semibold">Tarjeta (Culqi)</span>
+            </button>
+          </div>
+
+          {payChannel === 'yape' && bookingDataList.length > 0 && (
+            <YapeQRPayButton
+              bookingIds={[bookingDataList[0].id]}
+              amount={advanceAmount}
+              paymentType="advance"
+              userEmail={clientEmail || user?.email || ''}
+              onPaymentMarked={() => {
+                setPaidViaYape(true)
+                setFormStep('success')
+                setSuccess(true)
+                const courtNames = courts.map((c) => c.name).join(', ')
+                addNotification({
+                  title: 'Reserva registrada',
+                  message: `${courts.length} cancha${courts.length > 1 ? 's' : ''}: ${courtNames} — ${formatDateES(bookingDate)} a las ${timeParts.start}. Ref: ${bookingRefs.join(', ')}. Pago Yape pendiente de validación.`,
+                  type: 'info',
+                })
+              }}
+            />
+          )}
+
           {/* Culqi Payment - use first booking ID */}
-          {bookingDataList.length > 0 && (
+          {payChannel === 'culqi' && bookingDataList.length > 0 && (
             <CulqiPayButton
               bookingId={bookingDataList[0].id}
               totalAmount={totalPrice}
@@ -447,7 +496,7 @@ export default function BookingForm() {
           <div className="flex items-center justify-center gap-2 mt-4">
             <span className="material-symbols-outlined text-[16px] text-cm-on-surface-variant/40" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
             <span className="text-[10px] text-cm-on-surface-variant/40 font-[family-name:var(--font-inter)]">
-              Pagos seguros procesados por Culqi
+              {payChannel === 'yape' ? 'Pago mediante Yape — validado por el administrador' : 'Pagos seguros procesados por Culqi'}
             </span>
           </div>
         </motion.div>
@@ -672,7 +721,7 @@ export default function BookingForm() {
                     badge
                   </span>
                   <input
-                    type="text"
+                    type="text" autoComplete="name"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Tu nombre"
@@ -689,7 +738,7 @@ export default function BookingForm() {
                     mail
                   </span>
                   <input
-                    type="email"
+                    type="email" autoComplete="email"
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     placeholder="tu@email.com"
@@ -706,7 +755,7 @@ export default function BookingForm() {
                     phone
                   </span>
                   <input
-                    type="tel"
+                    type="tel" autoComplete="tel" inputMode="tel"
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                     placeholder="+51 999 999 999"
@@ -751,10 +800,12 @@ export default function BookingForm() {
             className="text-center mb-8"
           >
             <h2 className="font-[family-name:var(--font-sora)] text-2xl font-bold text-cm-on-surface mb-2">
-              ¡Reserva Confirmada!
+              {paidViaYape ? 'Reserva Registrada' : '¡Reserva Confirmada!'}
             </h2>
             <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
-              Tu cancha ha sido reservada exitosamente
+              {paidViaYape
+                ? 'Tu pago Yape quedó pendiente de validación. Te avisaremos cuando el administrador lo confirme.'
+                : 'Tu cancha ha sido reservada exitosamente'}
             </p>
           </motion.div>
 

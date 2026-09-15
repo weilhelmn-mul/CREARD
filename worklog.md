@@ -536,3 +536,21 @@ Stage Summary:
 - FASE 1 completa: 40 hallazgos consolidados → propuesta FASE 2 con alternativas A/B/C por iniciativa, impacto PC, prioridad y recomendación, presentada al usuario en el chat
 - CRÍTICOS detectados: H1 carrito reserva hora equivocada silenciosamente; H2 sin back/retorno post-login; F1-F2 navegación admin (Pagos invisible); V1 tipografía 9-10px
 - Esperando aprobación — nada se implementa sin autorización expresa
+
+---
+Task ID: A3
+Agent: Z Code (implementación de código)
+Task: Móvil <768px — sustituir 3 tablas de escritorio por tarjetas compactas (patrón dual-render hidden md:block + md:hidden) en ClientAnalyticsTab, ClaimsAdminTab y tabla de adelantos retenidos de AdminDashboard; mismas acciones, 0 cambios de lógica
+
+Work Log:
+- src/components/admin/ClientAnalyticsTab.tsx (~línea 455): tabla de clientes (min-w-[1180px], 15 col.) envuelta en hidden md:block (conserva overflow-x-auto + scroll-hint-x interior); líneas ~521-571 tarjetas md:hidden: fila 1 = nombre (font-semibold) + chip de saldo (rojo "Pendiente S/ X" si montoPendiente>0 / verde "Al día" si 0); fila 2 = teléfono, total reservas, total gastado (fmtCurrency de montoReservado); fila 3 = WhatsApp (mismo buildWhatsAppLink con misma condición que la tabla) y Balance (mismo setSelected(c)), p-2.5 con icono 18px; tarjeta sin click propio
+- src/components/claims/ClaimsAdminTab.tsx (~línea 406): wrapper de la tabla → hidden md:block; líneas ~479-537 tarjetas md:hidden con la paleta propia del archivo (#141e12/#dae6d2): fila 1 = Nº de reclamo (font-mono) + tipo + chip de estado; fila 2 = consumidor, fecha, plazo (con alerta Xd roja si isUrgent, "Sin plazo" si null); fila 3 = ver (setDetailClaim), responder (openResponse, condicional igual que tabla), archivar (handleArchive, condicional igual que tabla) — Buttons h-10 w-10 p-2.5 con iconos lucide 18px
+- src/components/admin/AdminDashboard.tsx (SOLO sección Adelantos por Cancelaciones, líneas ~5399-5793; git diff confirma que ningún otro hunk del archivo es de esta tarea): tabla → hidden md:block dentro de fragmento; líneas ~5591-5765 tarjetas md:hidden (mismo slice/paginación raPage): fila 1 = cliente + monto destacado (text-base font-bold text-orange-400); fila 2 = fecha, cancha, total reserva, chip Retenido/Devuelto y motivo truncado; fila 3 = editar (mismos setEditingRaId/setEditRaAmount/setEditRaReason), retener⇄devolver y eliminar con handlers fetch idénticos copiados de la tabla; si editingRaId === ra.id los inputs monto/motivo se renderizan a ancho completo (w-full) dentro de la tarjeta con el mismo estado y el mismo handler de guardado (fetch PUT + toast + fetchData) + guardar/cancelar p-2.5 18px
+- AdminDashboard paginación de adelantos: botones numerados w-6 h-6 → min-w-[40px] min-h-[40px] p-2.5 (línea ~5786); Anterior/Siguiente px-2 py-1 → min-h-[40px] px-3 (líneas ~5779/5793)
+- Nada de texto <11px en contenido nuevo; clases de tema cm-* y material-symbols en archivos de tema CREARD, paleta + lucide en ClaimsAdminTab (consistente con su diseño)
+- Verificación: npx tsc --noEmit → 155 errores (baseline exacto, 0 nuevos); bun run lint sin menciones nuevas en los 3 archivos; dev.log ✓ Compiled sin errores; git diff limitado a los 3 archivos objetivo (otros archivos modificados en el árbol son trabajo preexistente sin commitear de otros agentes, p.ej. "A4 (OLA 3 UX)")
+
+Stage Summary:
+- Las 3 tablas objetivo renderizan tarjetas compactas en móvil (<768px) y las tablas originales quedan intactas en md+
+- Todas las acciones de tabla están presentes en las tarjetas con los mismos handlers/estado; edición inline de adelantos funciona en móvil a ancho completo
+- 0 cambios de lógica Firebase/API/precios/horarios; tsc en 155 (baseline); listo para revisión/qa del coordinador

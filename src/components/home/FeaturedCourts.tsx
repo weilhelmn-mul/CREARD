@@ -73,7 +73,7 @@ const amenityIcons: Record<string, string> = {
 // --- Skeleton Card ---
 function CourtCardSkeleton() {
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className="bg-cm-surface-container border border-white/10 rounded-2xl overflow-hidden">
       <div className="relative h-48 bg-cm-surface-container-highest animate-pulse" />
       <div className="p-4 space-y-3">
         <div className="h-5 w-3/4 rounded bg-cm-surface-container-highest animate-pulse" />
@@ -195,7 +195,7 @@ export default function FeaturedCourts() {
                   delay: index * 0.08,
                   ease: [0.25, 0.4, 0.25, 1],
                 }}
-                className="glass-card rounded-2xl overflow-hidden group cursor-pointer hover:border-cm-primary/30 hover:shadow-[0_0_20px_rgba(0,255,65,0.1)] transition-all duration-300 flex flex-col"
+                className="bg-cm-surface-container border border-white/10 rounded-2xl overflow-hidden group cursor-pointer hover:border-cm-primary/30 hover:shadow-[0_0_20px_rgba(0,255,65,0.1)] transition-all duration-300 flex flex-col"
                 onClick={() => handleCourtClick(court.id)}
               >
                 {/* Image */}

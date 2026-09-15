@@ -117,7 +117,7 @@ export default function TodaysSchedule() {
 
         {/* Timeline */}
         {loading ? (
-          <div className="glass-card rounded-2xl p-6 space-y-4">
+          <div className="bg-cm-surface-container border border-white/10 rounded-2xl p-6 space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex gap-4 animate-pulse">
                 <div className="w-16 h-10 rounded-lg bg-cm-surface-container-highest flex-shrink-0" />
@@ -133,7 +133,7 @@ export default function TodaysSchedule() {
             initial={{ opacity: 0, y: 20 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="glass-card rounded-2xl p-8 md:p-12 text-center"
+            className="bg-cm-surface-container border border-white/10 rounded-2xl p-8 md:p-12 text-center"
           >
             <div className="w-16 h-16 rounded-full bg-cm-primary/10 flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-cm-primary text-[32px]" style={{ fontVariationSettings: '"FILL" 1' }}>
@@ -157,7 +157,7 @@ export default function TodaysSchedule() {
             </button>
           </motion.div>
         ) : (
-          <div className="glass-card rounded-2xl p-4 md:p-6 overflow-hidden">
+          <div className="bg-cm-surface-container border border-white/10 rounded-2xl p-4 md:p-6 overflow-hidden">
             <div className="overflow-x-auto no-scrollbar -mx-2 px-2 snap-x scroll-hint-x">
               <div className="flex gap-3 pb-2 min-w-max">
                 {bookings.map((booking, index) => (

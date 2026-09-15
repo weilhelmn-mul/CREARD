@@ -106,6 +106,14 @@ export default function UsersTab() {
   }
 
   const handleAction = async (userId: string, action: string, extra?: Record<string, unknown>) => {
+    // A4 (OLA 3 UX): confirmación en acciones irreversibles — antes rechazar
+    // registro o deshabilitar cuenta se aplicaba con UN toque sin confirmar
+    if (action === 'reject' && !extra?.reason) {
+      if (!confirm('¿Rechazar este registro? El usuario no podrá acceder a la app.')) return
+    }
+    if (action === 'disable') {
+      if (!confirm('¿Deshabilitar esta cuenta? El usuario dejará de poder iniciar sesión.')) return
+    }
     setActionLoading(userId)
     try {
       const res = await authFetch('/api/admin/users', {
@@ -342,7 +350,7 @@ export default function UsersTab() {
                         <button
                           onClick={() => handleAction(user.id, 'approve')}
                           disabled={isActive}
-                          className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50"
+                          className="p-2.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50 active:scale-95"
                           title="Aprobar usuario"
                         >
                           <span className="material-symbols-outlined text-[18px]">check</span>
@@ -350,7 +358,7 @@ export default function UsersTab() {
                         <button
                           onClick={() => handleAction(user.id, 'reject')}
                           disabled={isActive}
-                          className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                          className="p-2.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 active:scale-95"
                           title="Rechazar usuario"
                         >
                           <span className="material-symbols-outlined text-[18px]">close</span>
@@ -362,7 +370,7 @@ export default function UsersTab() {
                       <button
                         onClick={() => handleAction(user.id, 'disable')}
                         disabled={isActive}
-                        className="p-2 rounded-lg bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 transition-all disabled:opacity-50"
+                        className="p-2.5 rounded-lg bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 transition-all disabled:opacity-50 active:scale-95"
                         title="Deshabilitar"
                       >
                         <span className="material-symbols-outlined text-[18px]">block</span>
@@ -402,7 +410,7 @@ export default function UsersTab() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
             onClick={() => !creating && setShowCreateForm(false)}
           >
             <motion.div
@@ -410,7 +418,8 @@ export default function UsersTab() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl"
+              // A4 (OLA 3 UX): max-h + scroll — el teclado recortaba los campos
+              className="w-full max-w-md glass-card rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl max-h-[85dvh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6"
             >
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
@@ -419,7 +428,7 @@ export default function UsersTab() {
                   </div>
                   <h3 className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface">Nuevo Usuario</h3>
                 </div>
-                <button onClick={() => setShowCreateForm(false)} className="p-1 rounded-lg hover:bg-white/10 text-cm-on-surface-variant">
+                <button onClick={() => setShowCreateForm(false)} className="p-2 rounded-lg hover:bg-white/10 text-cm-on-surface-variant">
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
@@ -522,7 +531,7 @@ export default function UsersTab() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
             onClick={() => setSelectedUser(null)}
           >
             <motion.div
@@ -530,7 +539,8 @@ export default function UsersTab() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md glass-card rounded-2xl p-6 shadow-2xl"
+              // A4 (OLA 3 UX): max-h + scroll — el teclado recortaba las acciones
+              className="w-full max-w-md glass-card rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl max-h-[85dvh] overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6"
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-5">

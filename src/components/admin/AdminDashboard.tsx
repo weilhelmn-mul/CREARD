@@ -1983,28 +1983,28 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                                 className="w-24 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs font-semibold text-cm-on-surface focus:outline-none focus:border-white/30 font-[family-name:var(--font-sora)]"
                                 placeholder="Turno"
                               />
-                              {/* Time Range */}
+                              {/* Time Range — A4 (OLA 3 UX): selects con horas completas
+                                  (antes inputs numéricos de 56×28px, error fácil en móvil) */}
                               <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={23}
+                                <select
                                   value={slot.startHour}
                                   onChange={(e) => updateScheduleItem(idx, 'startHour', parseInt(e.target.value) || 0)}
-                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
-                                />
-                                <span className="text-cm-on-surface-variant text-xs font-mono">:</span>
-                                <span className="text-cm-on-surface-variant text-[10px]">00</span>
+                                  className="px-2 py-2 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-white/30 font-mono"
+                                >
+                                  {Array.from({ length: 24 }, (_, h) => (
+                                    <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                                  ))}
+                                </select>
                                 <span className="text-cm-on-surface-variant text-xs mx-1">—</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={24}
+                                <select
                                   value={slot.endHour}
                                   onChange={(e) => updateScheduleItem(idx, 'endHour', parseInt(e.target.value) || 1)}
-                                  className="w-14 px-2 py-1.5 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface text-center focus:outline-none focus:border-white/30 font-mono"
-                                />
-                                <span className="text-cm-on-surface-variant text-xs font-mono">:00</span>
+                                  className="px-2 py-2 bg-black/20 border border-white/10 rounded-lg text-xs text-cm-on-surface focus:outline-none focus:border-white/30 font-mono"
+                                >
+                                  {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
+                                    <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                                  ))}
+                                </select>
                               </div>
                               {/* Price */}
                               <div className="flex items-center gap-1 ml-auto">
@@ -2026,9 +2026,9 @@ function CourtsTab({ allCourts, onRefresh }: { allCourts: Array<{ id: string; na
                               {/* Remove */}
                               <button type="button"
                                 onClick={() => removeScheduleBlock(idx)}
-                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all"
+                                className="p-2.5 rounded-lg hover:bg-red-500/10 text-cm-on-surface-variant hover:text-red-400 transition-all active:scale-95"
                               >
-                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                <span className="material-symbols-outlined text-[16px]">close</span>
                               </button>
                             </div>
                           )
@@ -5397,7 +5397,9 @@ export default function AdminDashboard() {
                 )}
 
                 {retainedAdvances.length > 0 && (
-                <div className="overflow-x-auto -mx-4 px-4">
+                <>
+                {/* A3 (móvil): dual render — tabla solo md+, tarjetas compactas en móvil (mismas acciones) */}
+                <div className="hidden md:block overflow-x-auto -mx-4 px-4">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-white/5">
@@ -5586,6 +5588,182 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                {/* A3 (móvil): tarjetas compactas — mismas acciones que la tabla (editar / retener-devolver / eliminar) */}
+                <div className="md:hidden space-y-2 -mx-4 px-4">
+                  {retainedAdvances.slice((raPage - 1) * 8, raPage * 8).map((ra) => (
+                    <div key={ra.id} className="bg-cm-surface-container rounded-xl border border-white/10 px-4 py-3 space-y-2">
+                      {/* Fila 1 — cliente + monto retenido (destacado) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-inter)] truncate min-w-0">{ra.userName || 'Sin nombre'}</p>
+                        <span className="font-[family-name:var(--font-sora)] text-base font-bold text-orange-400 flex-shrink-0 whitespace-nowrap">{fmtCurrency(ra.amount)}</span>
+                      </div>
+                      {/* Fila 2 — fecha · reserva asociada · estado · motivo */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">event</span>
+                          <span className="text-cm-on-surface font-medium">{ra.bookingDate || (ra.createdAt ? new Date(ra.createdAt).toLocaleDateString('es-PE') : '-')}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 min-w-0">
+                          <span className="material-symbols-outlined text-[14px]">sports</span>
+                          <span className="text-cm-on-surface font-medium truncate max-w-[150px]">{ra.courtName || '-'}</span>
+                        </span>
+                        <span>Total reserva: {fmtCurrency(ra.originalTotal)}</span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium font-[family-name:var(--font-inter)] ${
+                          ra.status === 'retained'
+                            ? 'bg-orange-400/20 text-orange-400'
+                            : 'bg-purple-400/20 text-purple-400'
+                        }`}>
+                          <span className="material-symbols-outlined text-[12px]">
+                            {ra.status === 'retained' ? 'lock' : 'currency_exchange'}
+                          </span>
+                          {ra.status === 'retained' ? 'Retenido' : 'Devuelto'}
+                        </span>
+                        {ra.reason && <span className="truncate max-w-[180px]">Motivo: {ra.reason}</span>}
+                      </div>
+                      {/* Fila 3 — acciones (mismas que la tabla); edición inline a ancho completo dentro de la tarjeta */}
+                      {editingRaId === ra.id ? (
+                        <>
+                          <div className="space-y-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="Monto (S/)"
+                              value={editRaAmount}
+                              onChange={(e) => setEditRaAmount(e.target.value)}
+                              className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Motivo de la cancelación"
+                              value={editRaReason}
+                              onChange={(e) => setEditRaReason(e.target.value)}
+                              className="w-full bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const newAmount = parseFloat(editRaAmount)
+                                if (isNaN(newAmount) || newAmount < 0) {
+                                  toast({ title: 'Error', description: 'Monto inválido', variant: 'destructive' })
+                                  return
+                                }
+                                try {
+                                  const updateBody: Record<string, unknown> = { id: ra.id, bookingId: ra.bookingId, amount: newAmount, reason: editRaReason }
+                                  const res = await fetch('/api/retained-advances', {
+                                    method: 'PUT',
+                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(updateBody),
+                                  })
+                                  if (res.ok) {
+                                    toast({ title: 'Actualizado', description: 'Registro de adelanto actualizado' })
+                                    setEditingRaId(null)
+                                    fetchData()
+                                  } else {
+                                    const err = await res.json().catch(() => ({}))
+                                    toast({ title: 'Error', description: (err as Record<string, string>).error || 'No se pudo actualizar', variant: 'destructive' })
+                                  }
+                                } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                              }}
+                              className="p-2.5 rounded-lg text-green-400 hover:bg-green-400/10 transition-colors"
+                              title="Guardar cambios"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">check</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingRaId(null)}
+                              className="p-2.5 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                              title="Cancelar edición"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => { setEditingRaId(ra.id); setEditRaAmount(String(ra.amount)); setEditRaReason(ra.reason || '') }}
+                            className="p-2.5 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors"
+                            title="Editar monto/motivo"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                          </button>
+                          {ra.status === 'retained' ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como devuelto al cliente?`)) return
+                                try {
+                                  const res = await fetch('/api/retained-advances', {
+                                    method: 'PUT',
+                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'refunded' }),
+                                  })
+                                  if (res.ok) {
+                                    toast({ title: 'Actualizado', description: 'Adelanto marcado como devuelto' })
+                                    fetchData()
+                                  }
+                                } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                              }}
+                              className="p-2.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                              title="Marcar como devuelto"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">currency_exchange</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`Marcar este adelanto de ${fmtCurrency(ra.amount)} como retenido en caja?`)) return
+                                try {
+                                  const res = await fetch('/api/retained-advances', {
+                                    method: 'PUT',
+                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, status: 'retained' }),
+                                  })
+                                  if (res.ok) {
+                                    toast({ title: 'Actualizado', description: 'Adelanto marcado como retenido' })
+                                    fetchData()
+                                  }
+                                } catch { toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' }) }
+                              }}
+                              className="p-2.5 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors"
+                              title="Marcar como retenido"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">lock</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm('Eliminar este registro de adelanto?')) return
+                              try {
+                                const res = await fetch('/api/retained-advances', {
+                                  method: 'PUT',
+                                  headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: ra.id, bookingId: ra.bookingId, action: 'delete' }),
+                                })
+                                if (res.ok) {
+                                  toast({ title: 'Eliminado', description: 'Registro de adelanto eliminado' })
+                                  fetchData()
+                                }
+                              } catch { toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' }) }
+                            }}
+                            className="p-2.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                            title="Eliminar registro"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                </>
                 )}
                 {/* Pagination */}
                 {retainedAdvances.length > 8 && (
@@ -5598,21 +5776,21 @@ export default function AdminDashboard() {
                         type="button"
                         disabled={raPage <= 1}
                         onClick={() => setRaPage((p) => p - 1)}
-                        className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="min-h-[40px] px-3 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >Anterior</button>
                       {Array.from({ length: Math.ceil(retainedAdvances.length / 8) }, (_, i) => i + 1).slice(Math.max(0, raPage - 3), raPage + 2).map((p) => (
                         <button
                           key={p}
                           type="button"
                           onClick={() => setRaPage(p)}
-                          className={`w-6 h-6 rounded text-[10px] font-medium transition-colors ${p === raPage ? 'bg-cm-primary text-white' : 'text-cm-on-surface-variant hover:bg-white/5'}`}
+                          className={`min-w-[40px] min-h-[40px] p-2.5 rounded text-[10px] font-medium transition-colors ${p === raPage ? 'bg-cm-primary text-white' : 'text-cm-on-surface-variant hover:bg-white/5'}`}
                         >{p}</button>
                       ))}
                       <button
                         type="button"
                         disabled={raPage >= Math.ceil(retainedAdvances.length / 8)}
                         onClick={() => setRaPage((p) => p + 1)}
-                        className="px-2 py-1 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="min-h-[40px] px-3 rounded text-[10px] text-cm-on-surface-variant hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >Siguiente</button>
                     </div>
                   </div>
