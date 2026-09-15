@@ -195,7 +195,7 @@ export default function TodaysSchedule() {
                     {/* Status */}
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
                           booking.status === 'completed'
                             ? 'bg-green-500/15 text-green-400 border border-green-500/20'
                             : booking.status === 'cancelled'
@@ -206,7 +206,7 @@ export default function TodaysSchedule() {
                         <div className={`w-1.5 h-1.5 rounded-full ${booking.status === 'completed' ? 'bg-green-400' : booking.status === 'cancelled' ? 'bg-red-400' : 'bg-amber-400'}`} />
                         {booking.status === 'reserved' ? 'Reservado' : booking.status === 'completed' ? 'Completo' : booking.status === 'cancelled' ? 'Cancelado' : booking.status}
                       </span>
-                      <span className="text-cm-on-surface-variant text-[10px] font-medium font-[family-name:var(--font-inter)]">
+                      <span className="text-cm-on-surface-variant text-[11px] font-medium font-[family-name:var(--font-inter)]">
                         S/. {booking.total_price}
                       </span>
                     </div>

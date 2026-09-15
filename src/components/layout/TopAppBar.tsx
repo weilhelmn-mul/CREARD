@@ -117,7 +117,7 @@ export default function TopAppBar() {
               >
                 <span className="material-symbols-outlined text-[22px] sm:text-[24px]">notifications</span>
                 {unreadCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-cm-surface">
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center ring-2 ring-cm-surface">
                     {unreadCount}
                   </span>
                 )}
@@ -245,7 +245,7 @@ export default function TopAppBar() {
                     <span className="material-symbols-outlined text-cm-primary text-[12px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                       shield
                     </span>
-                    <span className="text-[10px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
+                    <span className="text-[11px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
                       {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                     </span>
                   </span>
@@ -281,10 +281,10 @@ export default function TopAppBar() {
                           </p>
                           {isAdmin && (
                             <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-cm-primary/15 border border-cm-primary/20">
-                              <span className="material-symbols-outlined text-cm-primary text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                              <span className="material-symbols-outlined text-cm-primary text-[11px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                                 shield
                               </span>
-                              <span className="text-[10px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
+                              <span className="text-[11px] font-bold text-cm-primary uppercase font-[family-name:var(--font-inter)]">
                                 {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                               </span>
                             </span>
@@ -319,7 +319,7 @@ export default function TopAppBar() {
                           </span>
                           <div className="flex-1 text-left">
                             <p>Panel de Administración</p>
-                            <p className="text-[10px] font-normal text-cm-primary/60 mt-0.5">Gestionar reservas, canchas y más</p>
+                            <p className="text-[11px] font-normal text-cm-primary/60 mt-0.5">Gestionar reservas, canchas y más</p>
                           </div>
                           <span className="material-symbols-outlined text-[18px] text-cm-primary/50">chevron_right</span>
                         </button>

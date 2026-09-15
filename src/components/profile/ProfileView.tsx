@@ -110,7 +110,7 @@ export default function ProfileView() {
                 <h1 className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface truncate">
                   {user.name}
                 </h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-cm-primary/10 text-cm-primary border-cm-primary/30">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-cm-primary/10 text-cm-primary border-cm-primary/30">
                   <span className="material-symbols-outlined text-[12px]">verified</span>
                   Activo
                 </span>
@@ -152,7 +152,7 @@ export default function ProfileView() {
             <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">
               {recentBookings.length}
             </p>
-            <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Reservas</p>
+            <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Reservas</p>
           </div>
           <div className="glass-card rounded-xl p-4 text-center">
             <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center mx-auto mb-2">
@@ -161,7 +161,7 @@ export default function ProfileView() {
             <p className="font-[family-name:var(--font-sora)] text-xl font-bold text-cm-on-surface">
               S/ {totalSpent.toFixed(0)}
             </p>
-            <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Total Gastado</p>
+            <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Total Gastado</p>
           </div>
           <div className="glass-card rounded-xl p-4 text-center">
             <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mx-auto mb-2">
@@ -170,7 +170,7 @@ export default function ProfileView() {
             <p className="font-[family-name:var(--font-sora)] text-lg font-bold text-cm-on-surface leading-tight">
               Cusco
             </p>
-            <p className="text-cm-on-surface-variant text-[10px] font-[family-name:var(--font-inter)]">Ubicación</p>
+            <p className="text-cm-on-surface-variant text-[11px] font-[family-name:var(--font-inter)]">Ubicación</p>
           </div>
         </motion.div>
 
@@ -223,7 +223,7 @@ export default function ProfileView() {
                       <p className="text-sm font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">
                         S/ {booking.totalPrice}
                       </p>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${status.color}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${status.color}`}>
                         {status.label}
                       </span>
                     </div>
@@ -253,7 +253,7 @@ export default function ProfileView() {
                 <span className="material-symbols-outlined text-yellow-400 text-[20px]">gavel</span>
                 <div className="text-left">
                   <span className="text-sm text-cm-on-surface font-[family-name:var(--font-inter)] block">Libro de Reclamaciones</span>
-                  <span className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Presenta quejas o reclamos</span>
+                  <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Presenta quejas o reclamos</span>
                 </div>
               </div>
               <span className="material-symbols-outlined text-cm-on-surface-variant text-[18px]">chevron_right</span>

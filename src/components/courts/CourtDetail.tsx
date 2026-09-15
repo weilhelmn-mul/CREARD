@@ -288,6 +288,8 @@ export default function CourtDetail() {
     setSelectedTimeSlot,
     // FIX #2 (FASE 4): se muestra en la barra carrito cuando la selección del slot ya se limpió
     selectedTimeSlot,
+    // R2-A (OLA 1 UX): fecha actual del carrito para bloquear mezclas silenciosas
+    selectedDate: storeSelectedDate,
   } = useAppStore()
 
   const [court, setCourt] = useState<Court | null>(null)
@@ -300,6 +302,14 @@ export default function CourtDetail() {
 
   // Admin booking popup
   const [popupBooking, setPopupBooking] = useState<BookingInfo | null>(null)
+
+  // R2-A (OLA 1 UX): mensaje de bloqueo del carrito (mezcla fecha/hora)
+  const [blockMsg, setBlockMsg] = useState<string | null>(null)
+  useEffect(() => {
+    if (!blockMsg) return
+    const t = setTimeout(() => setBlockMsg(null), 5000)
+    return () => clearTimeout(t)
+  }, [blockMsg])
 
   const timeSlots = useMemo(() => generateTimeSlots(), [])
   const next7Days = useMemo(() => getNext7Days(), [])
@@ -448,22 +458,38 @@ export default function CourtDetail() {
 
   const handleReservar = useCallback(() => {
     if (!selectedTime || !selectedCourtId) return
+    // R2-A (OLA 1 UX): el carrito reserva TODAS las canchas en la MISMA fecha y
+    // hora (un solo selectedTimeSlot/selectedDate en el store). Antes, agregar
+    // una 2ª cancha con otra hora SOBREESCRIBÍA la hora del carrito y todas las
+    // canchas terminaban reservadas en el último horario tocado, en silencio.
+    const endHour = parseInt(selectedTime.split(':')[0], 10) + 1
+    const endTime = `${String(endHour).padStart(2, '0')}:00`
+    const slotRange = `${selectedTime} - ${endTime}`
+    const dateISO = formatDateISO(selectedDate)
+    if (selectedCourtIds.length > 0) {
+      if (storeSelectedDate && dateISO !== storeSelectedDate) {
+        setBlockMsg(`Tu carrito es para el ${storeSelectedDate}. Vacía el carrito para reservar otro día.`)
+        return
+      }
+      if (selectedTimeSlot && selectedTimeSlot !== slotRange) {
+        setBlockMsg(`Tu carrito usa las ${selectedTimeSlot}. Vacía el carrito si quieres otra hora.`)
+        return
+      }
+    }
     // Store court name in the map for cart display
     if (court) {
       setCourtNamesMap((prev) => ({ ...prev, [court.id]: court.name }))
     }
     // Add this court to the multi-court selection cart
-    const endHour = parseInt(selectedTime.split(':')[0], 10) + 1
-    const endTime = `${String(endHour).padStart(2, '0')}:00`
-    setSelectedDate(formatDateISO(selectedDate))
-    setSelectedTimeSlot(`${selectedTime} - ${endTime}`)
+    setSelectedDate(dateISO)
+    setSelectedTimeSlot(slotRange)
     addSelectedCourtId(selectedCourtId)
     // FIX #2 (FASE 4): al agregar al carrito se limpia la selección del slot
     // para que NO queden las dos barras fixed montadas a la vez (barra
     // "Agregar" z-30 + barra "carrito" z-40 apiladas sobre bottom-0).
     // Solo para usuarios: el flujo admin conserva selectedTime.
     if (!isAdmin) setSelectedTime(null)
-  }, [selectedTime, selectedCourtId, selectedDate, court, isAdmin, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
+  }, [selectedTime, selectedCourtId, selectedDate, court, isAdmin, selectedCourtIds, storeSelectedDate, selectedTimeSlot, setSelectedDate, setSelectedTimeSlot, addSelectedCourtId])
 
   // Navigate to booking form with all selected courts
   const handleGoToBooking = useCallback(() => {
@@ -947,6 +973,13 @@ export default function CourtDetail() {
         >
           <div className="max-w-4xl mx-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
             <div className="glass-card rounded-2xl p-4 border border-[#00ff41]/20">
+              {/* R2-A (OLA 1 UX): aviso de bloqueo — el carrito es de una fecha/hora */}
+              {blockMsg && (
+                <div className="flex items-start gap-2 mb-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
+                  <span className="material-symbols-outlined text-red-400 text-[18px] mt-0.5">error</span>
+                  <p className="text-xs text-red-300 font-[family-name:var(--font-inter)] leading-snug">{blockMsg}</p>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#00ff41] text-[20px]">shopping_cart</span>
@@ -990,7 +1023,7 @@ export default function CourtDetail() {
                       agregar al carrito selectedTime se limpia y antes esta
                       línea quedaba vacía */}
                   <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
-                    {selectedTimeSlot || (selectedTime ? `${selectedTime} - ${endTimeStr}` : '')}
+                    {(storeSelectedDate ? `${storeSelectedDate} · ` : '')}{selectedTimeSlot || (selectedTime ? `${selectedTime} - ${endTimeStr}` : '')}
                   </p>
                 </div>
                 <button type="button"

@@ -227,7 +227,7 @@ export default function HeroSection() {
 
         {/* Banner Carousel (shows when heroBanners exist) */}
         {activeBanners.length > 1 && (
-          <div className="relative h-48 md:h-72 mb-6 rounded-2xl overflow-hidden">
+          <div className="relative h-40 sm:h-48 md:h-72 mb-5 md:mb-6 rounded-2xl overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentBanner}
@@ -248,7 +248,7 @@ export default function HeroSection() {
                 {(activeBanners[currentBanner].title || activeBanners[currentBanner].subtitle) && (
                   <div className="absolute bottom-4 left-4 right-4">
                     {activeBanners[currentBanner].subtitle && (
-                      <span className="text-cm-primary text-[10px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
+                      <span className="text-cm-primary text-[11px] font-bold uppercase tracking-wider">{activeBanners[currentBanner].subtitle}</span>
                     )}
                     {activeBanners[currentBanner].title && (
                       <h3 className="font-[family-name:var(--font-sora)] text-lg md:text-2xl font-bold text-white mt-0.5">
@@ -260,16 +260,19 @@ export default function HeroSection() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Dots */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+            {/* Dots — R1/V3 (OLA 1): área de toque ampliada (antes 8px) */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
               {activeBanners.map((_, idx) => (
                 <button type="button"
                   key={idx}
                   onClick={() => { setCurrentBanner(idx) }}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    idx === currentBanner ? 'bg-cm-primary w-4' : 'bg-white/50 hover:bg-white/70'
-                  }`}
-                />
+                  aria-label={`Ir al banner ${idx + 1}`}
+                  className="p-1.5 -m-0.5"
+                >
+                  <span className={`block w-2.5 h-2.5 rounded-full transition-all ${
+                    idx === currentBanner ? 'bg-cm-primary w-5' : 'bg-white/50'
+                  }`} />
+                </button>
               ))}
             </div>
           </div>
@@ -293,8 +296,8 @@ export default function HeroSection() {
           initial="hidden"
           animate={isSectionInView ? 'visible' : 'hidden'}
         >
-          {/* Location Badge */}
-          <motion.div variants={itemVariants} className="inline-flex items-center gap-1.5 mb-4">
+          {/* Location Badge — R1 (OLA 1): oculto en móvil para compactar el hero */}
+          <motion.div variants={itemVariants} className="hidden sm:inline-flex items-center gap-1.5 mb-4">
             <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
               location_on
             </span>
@@ -303,10 +306,10 @@ export default function HeroSection() {
             </span>
           </motion.div>
 
-          {/* Hero Badge */}
+          {/* Hero Badge — R1 (OLA 1): oculto en móvil para compactar el hero */}
           <motion.div
             variants={itemVariants}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
+            className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cm-primary/10 border border-cm-primary/20 mb-6"
           >
             <span className="material-symbols-outlined text-cm-primary text-[16px]" style={{ fontVariationSettings: '"FILL" 1' }}>
               bolt
@@ -316,39 +319,39 @@ export default function HeroSection() {
             </span>
           </motion.div>
 
-          {/* Headline */}
+          {/* Headline — R1 (OLA 1): 28px en móvil (antes 36px) para que el CTA suba al primer viewport */}
           <motion.h1
             variants={itemVariants}
-            className="font-[family-name:var(--font-sora)] text-[36px] sm:text-[48px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-5"
+            className="font-[family-name:var(--font-sora)] text-[28px] sm:text-[44px] md:text-[64px] lg:text-[72px] font-extrabold leading-[1.08] text-cm-on-surface mb-3 sm:mb-5"
           >
             {defaults.headline}{' '}
             <span className="text-cm-primary text-glow">{defaults.headlineHighlight}</span>
           </motion.h1>
 
-          {/* Subtitle */}
+          {/* Subtitle — R1 (OLA 1): line-clamp en móvil */}
           <motion.p
             variants={itemVariants}
-            className="text-cm-on-surface-variant text-base md:text-lg max-w-2xl mx-auto mb-8 font-[family-name:var(--font-inter)] leading-relaxed"
+            className="text-cm-on-surface-variant text-sm sm:text-base md:text-lg max-w-2xl mx-auto mb-5 sm:mb-8 font-[family-name:var(--font-inter)] leading-relaxed line-clamp-2 sm:line-clamp-none"
           >
             {defaults.subtitle}
           </motion.p>
 
           {/* Search Panel */}
           <motion.div variants={itemVariants} className="glass-card rounded-2xl p-4 md:p-6 max-w-2xl mx-auto glow-border">
-            {/* Date Picker with Arrows */}
-            <div className="relative mb-5">
+            {/* Date Picker with Arrows — R1/V3 (OLA 1): flechas 32px ocultas en móvil (el swipe es natural), 44px en desktop */}
+            <div className="relative mb-4 sm:mb-5">
               <button
                 type="button"
                 onClick={() => scrollDates('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+                className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 w-11 h-11 items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
                 aria-label="Fecha anterior"
               >
-                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
               </button>
 
               <div
                 ref={dateScrollRef}
-                className="flex gap-2 overflow-x-auto no-scrollbar px-10 scroll-smooth snap-x"
+                className="flex gap-2 overflow-x-auto no-scrollbar px-1 sm:px-12 scroll-smooth snap-x"
               >
                 {dateList.map((d, idx) => (
                   <button
@@ -361,9 +364,9 @@ export default function HeroSection() {
                         : 'bg-cm-surface-container-highest/50 text-cm-on-surface-variant hover:bg-cm-surface-container-highest/80'
                     }`}
                   >
-                    <span className="text-[10px] uppercase tracking-wider font-bold">{d.dayName}</span>
+                    <span className="text-[11px] uppercase tracking-wider font-bold">{d.dayName}</span>
                     <span className="text-base mt-0.5 font-bold font-[family-name:var(--font-sora)]">{d.date.getDate()}</span>
-                    <span className="text-[10px] mt-0.5 opacity-80">{d.label.split(' ')[1]}</span>
+                    <span className="text-[11px] mt-0.5 opacity-80">{d.label.split(' ')[1]}</span>
                   </button>
                 ))}
               </div>
@@ -371,10 +374,10 @@ export default function HeroSection() {
               <button
                 type="button"
                 onClick={() => scrollDates('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
+                className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 w-11 h-11 items-center justify-center rounded-full bg-cm-surface-container-highest/90 border border-white/10 text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-all shadow-lg backdrop-blur-sm"
                 aria-label="Fecha siguiente"
               >
-                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
               </button>
             </div>
 
@@ -597,7 +600,7 @@ export default function HeroSection() {
             </label>
             <button type="button"
               onClick={addStat}
-              className="text-[10px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
+              className="text-[11px] font-semibold text-cm-primary hover:text-cm-primary-dim flex items-center gap-1"
             >
               <span className="material-symbols-outlined text-[14px]">add</span>
               Agregar

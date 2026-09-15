@@ -214,7 +214,7 @@ export default function FeaturedCourts() {
                     <span className="material-symbols-outlined text-cm-primary text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                       {sportIcons[court.sport] || 'sports'}
                     </span>
-                    <span className="text-[10px] font-bold text-cm-primary uppercase tracking-wide">
+                    <span className="text-[11px] font-bold text-cm-primary uppercase tracking-wide">
                       {sportLabels[court.sport] || court.sport}
                     </span>
                   </div>
@@ -225,7 +225,7 @@ export default function FeaturedCourts() {
                       <span className="material-symbols-outlined text-cm-on-primary text-[12px]" style={{ fontVariationSettings: '"FILL" 1' }}>
                         schedule
                       </span>
-                      <span className="text-[10px] font-bold text-cm-on-primary">
+                      <span className="text-[11px] font-bold text-cm-on-primary">
                         {court.availableToday} hrs
                       </span>
                     </div>
@@ -244,7 +244,7 @@ export default function FeaturedCourts() {
                     {court.amenities.filter(Boolean).slice(0, 3).map((amenity: string, i: number) => (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/80 text-cm-on-surface-variant text-[10px] font-medium"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cm-surface-container-highest/80 text-cm-on-surface-variant text-[11px] font-medium"
                       >
                         <span className="material-symbols-outlined text-[11px]">
                           {amenityIcons[amenity.toLowerCase()] || 'check_circle'}
@@ -261,20 +261,20 @@ export default function FeaturedCourts() {
                         <div className="space-y-0.5">
                           {court.pricingSchedule.map((ps, psi) => (
                             <div key={psi} className="flex items-center gap-1.5">
-                              <span className="text-[9px] text-cm-on-surface-variant font-medium">{ps.label}</span>
+                              <span className="text-[11px] text-cm-on-surface-variant font-medium">{ps.label}</span>
                               <span className="font-[family-name:var(--font-sora)] text-sm md:text-base font-bold text-cm-primary">
                                 S/. {ps.pricePerHour}
-                                <span className="text-[9px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                                <span className="text-[11px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
                               </span>
                             </div>
                           ))}
                         </div>
                       ) : (
                         <div>
-                          <p className="text-[10px] text-cm-on-surface-variant font-medium">Desde</p>
+                          <p className="text-[11px] text-cm-on-surface-variant font-medium">Desde</p>
                           <p className="font-[family-name:var(--font-sora)] text-lg md:text-xl font-bold text-cm-primary">
                             S/. {court.price_per_hour}
-                            <span className="text-[10px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
+                            <span className="text-[11px] text-cm-on-surface-variant font-normal ml-0.5">/hr</span>
                           </p>
                         </div>
                       )}

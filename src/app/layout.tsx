@@ -14,7 +14,9 @@ const sora = Sora({
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  // V1 (OLA 1 UX): pesos reales 300-700 — antes solo 400/700 y la UI usa
+  // font-medium/semibold profusamente (pesos sintetizados = texto borroso)
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {

@@ -170,20 +170,33 @@ const expenseCategories: Record<string, { label: string; icon: string; color: st
   otros:         { label: 'Otros',         icon: 'more_horiz',  color: 'text-gray-400' },
 }
 
-const adminTabs: { key: AdminTab; label: string; icon: string }[] = [
-  { key: 'reservas',  label: 'Reservas',  icon: 'calendar_month' },
-  { key: 'finanzas',  label: 'Finanzas',  icon: 'account_balance_wallet' },
-  { key: 'clientes', label: 'Clientes',  icon: 'leaderboard' },
-  { key: 'gastos',    label: 'Gastos',    icon: 'receipt_long' },
-  { key: 'equipos',   label: 'Equipos',   icon: 'sports_tennis' },
-  { key: 'alarmas',   label: 'Alarmas',   icon: 'notifications_active' },
-  { key: 'reclamaciones', label: 'Reclamaciones', icon: 'gavel' },
-  { key: 'canchas',    label: 'Canchas',    icon: 'sports_soccer' },
-  { key: 'usuarios',  label: 'Usuarios',  icon: 'group' },
-  { key: 'contenido', label: 'Contenido', icon: 'edit_note' },
-  { key: 'pagos',       label: 'Pagos',          icon: 'verified' },
-  { key: 'yape_config',  label: 'Pago Yape',      icon: 'qr_code_2' },
-  { key: 'config',     label: 'Configuración', icon: 'settings' },
+// A1 (OLA 1 UX): tabs agrupados en 4 familias sticky + renombres para que lo
+// urgente sea encontrable ("Pagos"→"Validar Pagos", "Pago Yape"→"Yape/Culqi").
+// Antes: 13 tabs planos, "Pagos" era el 11º y su badge quedaba a x=1326px
+// (invisible en móvil).
+type AdminGroup = 'operaciones' | 'finanzas' | 'clientes' | 'configuracion'
+
+const adminGroups: { key: AdminGroup; label: string; icon: string }[] = [
+  { key: 'operaciones',   label: 'Operaciones',   icon: 'bolt' },
+  { key: 'finanzas',      label: 'Finanzas',      icon: 'payments' },
+  { key: 'clientes',      label: 'Clientes',      icon: 'groups' },
+  { key: 'configuracion', label: 'Configuración', icon: 'tune' },
+]
+
+const adminTabs: { key: AdminTab; label: string; icon: string; group: AdminGroup }[] = [
+  { key: 'reservas',      label: 'Reservas',          icon: 'calendar_month',       group: 'operaciones' },
+  { key: 'pagos',         label: 'Validar Pagos',     icon: 'verified',             group: 'operaciones' },
+  { key: 'reclamaciones', label: 'Reclamaciones',     icon: 'gavel',                group: 'operaciones' },
+  { key: 'alarmas',       label: 'Alarmas',           icon: 'notifications_active', group: 'operaciones' },
+  { key: 'finanzas',      label: 'Ingresos',          icon: 'account_balance_wallet', group: 'finanzas' },
+  { key: 'gastos',        label: 'Gastos',            icon: 'receipt_long',         group: 'finanzas' },
+  { key: 'clientes',      label: 'Análisis',          icon: 'leaderboard',          group: 'clientes' },
+  { key: 'usuarios',      label: 'Usuarios',          icon: 'group',                group: 'clientes' },
+  { key: 'equipos',       label: 'Equipamiento',      icon: 'sports_tennis',        group: 'configuracion' },
+  { key: 'canchas',       label: 'Canchas y tarifas', icon: 'sports_soccer',        group: 'configuracion' },
+  { key: 'contenido',     label: 'Contenido',         icon: 'edit_note',            group: 'configuracion' },
+  { key: 'yape_config',   label: 'Yape/Culqi',        icon: 'qr_code_2',            group: 'configuracion' },
+  { key: 'config',        label: 'Configuración',     icon: 'settings',             group: 'configuracion' },
 ]
 
 /* ─── helpers ─── */
@@ -2314,6 +2327,11 @@ export default function AdminDashboard() {
   const { setView, user: loggedInUser } = useAppStore()
   const isSuperAdmin = loggedInUser?.role === 'super_admin'
   const [activeTab, setActiveTab] = useState<AdminTab>('reservas')
+  // A1 (OLA 1 UX): grupo activo derivado del tab actual
+  const activeGroup: AdminGroup = adminTabs.find((t) => t.key === activeTab)?.group || 'operaciones'
+  // A2 (OLA 1 UX): hoja de cambio de estado de reserva (botones grandes + confirmación)
+  const [statusSheetBooking, setStatusSheetBooking] = useState<Booking | null>(null)
+  const [statusSheetPending, setStatusSheetPending] = useState<string | null>(null)
 
   /* data */
   const [stats, setStats] = useState<Stats | null>(null)
@@ -4144,38 +4162,67 @@ export default function AdminDashboard() {
                         {isCCompleted && (
                           <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-green-400/10 via-green-400/[0.03] to-transparent animate-scanline-green pointer-events-none" />
                         )}
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                          {/* Date & Time */}
-                          <div className="flex items-center gap-2 sm:w-32 flex-shrink-0">
-                            <span className="material-symbols-outlined text-cm-on-surface-variant text-[16px]">event</span>
-                            <div>
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</p>
-                                {b.recurringGroupId && (
-                                  <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-0.5 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
-                                    <span className="material-symbols-outlined text-[13px]">repeat</span>
-                                  </button>
+                        {/* A2 (OLA 1 UX): tarjeta rediseñada — fila 1: CLIENTE (dato nº1) + estado;
+                            fila 2: fecha·hora·cancha·método·precio; fila 3: acciones con wrap */}
+                        <div className="flex flex-col gap-2">
+                          {/* Fila 1 — cliente + estado */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-cm-primary/10 border border-cm-primary/20 text-cm-primary text-[14px] font-bold flex-shrink-0 font-[family-name:var(--font-sora)]">
+                                {(b.user?.name || '?').trim().charAt(0).toUpperCase()}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-sm text-cm-on-surface font-semibold font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
+                                {b.user?.email && (
+                                  <p className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user.email}</p>
                                 )}
                               </div>
-                              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">{formatTimeRange(b.startTime, b.endTime, use12hFormat)}</p>
                             </div>
+                            {b.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green flex-shrink-0">
+                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                                {st.label}
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${st.color}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                                {st.label}
+                              </span>
+                            )}
                           </div>
-                          {/* Court */}
-                          <div className="flex items-center gap-1.5 sm:w-36 flex-shrink-0">
-                            <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
-                            <span className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate">
-                              {b.courtIds && b.courtIds.length > 1
-                                ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
-                                : (b.court?.name || 'N/A')}
+                          {/* Fila 2 — fecha · hora · cancha · método · precio */}
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="material-symbols-outlined text-cm-on-surface-variant text-[14px]">event</span>
+                              <span className="text-cm-on-surface font-medium font-[family-name:var(--font-inter)]">{fmtDate(b.date)}</span>
+                              <span className="text-cm-on-surface-variant font-[family-name:var(--font-inter)]">· {formatTimeRange(b.startTime, b.endTime, use12hFormat)}</span>
+                              {b.recurringGroupId && (
+                                <button type="button" onClick={() => openSeriesModal(b.recurringGroupId!)} className="p-1 rounded text-cm-primary hover:bg-cm-primary/10 transition-colors" title="Serie recurrente">
+                                  <span className="material-symbols-outlined text-[13px]">repeat</span>
+                                </button>
+                              )}
                             </span>
+                            <span className="inline-flex items-center gap-1 min-w-0">
+                              <span className="material-symbols-outlined text-cm-primary text-[14px]">{sportIcons[b.court?.sport || ''] || 'sports'}</span>
+                              <span className="text-cm-on-surface font-medium font-[family-name:var(--font-sora)] truncate max-w-[170px]">
+                                {b.courtIds && b.courtIds.length > 1
+                                  ? (b.courts?.map(c => c.name).join(', ') || `${b.courtIds.length} canchas`)
+                                  : (b.court?.name || 'N/A')}
+                              </span>
+                            </span>
+                            {b.paymentMethod && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant"
+                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
+                              >
+                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
+                                <span>{paymentMethodLabel(b.paymentMethod)}</span>
+                              </span>
+                            )}
+                            <span className="text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
                           </div>
-                          {/* Client */}
-                          <div className="flex-1 min-w-0 hidden md:block">
-                            <p className="text-xs text-cm-on-surface font-medium font-[family-name:var(--font-inter)] truncate">{b.user?.name || 'Sin nombre'}</p>
-                            <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] truncate">{b.user?.email || ''}</p>
-                          </div>
-                          {/* Status + Price + Action */}
-                          <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto flex-shrink-0">
+                          {/* Fila 3 — acciones con wrap (antes desbordaban en 320px) */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
                             {b.recurringGroupId && (
                               <button type="button"
                                 onClick={() => openSeriesModal(b.recurringGroupId!)}
@@ -4185,28 +4232,6 @@ export default function AdminDashboard() {
                                 <span className="material-symbols-outlined text-[18px]">repeat</span>
                               </button>
                             )}
-                            {b.status === 'completed' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.25),0_0_3px_rgba(34,197,94,0.5)] border border-green-400/20 animate-glow-green">
-                                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
-                                {st.label}
-                              </span>
-                            ) : (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.color}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                                {st.label}
-                              </span>
-                            )}
-                            {b.paymentMethod && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cm-surface-container-highest/60 text-cm-on-surface-variant hidden sm:inline-flex"
-                                title={b.paymentMethod === 'MIXTO' && b.paymentBreakdown ? `Efectivo: S/ ${(b.paymentBreakdown.efectivo || 0).toFixed(2)} + ${b.paymentBreakdown.digitalMethod || 'Yape/Plin'}: S/ ${(b.paymentBreakdown.digital || 0).toFixed(2)}` : undefined}
-                              >
-                                {b.paymentMethod === 'YAPE' ? '📱' : b.paymentMethod === 'PLIN' ? '💜' : b.paymentMethod === 'MIXTO' ? '💵📱' : '💵'}
-                                <span>{paymentMethodLabel(b.paymentMethod)}</span>
-                              </span>
-                            )}
-                            <span className="text-xs text-cm-primary font-bold font-[family-name:var(--font-sora)] whitespace-nowrap">{fmtCurrency(b.totalPrice)}</span>
-                            {/* B8 FIX: Always show payment button */}
                             <button type="button"
                               onClick={() => openAdvanceModal(b)}
                               className="p-2.5 rounded-lg text-amber-400 hover:bg-amber-400/10 transition-colors"
@@ -4232,15 +4257,14 @@ export default function AdminDashboard() {
                                 <span className="material-symbols-outlined text-[18px]">edit</span>
                               </button>
                             )}
-                            <select
-                              value={b.status}
-                              onChange={(e) => handleStatusChangeWithAdvanceCheck(b, e.target.value)}
-                              className="bg-cm-surface-container-highest/60 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-cm-on-surface focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+                            <button type="button"
+                              onClick={() => { setStatusSheetBooking(b); setStatusSheetPending(null) }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-cm-surface-container-highest/60 border border-white/10 text-[11px] font-semibold text-cm-on-surface hover:border-cm-primary/40 transition-colors"
+                              title="Cambiar estado"
                             >
-                              <option value="reserved">Reservado</option>
-                              <option value="completed">Completo</option>
-                              <option value="cancelled">Cancelado</option>
-                            </select>
+                              <span className="material-symbols-outlined text-[16px]">tune</span>
+                              {st.label}
+                            </button>
                             {isSuperAdmin && (
                               <button type="button"
                                 onClick={() => handleDeleteBooking(b.id)}
@@ -4313,44 +4337,178 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl mb-6 overflow-x-auto no-scrollbar scroll-hint-x">
-          {adminTabs.map((tab) => {
-            // Alerta visual: la pestaña Pagos cambia de color y muestra un badge
-            // cuando hay pagos pendientes de validación por el administrador.
-            const pendingValidations = tab.key === 'pagos' ? paymentsToValidate : 0
-            const alertTab = pendingValidations > 0
-            return (
-              <button type="button"
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 py-2.5 px-4 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
-                  activeTab === tab.key
-                    ? alertTab
-                      ? 'bg-orange-500/15 text-orange-400 font-semibold'
-                      : 'bg-cm-primary/10 text-cm-primary font-semibold'
-                    : alertTab
-                      ? 'text-orange-400 hover:text-orange-300'
-                      : 'text-cm-on-surface-variant hover:text-cm-on-surface'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
-                {tab.label}
-                {alertTab && (
-                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none animate-pulse">
-                    {pendingValidations > 99 ? '99+' : pendingValidations}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        {/* A1 (OLA 1 UX): navegación agrupada STICKY — 4 grupos + sub-tabs del
+            grupo activo. El badge de pagos pendientes ahora vive en el GRUPO
+            (siempre visible, sin depender del scroll de la tira). */}
+        <div className="sticky top-14 z-30 -mx-4 px-4 pt-2 pb-2.5 bg-cm-background/95 backdrop-blur-md border-b border-white/5 mb-4">
+          {/* Grupos */}
+          <div className="flex gap-1.5 mb-1.5 overflow-x-auto no-scrollbar">
+            {adminGroups.map((g) => {
+              const gTabs = adminTabs.filter((t) => t.group === g.key)
+              const isActiveGroup = g.key === activeGroup
+              const gBadge = g.key === 'operaciones' ? paymentsToValidate : 0
+              return (
+                <button type="button"
+                  key={g.key}
+                  onClick={() => { if (!gTabs.some((t) => t.key === activeTab)) setActiveTab(gTabs[0].key) }}
+                  className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0 transition-all border ${
+                    isActiveGroup
+                      ? 'bg-cm-primary/15 text-cm-primary border-cm-primary/30'
+                      : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border-white/10 hover:text-cm-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">{g.icon}</span>
+                  {g.label}
+                  {gBadge > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none animate-pulse">
+                      {gBadge > 99 ? '99+' : gBadge}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          {/* Sub-tabs del grupo activo */}
+          <div className="flex gap-1 p-1 bg-cm-surface-container-highest/40 rounded-xl overflow-x-auto no-scrollbar scroll-hint-x">
+            {adminTabs.filter((t) => t.group === activeGroup).map((tab) => {
+              const pendingValidations = tab.key === 'pagos' ? paymentsToValidate : 0
+              const alertTab = pendingValidations > 0
+              return (
+                <button type="button"
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 py-2 px-3 rounded-lg text-[13px] font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                    activeTab === tab.key
+                      ? alertTab
+                        ? 'bg-orange-500/15 text-orange-400 font-semibold'
+                        : 'bg-cm-primary/10 text-cm-primary font-semibold'
+                      : alertTab
+                        ? 'text-orange-400 hover:text-orange-300'
+                        : 'text-cm-on-surface-variant hover:text-cm-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                  {tab.label}
+                  {alertTab && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none animate-pulse">
+                      {pendingValidations > 99 ? '99+' : pendingValidations}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
+
+        {/* A2 (OLA 1 UX): hoja de cambio de estado — botones grandes, confirmación
+            para cambios irreversibles (Completo) y cierre seguro en móvil */}
+        <AnimatePresence>
+          {statusSheetBooking && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center"
+              onClick={() => { setStatusSheetBooking(null); setStatusSheetPending(null) }}
+            >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ y: 60, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 60, opacity: 0 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+                className="relative w-full sm:max-w-sm bg-cm-surface-container rounded-t-2xl sm:rounded-2xl border border-white/10 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">Cambiar estado</p>
+                    <p className="text-xs text-cm-on-surface-variant truncate">
+                      {statusSheetBooking.user?.name || 'Sin nombre'} · {fmtDate(statusSheetBooking.date)} · {formatTimeRange(statusSheetBooking.startTime, statusSheetBooking.endTime, use12hFormat)}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => { setStatusSheetBooking(null); setStatusSheetPending(null) }}
+                    className="p-2.5 rounded-lg text-cm-on-surface-variant hover:bg-white/5 transition-colors" aria-label="Cerrar">
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+                {statusSheetPending ? (
+                  <div>
+                    <p className="text-sm text-cm-on-surface mb-3">
+                      ¿Cambiar el estado a <b>{statusConfig[statusSheetPending]?.label || statusSheetPending}</b>? Esta acción se registra en el sistema.
+                    </p>
+                    <div className="flex gap-2">
+                      <button type="button"
+                        onClick={() => {
+                          const bRef = statusSheetBooking
+                          setStatusSheetBooking(null)
+                          setStatusSheetPending(null)
+                          if (bRef) handleStatusChangeWithAdvanceCheck(bRef, statusSheetPending)
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-cm-primary text-[#003907] font-bold text-sm active:scale-[0.98] transition-transform"
+                      >
+                        Sí, cambiar
+                      </button>
+                      <button type="button" onClick={() => setStatusSheetPending(null)}
+                        className="flex-1 py-3 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface text-sm font-medium"
+                      >
+                        Volver
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {['reserved', 'completed', 'cancelled'].map((sVal) => {
+                      const cfg = statusConfig[sVal] || statusConfig.reserved
+                      const isCurrent = statusSheetBooking.status === sVal
+                      return (
+                        <button key={sVal} type="button" disabled={isCurrent}
+                          onClick={() => {
+                            if (sVal === 'completed') {
+                              setStatusSheetPending('completed')
+                            } else {
+                              const bRef = statusSheetBooking
+                              setStatusSheetBooking(null)
+                              if (bRef) handleStatusChangeWithAdvanceCheck(bRef, sVal)
+                            }
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-colors ${isCurrent ? 'opacity-40 cursor-default' : 'hover:bg-white/5'} ${cfg.color} border-white/10`}
+                        >
+                          <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
+                          <span className="text-sm font-semibold">{cfg.label}</span>
+                          {isCurrent && <span className="ml-auto text-[11px] text-cm-on-surface-variant">actual</span>}
+                        </button>
+                      )
+                    })}
+                    <p className="text-[11px] text-cm-on-surface-variant px-1 pt-1">
+                      "Completo" pide confirmación aquí; "Cancelado" abre su propio diálogo de cancelación.
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ═════════════════ TAB CONTENT ═════════════════ */}
         <AnimatePresence mode="wait">
           {/* ─── RESERVAS ─── */}
           {activeTab === 'reservas' && (
             <motion.div key="reservas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+              {/* A1 (OLA 1 UX): KPIs del día al aterrizar — antes hoyStats estaba
+                  calculado pero NUNCA se renderizaba (código muerto) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                {kpis.map((k) => (
+                  <div key={k.label} className={`glass-card rounded-xl p-3 ${k.bg} border border-white/10`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className={`material-symbols-outlined text-[16px] ${k.color}`}>{k.icon}</span>
+                      <p className="text-[10px] uppercase tracking-wide text-cm-on-surface-variant font-semibold truncate">{k.label}</p>
+                    </div>
+                    <p className="text-lg font-bold text-cm-on-surface font-[family-name:var(--font-sora)]">{k.value}</p>
+                    <p className="text-[10px] text-cm-on-surface-variant">{k.sub}</p>
+                  </div>
+                ))}
+              </div>
               {/* ─── Live Clock + Alarm Indicator ─── */}
               <LiveClock alarmsCount={bookingAlerts.length} settings={notifSettings} />
 
