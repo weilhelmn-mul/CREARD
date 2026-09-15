@@ -83,6 +83,8 @@ interface PaymentRecord {
   payment_time?: string
   status?: string
   external_ref?: string | null
+  // R6-B (OLA 2 UX): nombre con el que el usuario yapeó
+  yape_payer_name?: string | null
   created_at?: any
   booking_created_at?: any
   validated_by?: string
@@ -511,6 +513,9 @@ export default function PaymentValidationTab({ onValidationChange }: PaymentVali
             <InfoItem label="Correo Electronico" value={p.user_email || 'No registrado'} />
             <InfoItem label="Telefono" value={p.user_phone || 'No registrado'} />
             <InfoItem label="Documento de Identidad" value={p.user_document || 'No registrado'} />
+            {p.yape_payer_name && (
+              <InfoItem label="Yapeó como (declarado por cliente)" value={p.yape_payer_name} />
+            )}
           </div>
         </div>
 

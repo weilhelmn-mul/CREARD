@@ -164,6 +164,8 @@ export async function GET(request: NextRequest) {
         booking_slot_status: booking?.slot_status || '',
         booking_notes: booking?.notes || '',
         booking_payment_method: booking?.payment_method || '',
+        // R6-B (OLA 2 UX): nombre con el que el usuario yapeó
+        yape_payer_name: booking?.yape_payer_name || null,
       };
     });
 

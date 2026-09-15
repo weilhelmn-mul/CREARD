@@ -194,8 +194,18 @@ export default function ProfileView() {
           </div>
           <div className="space-y-2">
             {recentBookings.length === 0 ? (
-              <div className="text-center py-8 text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)]">
-                No tienes reservas aún
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <span className="material-symbols-outlined text-[44px] text-cm-on-surface-variant/25 mb-2">event_busy</span>
+                <p className="text-cm-on-surface-variant text-sm font-[family-name:var(--font-inter)] mb-3">
+                  No tienes reservas aún
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView('booking')}
+                  className="px-5 py-2.5 rounded-xl bg-cm-primary text-[#003907] text-sm font-bold active:scale-95 transition-transform"
+                >
+                  Reservar tu primera cancha
+                </button>
               </div>
             ) : (
               recentBookings.map((booking) => {

@@ -6,6 +6,7 @@ import { useAppStore, type User } from '@/store/useAppStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthHeaders } from '@/lib/auth-helpers'
 import { paymentMethodLabel } from '@/lib/paymentMethodLabels'
+import DateCalendarSheet from '@/components/bookings/DateCalendarSheet'
 
 /* ───────────── Interfaces ───────────── */
 
@@ -126,10 +127,12 @@ function getMonthShort(date: Date): string {
   return months[date.getMonth()]
 }
 
-function getNext7Days(): Date[] {
+function getNext14Days(): Date[] {
+  // R4 (OLA 2 UX): horizonte unificado a 14 días (antes 7 — era el único
+  // selector con menos horizonte que el resto de la app)
   const days: Date[] = []
   const now = new Date()
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() + i))
   }
   return days
@@ -290,6 +293,10 @@ export default function CourtDetail() {
     selectedTimeSlot,
     // R2-A (OLA 1 UX): fecha actual del carrito para bloquear mezclas silenciosas
     selectedDate: storeSelectedDate,
+    // R3 (OLA 2 UX): retorno post-login a la cancha/hora elegida
+    returnTo,
+    setReturnTo,
+    clearReturnTo,
   } = useAppStore()
 
   const [court, setCourt] = useState<Court | null>(null)
@@ -312,11 +319,21 @@ export default function CourtDetail() {
   }, [blockMsg])
 
   const timeSlots = useMemo(() => generateTimeSlots(), [])
-  const next7Days = useMemo(() => getNext7Days(), [])
+  const next14Days = useMemo(() => getNext14Days(), [])
+  // R4 (OLA 2 UX): calendario mensual para fechas lejanas
+  const [calOpen, setCalOpen] = useState(false)
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   const isUser = !!user && !isAdmin
   const isGuest = !user
+
+  // R3 (OLA 2 UX): restaurar la hora elegida si volvemos del login
+  useEffect(() => {
+    if (returnTo && returnTo.view === 'court-detail' && returnTo.courtId === selectedCourtId) {
+      if (returnTo.timeSlot) setSelectedTime(returnTo.timeSlot)
+      clearReturnTo()
+    }
+  }, [returnTo, selectedCourtId, clearReturnTo])
 
   /* ──── Fetch court ──── */
   useEffect(() => {
@@ -447,13 +464,16 @@ export default function CourtDetail() {
       if (bk.has(hour) || ph.has(hour)) return
 
       if (isGuest) {
+        // R3 (OLA 2 UX): recordar cancha + hora para continuar la reserva
+        // automáticamente después del login (antes: caía en home sin contexto)
+        setReturnTo({ view: 'court-detail', courtId: selectedCourtId, timeSlot: slot })
         setView('login')
         return
       }
 
       setSelectedTime(slot)
     },
-    [isAdmin, adminSlotMap, isGuest, setView, bookings, selectedDate]
+    [isAdmin, adminSlotMap, isGuest, setView, setReturnTo, bookings, selectedDate]
   )
 
   const handleReservar = useCallback(() => {
@@ -793,23 +813,36 @@ export default function CourtDetail() {
           transition={{ delay: 0.2 }}
           className="mb-6"
         >
-          <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg mb-3 flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-[#00ff41] text-[20px]"
-              style={{ fontVariationSettings: '"FILL" 1' }}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-[family-name:var(--font-sora)] font-semibold text-cm-on-surface text-lg flex items-center gap-2">
+              <span
+                className="material-symbols-outlined text-[#00ff41] text-[20px]"
+                style={{ fontVariationSettings: '"FILL" 1' }}
+              >
+                calendar_month
+              </span>
+              Disponibilidad
+            </h2>
+            {/* R4 (OLA 2 UX): acceso al calendario mensual */}
+            <button
+              type="button"
+              onClick={() => setCalOpen(true)}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cm-surface-container-highest/60 border border-white/10 text-[11px] font-semibold text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-colors active:scale-95"
             >
-              calendar_month
-            </span>
-            Disponibilidad
-          </h2>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 snap-x">
-            {next7Days.map((date) => {
+              <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+              Elegir fecha
+            </button>
+          </div>
+          {/* R5 (OLA 2 UX): scroll-hint — la tira de fechas invita a deslizar */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 snap-x scroll-hint-x">
+            {next14Days.map((date) => {
               const dateStr = formatDateISO(date)
               const isSelected = dateStr === formatDateISO(selectedDate)
               const todayFlag = isToday(date)
               return (
                 <button type="button"
                   key={dateStr}
+                  id={`cd-date-${dateStr}`}
                   onClick={() => handleSelectDate(date)}
                   className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl min-w-[68px] transition-all duration-200 flex-shrink-0 snap-start ${
                     isSelected
@@ -897,6 +930,25 @@ export default function CourtDetail() {
             </div>
           )}
 
+          {/* R5 (OLA 2 UX): leyenda para usuarios (antes solo existía la de admin;
+              ocupado vs transcurrido era indistinguible sin zoom) */}
+          {!isAdmin && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 px-1">
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Libre</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-white/15" />
+                <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Ocupado</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-white/5" />
+                <span className="text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Transcurrido</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
             {timeSlots.map((slot) => {
               const hour = parseInt(slot.split(':')[0], 10)
@@ -962,6 +1014,20 @@ export default function CourtDetail() {
           </div>
         </motion.div>
       )}
+
+      {/* R4 (OLA 2 UX): calendario mensual */}
+      <DateCalendarSheet
+        open={calOpen}
+        selectedISO={selectedDate ? formatDateISO(selectedDate) : null}
+        onSelect={(iso) => {
+          const [y, m, d] = iso.split('-').map(Number)
+          handleSelectDate(new Date(y, m - 1, d))
+          setTimeout(() => {
+            document.getElementById(`cd-date-${iso}`)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+          }, 80)
+        }}
+        onClose={() => setCalOpen(false)}
+      />
 
       {/* ─── Cart Bar: shows when courts are selected ─── */}
       {selectedCourtIds.length > 0 && !isAdmin && (

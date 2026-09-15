@@ -295,7 +295,7 @@ export default function BookingsView() {
           <button
               type="button"
               onClick={() => setUse12hFormat(!use12hFormat)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cm-surface-container-highest/60 border border-white/10 text-cm-on-surface-variant hover:text-cm-on-surface hover:border-white/20 transition-all active:scale-95"
               title={use12hFormat ? 'Cambiar a formato 24h' : 'Cambiar a formato 12h'}
             >
               <span className="material-symbols-outlined text-[16px]">schedule</span>

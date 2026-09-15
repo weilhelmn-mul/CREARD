@@ -80,6 +80,8 @@ interface AppState {
   sportFilter: string
   isMobile: boolean
   authChecked: boolean // true after initial session restoration attempt
+  // R3 (OLA 2 UX): destino al que volver tras el login obligatorio
+  returnTo: { view: ViewType; courtId?: string | null; timeSlot?: string | null } | null
 
   setView: (view: ViewType) => void
   setSelectedCourt: (courtId: string | null) => void
@@ -100,6 +102,8 @@ interface AppState {
   setMobile: (mobile: boolean) => void
   logout: () => void
   setAuthChecked: (checked: boolean) => void
+  setReturnTo: (r: { view: ViewType; courtId?: string | null; timeSlot?: string | null } | null) => void
+  clearReturnTo: () => void
 }
 
 // Restore persisted session from localStorage
@@ -120,6 +124,8 @@ export const useAppStore = create<AppState>((set) => ({
   notifications: [],
   sportFilter: 'todos',
   isMobile: false,
+  // R3 (OLA 2 UX): sin destino recordado al inicio
+  returnTo: null,
 
   setView: (view) => set({ currentView: view }),
   setSelectedCourt: (courtId) => set({ selectedCourtId: courtId }),
@@ -169,6 +175,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ user: null, firebaseToken: null, currentView: 'home' })
   },
   setAuthChecked: (checked: boolean) => set({ authChecked: checked }),
+  setReturnTo: (r) => set({ returnTo: r }),
+  clearReturnTo: () => set({ returnTo: null }),
 }))
 
 // Initialize mobile detection

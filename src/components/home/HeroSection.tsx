@@ -388,7 +388,7 @@ export default function HeroSection() {
                   type="button"
                   key={sport.value}
                   onClick={() => setSelectedSport(selectedSport === sport.value ? null : sport.value)}
-                  className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
+                  className={`flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 border tap-feedback ${
                     selectedSport === sport.value
                       ? 'bg-cm-primary/10 text-cm-primary border-cm-primary/40 shadow-md shadow-cm-primary/10'
                       : 'bg-cm-surface-container-highest/40 text-cm-on-surface-variant border-white/10 hover:border-white/20'

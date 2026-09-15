@@ -158,7 +158,7 @@ export default function TodaysSchedule() {
           </motion.div>
         ) : (
           <div className="glass-card rounded-2xl p-4 md:p-6 overflow-hidden">
-            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 snap-x">
+            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 snap-x scroll-hint-x">
               <div className="flex gap-3 pb-2 min-w-max">
                 {bookings.map((booking, index) => (
                   <motion.div

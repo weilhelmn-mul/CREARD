@@ -28,6 +28,9 @@ import TermsAndConditions from '@/components/legal/TermsAndConditions'
 import RefundPolicy from '@/components/legal/RefundPolicy'
 // REQUISITO 1 (AUDITORÍA): Footer con datos de contacto y redes sociales
 import SiteFooter from '@/components/layout/SiteFooter'
+// R3 (OLA 2 UX): historial de vistas (atrás real) + borrador de reserva
+import { installViewHistory, restoreBookingDraft } from '@/lib/viewNavigation'
+import { useEffect } from 'react'
 
 function HomeView() {
   const { settings } = useSiteSettings()
@@ -157,6 +160,13 @@ export default function Home() {
   const { currentView } = useAppStore()
   // REQUISITO 1 (AUDITORÍA): Footer visible en todas las vistas no-fullpage
   const isFullPage = currentView === 'booking-form' || currentView === 'booking' || currentView === 'login' || currentView === 'register'
+
+  // R3 (OLA 2 UX): atrás del celular navega vistas internas; el borrador de
+  // reserva sobrevive a recargas (antes se perdía todo el avance)
+  useEffect(() => {
+    installViewHistory()
+    restoreBookingDraft()
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-cm-background">

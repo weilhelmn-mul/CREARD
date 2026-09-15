@@ -332,6 +332,22 @@
 }
 
 /* ══════════════════════════════════════════════════════════════
+   V3 (OLA 2 UX): feedback táctil unificado — todo botón .tap-feedback
+   responde al toque (escala + fondo sutil). No cambia nada en reposo
+   ni en PC.
+   ══════════════════════════════════════════════════════════════ */
+.tap-feedback {
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.tap-feedback:active {
+  transform: scale(0.96);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.tap-feedback:disabled {
+  transform: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
    FIX #9 (FASE 4): Safe-areas iOS — se aplican directamente con
    env() en BottomNavBar / TopAppBar / SiteFooter / page.tsx y en
    las barras de acción del flujo de reserva. En navegadores sin

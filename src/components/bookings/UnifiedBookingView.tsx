@@ -8,6 +8,7 @@ import { getAuthHeaders } from '@/lib/auth-helpers'
 import CulqiPayButton from '@/components/payments/CulqiPayButton'
 import YapeQRPayButton from '@/components/payments/YapeQRPayButton'
 import PaymentVoucher from '@/components/payments/PaymentVoucher'
+import DateCalendarSheet from '@/components/bookings/DateCalendarSheet'
 
 /* ═══════════════════════════════════════════════════════
    CREARD — UnifiedBookingView
@@ -161,7 +162,17 @@ export default function UnifiedBookingView() {
   const [clientPhone, setClientPhone] = useState(user?.phone || '')
   const [clientEmail, setClientEmail] = useState(user?.email || '')
   const [formStep, setFormStep] = useState<'select' | 'summary' | 'payment' | 'done'>('select')
+  // R4 (OLA 2 UX): calendario mensual para elegir fechas lejanas
+  const [calOpen, setCalOpen] = useState(false)
   const [activePaymentMethod, setActivePaymentMethod] = useState<'yape_qr' | 'culqi'>('yape_qr')
+
+  // R4 (OLA 2 UX): auto-scroll de la tira de fechas al día activo — si llegas
+  // con una fecha lejana preseleccionada, el día elegido queda fuera de pantalla
+  useEffect(() => {
+    if (!selectedDate || formStep !== 'select') return
+    const el = dateScrollRef.current?.querySelector(`[data-iso="${selectedDate}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }, [selectedDate, formStep])
   const [paymentType, setPaymentType] = useState<'advance' | 'full_payment'>('advance')
   const [lastPaymentId, setLastPaymentId] = useState<string | null>(null)
   const [showVoucher, setShowVoucher] = useState(false)
@@ -604,17 +615,28 @@ export default function UnifiedBookingView() {
 
           {/* ── Date Picker ── */}
           <div className="mb-5">
-            <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-2.5 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px] text-[#00ff41]">calendar_month</span>
-              Fecha
-            </h2>
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <h2 className="text-xs text-cm-on-surface-variant font-semibold font-[family-name:var(--font-inter)] mb-0 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px] text-[#00ff41]">calendar_month</span>
+                Fecha
+              </h2>
+              {/* R4 (OLA 2 UX): acceso al calendario mensual */}
+              <button
+                type="button"
+                onClick={() => setCalOpen(true)}
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cm-surface-container-highest/60 border border-white/10 text-[11px] font-semibold text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-colors active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+                Elegir fecha
+              </button>
+            </div>
             <div ref={dateScrollRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x -mx-4 px-4">
               {availableDays.map((day) => {
                 const iso = formatDateISO(day)
                 const isActive = selectedDate === iso
                 const isTodayDate = isToday(day)
                 return (
-                  <button key={iso} type="button" onClick={() => handleDateSelect(day)}
+                  <button key={iso} type="button" data-iso={iso} onClick={() => handleDateSelect(day)}
                     className={`flex-shrink-0 snap-start w-[72px] py-2.5 rounded-xl text-center transition-all duration-200 border ${
                       isActive
                         ? 'bg-[#00ff41]/15 border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.1)]'
@@ -765,6 +787,16 @@ export default function UnifiedBookingView() {
                 )
               })}
             </div>
+            {/* R4 (OLA 2 UX): calendario mensual */}
+            <DateCalendarSheet
+              open={calOpen}
+              selectedISO={selectedDate}
+              onSelect={(iso) => {
+                const [y, m, d] = iso.split('-').map(Number)
+                handleDateSelect(new Date(y, m - 1, d))
+              }}
+              onClose={() => setCalOpen(false)}
+            />
           </div>
           {/* ── Time Slot Grid ── */}
           {selectedCourtIds.length > 0 && (
@@ -782,9 +814,15 @@ export default function UnifiedBookingView() {
                 </span>
               </div>
               <div className="space-y-2">
-                <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)]">
-                  {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
-                </p>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-[11px] text-cm-on-surface-variant font-medium uppercase tracking-wider font-[family-name:var(--font-inter)]">
+                    {isToday(bookingDate) ? 'Hoy, ' : ''}{bookingDate.getDate()} de {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][bookingDate.getMonth()]}
+                  </p>
+                  {/* R5 (OLA 2 UX): microcopy de la gramática de selección */}
+                  <p className="text-[11px] text-cm-on-surface-variant/80 font-[family-name:var(--font-inter)]">
+                    Toca <b className="text-cm-on-surface">inicio</b> y luego <b className="text-cm-on-surface">fin</b> para un rango
+                  </p>
+                </div>
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                   {visibleSlots.map((slot) => {
                     const status = getUnifiedSlotStatus(slot)
@@ -804,16 +842,29 @@ export default function UnifiedBookingView() {
                     return (
                       <button key={slot} type="button" disabled={!clickAllowed}
                         onClick={() => handleSlotToggle(slot)}
-                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[13px] font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
-                        {slot} - {nextHour}
+                        title={`${slot} - ${nextHour}`}
+                        className={`py-3 px-2 rounded-lg border transition-all duration-200 text-center text-[12px] whitespace-nowrap tracking-tight font-[family-name:var(--font-sora)] ${chipClass} ${clickAllowed ? 'active:scale-95' : ''}`}>
+                        {slot}–{nextHour}
                       </button>
                     )
                   })}
                 </div>
+                {/* R5 (OLA 2 UX): resumen vivo del rango seleccionado */}
+                {selectedTimeSlots.length > 0 && (() => {
+                  const sortedS = [...selectedTimeSlots].sort()
+                  const lastS = sortedS[sortedS.length - 1]
+                  const lastEnd = `${String(parseInt(lastS.split(':')[0], 10) + 1).padStart(2, '0')}:00`
+                  return (
+                    <p className="mt-2 text-xs text-cm-primary font-semibold font-[family-name:var(--font-inter)]">
+                      Seleccionado: {sortedS[0]}–{lastEnd} · {selectedTimeSlots.length} hora{selectedTimeSlots.length > 1 ? 's' : ''}
+                    </p>
+                  )
+                })()}
               </div>
               {selectedTimeSlots.length > 0 && (
                 <button type="button" onClick={clearTimeSlots}
-                  className="mt-3 text-[11px] text-cm-on-surface-variant/60 hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors">
+                  className="mt-3 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] text-cm-on-surface-variant hover:text-cm-error font-[family-name:var(--font-inter)] transition-colors active:scale-95">
+                  <span className="material-symbols-outlined text-[14px]">restart_alt</span>
                   Limpiar selección
                 </button>
               )}

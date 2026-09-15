@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { bookingIds, paymentType } = body;
+    // R6-B (OLA 2 UX): nombre con el que el usuario yapeó — metadato aditivo
+    // para facilitar la validación del admin (no afecta la lógica de estados)
+    const payerName = typeof body.payerName === 'string' ? body.payerName.trim().slice(0, 60) : '';
 
     if (!Array.isArray(bookingIds) || bookingIds.length === 0) {
       return NextResponse.json({ error: 'IDs de reserva requeridos.' }, { status: 400 });
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest) {
         batch.update(ref, {
           remaining_payment_status: 'pending',
           payment_method: 'Yape QR',
+          ...(payerName ? { yape_payer_name: payerName } : {}),
           updated_at: Timestamp.now(),
         });
       } else {
@@ -124,6 +128,7 @@ export async function POST(request: NextRequest) {
         batch.update(ref, {
           status: 'payment_pending',
           payment_method: 'Yape QR',
+          ...(payerName ? { yape_payer_name: payerName } : {}),
           expires_at: FieldValue.delete(),
           updated_at: Timestamp.now(),
         });

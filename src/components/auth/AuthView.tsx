@@ -65,8 +65,32 @@ export default function AuthView() {
     }
   }
 
+  // R3 (OLA 2 UX): tras autenticar, volver al destino recordado (cancha/hora
+  // elegida) en lugar de soltar siempre al home — antes el login obligatorio
+  // descartaba todo el avance de la reserva
+  const navigateAfterAuth = () => {
+    const store = useAppStore.getState()
+    const rt = store.returnTo
+    if (rt?.view) {
+      if (rt.courtId) store.setSelectedCourt(rt.courtId)
+      store.setView(rt.view)
+      // returnTo NO se limpia aquí: CourtDetail lo consume para restaurar
+      // la hora elegida y recién entonces lo descarta
+    } else {
+      store.setView('home')
+    }
+  }
+
   const goBack = () => {
-    setView('home')
+    // R3: "Volver" desde login/register regresa a donde estaba el usuario
+    const rt = useAppStore.getState().returnTo
+    if (rt?.view) {
+      const store = useAppStore.getState()
+      if (rt.courtId) store.setSelectedCourt(rt.courtId)
+      store.setView(rt.view)
+    } else {
+      setView('home')
+    }
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -127,7 +151,7 @@ export default function AuthView() {
       store.setUser(data.user)
       store.setFirebaseToken(firebaseToken)
       startTokenRefresher() // mantiene el Bearer vivo (>1h en el panel)
-      setView('home')
+      navigateAfterAuth()
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message)
@@ -201,7 +225,7 @@ export default function AuthView() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Error al registrar.')
         setUser(data.user)
-        setView('home')
+        navigateAfterAuth()
       }
     } catch (err) {
       if (err instanceof Error) {

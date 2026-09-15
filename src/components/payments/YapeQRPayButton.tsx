@@ -53,6 +53,28 @@ export default function YapeQRPayButton({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [marked, setMarked] = useState(false);
+  // R6 (OLA 2 UX): copiar número/monto + nombre del pagador
+  const [copied, setCopied] = useState<'numero' | 'monto' | null>(null);
+  const [payerName, setPayerName] = useState('');
+
+  const handleCopy = useCallback(async (what: 'numero' | 'monto', value: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopied(what);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast({ title: 'No se pudo copiar', description: 'Cópialo manualmente: ' + value, variant: 'destructive' });
+    }
+  }, []);
 
   const isRemaining = paymentType === 'remaining';
   const defaultButtonText = isRemaining
@@ -81,7 +103,8 @@ export default function YapeQRPayButton({
       const res = await fetch('/api/payment-validation', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingIds, paymentType }),
+        // R6-B: se envía el nombre del pagador (metadato opcional para el admin)
+        body: JSON.stringify({ bookingIds, paymentType, payerName: payerName.trim() }),
       });
 
       const data = await res.json();
@@ -107,7 +130,7 @@ export default function YapeQRPayButton({
     } finally {
       setSubmitting(false);
     }
-  }, [submitting, bookingIds, paymentType, isRemaining, onPaymentMarked]);
+  }, [submitting, bookingIds, paymentType, isRemaining, onPaymentMarked, payerName]);
 
   if (loading) {
     return (
@@ -190,23 +213,72 @@ export default function YapeQRPayButton({
           )}
           {config.numero_yape && (
             <div>
-              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">N\u00famero Yape</p>
-              <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{config.numero_yape}</p>
+              <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">Número Yape</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-sm font-semibold text-cm-on-surface font-[family-name:var(--font-sora)]">{config.numero_yape}</p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy('numero', config.numero_yape)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cm-surface-container-highest/70 border border-white/10 text-[11px] font-semibold text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-colors active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[13px]">{copied === 'numero' ? 'check' : 'content_copy'}</span>
+                  {copied === 'numero' ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
             </div>
           )}
           <div className="bg-[#00ff41]/5 border border-[#00ff41]/20 rounded-lg p-3">
             <p className="text-[10px] text-cm-on-surface-variant font-[family-name:var(--font-inter)]">
               {isRemaining ? 'Monto restante a pagar' : 'Monto a pagar'}
             </p>
-            <p className="text-xl font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {displayAmount.toFixed(2)}</p>
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-xl font-bold text-[#00ff41] font-[family-name:var(--font-sora)]">S/ {displayAmount.toFixed(2)}</p>
+              <button
+                type="button"
+                onClick={() => handleCopy('monto', displayAmount.toFixed(2))}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cm-surface-container-highest/70 border border-white/10 text-[11px] font-semibold text-cm-on-surface-variant hover:text-cm-primary hover:border-cm-primary/30 transition-colors active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[13px]">{copied === 'monto' ? 'check' : 'content_copy'}</span>
+                {copied === 'monto' ? 'Copiado' : 'Copiar'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Instructions */}
-      <p className="text-xs text-cm-on-surface-variant text-center max-w-xs mb-5 font-[family-name:var(--font-inter)]">
+      {/* Instructions — R6 (OLA 2): pasos guiados, sin memorizar nada */}
+      <div className="w-full max-w-xs mb-4 space-y-1.5">
+        {[
+          'Abre Yape y escanea el QR (o usa el n\u00famero copiado).',
+          'Yapea el MONTO EXACTO y escribe tu nombre en el mensaje.',
+          'Vuelve aqu\u00ed y toca el bot\u00f3n verde.',
+        ].map((step, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-cm-primary/15 text-cm-primary text-[10px] font-bold mt-0.5">{i + 1}</span>
+            <p className="text-xs text-cm-on-surface-variant font-[family-name:var(--font-inter)] leading-snug">{step}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-cm-on-surface-variant text-center max-w-xs mb-4 font-[family-name:var(--font-inter)]">
         {config.mensaje || 'Escanea el c\u00f3digo QR con la aplicaci\u00f3n Yape y realiza el pago del monto correspondiente.'}
       </p>
+
+      {/* R6-B: nombre con el que yapea — facilita la validación del admin */}
+      <div className="w-full max-w-xs mb-4">
+        <label htmlFor="yape-payer-name" className="block text-[11px] text-cm-on-surface-variant font-[family-name:var(--font-inter)] mb-1">
+          ¿Con qué nombre yapeaste? (opcional, ayuda a validar más rápido)
+        </label>
+        <input
+          id="yape-payer-name"
+          type="text"
+          value={payerName}
+          onChange={(e) => setPayerName(e.target.value)}
+          maxLength={60}
+          autoComplete="name"
+          placeholder="Ej: Juan Pérez"
+          className="w-full px-3 py-2.5 bg-cm-surface-container-highest/40 border border-white/10 rounded-xl text-[16px] text-cm-on-surface placeholder:text-cm-on-surface-variant/40 focus:outline-none focus:border-cm-primary/40 font-[family-name:var(--font-inter)]"
+        />
+      </div>
 
       {/* Mark as paid button */}
       <button
